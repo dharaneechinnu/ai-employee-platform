@@ -1,0 +1,47 @@
+# ---- Secrets (never commit these) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials.json
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ---- Node / React ----
+node_modules/
+dist/
+build/
+.vite/
+*.local
+npm-debug.log*
+yarn-error.log*
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Local data ----
+*.sqlite3
+*.db
+postgres-data/
+redis-data/
+uploads/
+
+# ---- AI test cassettes are COMMITTED on purpose ----
+# (tests must run offline in CI, so do not ignore tests/cassettes/)
