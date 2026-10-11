@@ -104,5 +104,20 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  web:
+    build:
+      context: ./frontend
+    environment:
+      NODE_ENV: development
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # Keep the container's own node_modules: the host has Windows
+      # binaries and the container is Alpine Linux.
+      - /app/node_modules
+    depends_on:
+      - api
+
 volumes:
   postgres-data:

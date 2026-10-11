@@ -1,0 +1,310 @@
+/**
+ * Typed API client.
+ *
+ * The access token lives in memory only, never localStorage: anything
+ * in localStorage is readable by any script on the page, so an XSS
+ * would hand over the session. The refresh token is an httpOnly
+ * cookie the browser sends automatically and JavaScript cannot read.
+ *
+ * A 401 triggers one refresh attempt and one retry. If that fails the
+ * session is genuinely over and we stop rather than loop.
+ */
+
+const BASE = "/api/v1";
+
+let accessToken: string | null = null;
+let onSessionLost: (() => void) | null = null;
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
+export function onSessionExpired(handler: () => void): void {
+  onSessionLost = handler;
+}
+
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly fields?: { field: string; message: string }[],
+  ) {
+    super(message);
+  }
+}
+
+async function parseError(response: Response): Promise<ApiError> {
+  let detail = response.statusText;
+  let fields: { field: string; message: string }[] | undefined;
+  try {
+    const body = await response.json();
+    detail = body.detail ?? detail;
+    fields = Array.isArray(body.errors) ? body.errors : undefined;
+  } catch {
+    // A non-JSON error body is still an error; the status carries it.
+  }
+  return new ApiError(response.status, detail, fields);
+}
+
+async function send(path: string, init: RequestInit, retry = true): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", "application/json");
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+
+  const response = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+
+  if (response.status === 401 && retry && path !== "/auth/refresh") {
+    const refreshed = await refresh();
+    if (refreshed) return send(path, init, false);
+    onSessionLost?.();
+  }
+
+  return response;
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await send(path, init);
+  if (!response.ok) throw await parseError(response);
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+export const api = {
+  get: <T>(path: string) => request<T>(path),
+  post: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
+  put: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+  patch: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+};
+
+export async function refresh(): Promise<boolean> {
+  const response = await fetch(`${BASE}/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok) return false;
+  const body = (await response.json()) as { access_token: string };
+  accessToken = body.access_token;
+  return true;
+}
+
+/** Subscribe to a run's live events. Resumes from the last seq seen. */
+export function streamRun(
+  orgId: string,
+  runId: string,
+  onEvent: (event: RunEvent) => void,
+  lastSeq = 0,
+): () => void {
+  // EventSource cannot set an Authorization header, so the token goes
+  // in the query string. Acceptable only because it is short-lived;
+  // a long-lived credential must never travel in a URL.
+  const url = `${BASE}/orgs/${orgId}/runs/${runId}/events?last_event_id=${lastSeq}`;
+  const source = new EventSource(url, { withCredentials: true });
+
+  source.onmessage = (message) => {
+    try {
+      onEvent(JSON.parse(message.data) as RunEvent);
+    } catch {
+      /* a malformed frame should not kill the stream */
+    }
+  };
+  source.addEventListener("done", () => source.close());
+  source.onerror = () => source.close();
+
+  return () => source.close();
+}
+
+// ---------------------------------------------------------------- types
+
+export interface Org {
+  id: string;
+  name: string;
+  slug: string;
+  role: "admin" | "member";
+}
+
+export interface Me {
+  id: string;
+  email: string;
+  full_name: string | null;
+  organizations: Org[];
+}
+
+export interface Member {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: "admin" | "member";
+}
+
+export type EmployeeStatus = "draft" | "active" | "paused" | "archived";
+
+export interface EmployeeListItem {
+  id: string;
+  name: string;
+  job_title: string | null;
+  department: string | null;
+  avatar: string | null;
+  status: EmployeeStatus;
+}
+
+export interface EmployeeList {
+  items: EmployeeListItem[];
+  used: number;
+  limit: number;
+}
+
+export interface Employee extends EmployeeListItem {
+  version_no: number;
+  config: EmployeeConfig;
+  created_at: string;
+}
+
+export interface EmployeeConfig {
+  guided?: {
+    what_it_does: string;
+    what_it_must_never_do?: string | null;
+    tone?: string | null;
+    when_to_ask_a_human?: string | null;
+    what_good_looks_like?: string | null;
+  } | null;
+  raw_instructions?: string | null;
+  model: string;
+  temperature: number;
+  max_steps: number;
+  enabled_tools: string[];
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  description: string | null;
+  department: string | null;
+  config: EmployeeConfig;
+  is_platform_template: boolean;
+}
+
+export interface ProviderOption {
+  key: string;
+  display_name: string;
+  default_model: string | null;
+  docs_url: string | null;
+  trains_on_data: boolean;
+}
+
+export interface ConnectedProvider {
+  provider_key: string;
+  display_name: string;
+  key_last4: string;
+  status: "untested" | "working" | "failed";
+  last_tested_at: string | null;
+  last_error: string | null;
+  trains_on_data: boolean;
+  default_model: string | null;
+}
+
+export type TaskStatus =
+  | "queued"
+  | "running"
+  | "awaiting_approval"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface TaskListItem {
+  id: string;
+  title: string | null;
+  status: TaskStatus;
+  employee_id: string;
+  created_at: string;
+}
+
+export interface Run {
+  id: string;
+  status: string;
+  step_count: number;
+  prompt_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: string;
+  output: string | null;
+  stop_cause: string | null;
+  error_message: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface Task extends TaskListItem {
+  input: string;
+  dry_run: boolean;
+  run: Run | null;
+}
+
+export interface RunEvent {
+  seq: number;
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface ToolEntry {
+  name: string;
+  pack: string;
+  description: string;
+  side_effect: "read" | "write" | "destructive";
+  effective_setting: "auto" | "ask" | "blocked";
+  reason: string;
+  permanently_blocked: boolean;
+}
+
+export interface PolicyRow {
+  scope: "pack" | "tool";
+  scope_value: string;
+  side_effect: string | null;
+  setting: "auto" | "ask" | "blocked";
+  is_default: boolean;
+}
+
+export interface Approval {
+  id: string;
+  run_id: string;
+  tool_name: string;
+  side_effect: string;
+  proposed: Record<string, unknown>;
+  status: string;
+  expires_at: string;
+  created_at: string;
+  task_title: string | null;
+}
+
+export interface MemoryItem {
+  id: string;
+  content: string;
+  kind: string;
+  scope: string;
+  employee_id: string | null;
+  embedding_model: string;
+  created_at: string;
+}
+
+export interface EmbeddingConfig {
+  provider_key: string;
+  model: string;
+  dim: number;
+  memories_needing_reembedding: number;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  max_employees: number;
+  employees_used: number;
+  member_count: number;
+}
