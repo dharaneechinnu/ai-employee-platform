@@ -48,7 +48,13 @@ Result         →  a real pull request, with full audit trail and cost per task
 
 ## Documentation
 
-📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** — the full phase-by-phase roadmap, written in plain English, with decisions, risks, and a completion checklist per phase.
+| Document | What it covers | Size |
+|---|---|---|
+| 🏗️ **[High Level Design](docs/HLD.md)** | System context, containers, domain model, core flows, security architecture, scalability, risks. 14 diagrams. | ~970 lines |
+| 🔧 **[Low Level Design](docs/LLD.md)** | Folder layout, full database schema, API specification, agent loop, tool and provider contracts, policy engine, SSE protocol, encryption, testing strategy. | ~1,070 lines |
+| 📋 **[Implementation Plan](docs/IMPLEMENTATION_PLAN.md)** | Phase-by-phase roadmap in plain English, with decisions, risks and a completion checklist per phase. | ~2,930 lines |
+
+Read them in that order: **HLD → LLD → Plan**. The HLD fixes the big decisions, the LLD details them, and the plan sequences the work.
 
 ## Roadmap
 
