@@ -2,7 +2,7 @@
 
 A platform where business teams — developers, operations, sales, HR — create and manage their own **AI Employees**: persistent AI workers with a role, instructions, scoped tool access and permission boundaries.
 
-> **Status:** planning complete for Phases 0–7. Implementation starting at Phase 0.
+> **Status:** backend built through Phase 7. 102 tests passing, 59 endpoints live.
 
 ## What problem this solves
 
@@ -60,14 +60,45 @@ Read them in that order: **HLD → LLD → Plan**. The HLD fixes the big decisio
 
 | Phase | Name | Status |
 |---|---|---|
-| 0 | Foundation and walking skeleton | 📋 Planned |
-| 1 | Auth, companies, Platform Admin | 📋 Planned |
-| 2 | AI Employee configuration | 📋 Planned |
-| 3 | LLM providers, tools, agent loop | 📋 Planned |
-| 4 | 🎯 **MVP** — one AI Employee end to end | 📋 Planned |
-| 5 | Integrations and the approval system | 📋 Planned |
-| 6 | Memory and execution history | 📋 Planned |
-| 7 | LangGraph, branching, parallel, delegation | 📋 Planned |
-| 8–10 | Reliability · security and cost · production readiness | 🗒️ Outlined |
+| 0 | Foundation and walking skeleton | ✅ Built |
+| 1 | Auth, companies, Platform Admin with 2FA | ✅ Built |
+| 2 | AI Employee configuration and versioning | ✅ Built |
+| 3 | LLM providers, tool registry, agent loop | ✅ Built |
+| 4 | 🎯 **MVP** — async tasks, worker, live streaming | ✅ Built |
+| 5 | Permission policy, approvals, email and SQL tools | ✅ Built |
+| 6 | Memory, pluggable embeddings, hybrid search | ✅ Built |
+| 7 | Parallel execution, bounded delegation | ✅ Built |
+| 8–10 | Reliability · security and cost · production readiness | 🗒️ Outlined, not built |
 
-Each phase has a completion checklist. A phase is not finished until every box is ticked.
+**Not built, and deliberately so:** the LangGraph migration from Phase 7.
+Its dependency footprint was measured at 25 transitive packages — including
+a second HTTP client and a telemetry SDK — to replace a working loop with
+102 tests behind it. What it would add here is durable checkpointing for
+pausing inside a branch; the single-path pause already works and is tested.
+
+## Running it
+
+```bash
+docker compose up --build        # all five services
+make test                        # 102 tests
+make lint                        # ruff + mypy strict
+```
+
+Host ports are **5433** (Postgres) and **6380** (Redis), not the defaults, so
+the containers do not clash with a database already installed on your machine.
+
+Create the first platform admin:
+
+```bash
+cd backend && python -m scripts.bootstrap_admin --email you@example.com
+```
+
+## What is verified
+
+| Check | Result |
+|---|---|
+| Tests | 102 passing — unit, tenant isolation, and integration against real Postgres |
+| Types | mypy **strict**, 72 files, zero errors |
+| Lint | ruff with bugbear, bandit, async and blind-except rules, zero suppressions |
+| Migrations | 6, each verified forward *and* backward |
+| Live stack | `docker compose up` → 4 healthy services, 59 endpoints |

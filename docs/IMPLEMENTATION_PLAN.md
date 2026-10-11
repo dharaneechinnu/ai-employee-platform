@@ -2929,3 +2929,54 @@ Each one will get its own full discussion and be written up here **only if we de
 
 ---
 ---
+
+---
+---
+
+# 🔨 Build log: what changed during implementation
+
+Written after building phases 0 to 7. Every item here is a place the
+plan met reality and reality won. Kept because "what I planned" and
+"what I shipped" differing is normal, and the differences are the
+interesting part.
+
+## Decisions that changed
+
+| Planned | Built | Why |
+|---|---|---|
+| Postgres on 5432, Redis on 6379 | **5433 and 6380** | This machine already runs PostgreSQL 18 and a Redis. They won the port binding over Docker's forward, so every connection silently reached the local database and failed authentication as user `app`. |
+| Approvals in phase 7 | **Moved into phase 5** | Phase 5 adds tools that send email. Shipping those before the gate that controls them was the exact risk the plan set out to avoid. |
+| Phase 7 migrates the loop to LangGraph | **Not done; capabilities built directly** | Measured rather than assumed: 25 transitive packages, including a second HTTP client and a telemetry SDK, to replace a working loop with 102 tests behind it. Its real benefit here is durable checkpointing for pausing inside a branch, and the single-path pause already works. Put to the user rather than decided silently. |
+| Local embeddings via sentence-transformers | **fastembed, with a hashed fallback** | sentence-transformers pulls in torch. fastembed is ONNX-based and far lighter. When it is absent the fallback is deterministic but **not semantic**, and says so loudly in the logs rather than quietly degrading search. |
+
+## Bugs that only running it would find
+
+Each of these passed review and failed on contact with reality.
+
+| Bug | Why it mattered |
+|---|---|
+| **Enum columns returned plain strings.** `Mapped[PolicySetting]` typed as `String(20)` hands back `str`. Equality kept working because StrEnum subclasses str, so it hid for five phases. | It surfaced as `if approval.status is not ApprovalStatus.PENDING` — an identity check that is always true, so no approval could ever be decided. `.value` raises loudly; `is` just misbehaves silently for ever. Fixed with a `StrEnumType` decorator on every enum column. |
+| **The worker could not start.** arq refuses to boot with zero registered jobs. | The container exited 1 on every boot. A worker that cannot start is not a walking skeleton. |
+| **The worker was reported unhealthy while working perfectly.** It inherited the image's `curl /healthz` probe. | The worker serves no HTTP — that is the point of splitting it from the API. A permanently red status means you cannot tell a working worker from a broken one. |
+| **`migrate` ran baked-in image code** while api and worker used a live mount. | A new migration was invisible to it, and the error read "Can't locate revision 0002" — pointing at the migration history rather than the stale image. |
+| **A module and a function shared the name `run_task`.** | The re-export shadowed the module, so importing it returned the function. |
+| **Module-level async singletons broke under pytest.** Both the database engine and the Redis pool. | Each test gets a fresh event loop, so connections pooled on the previous one fail with "Event loop is closed". Correct in production, wrong in tests. Hit twice before the pattern was recognised. |
+| **`TRUNCATE ... CASCADE` in a test fixture wiped seeded platform templates.** | CASCADE empties every referencing table outright, including rows with `org_id` NULL. Switched to DELETE, which follows the foreign keys instead. |
+| **Autogenerate wrote app types into migrations.** | `app.db.models.base.StrEnumType(...)` makes a migration depend on application code. Rename that class later and every old migration breaks, so the history stops replaying. |
+| **The default embedding model is 384-wide and no 384 vector table existed.** | The default configuration could not store a single vector. |
+| **Resume created a new `Run` row**, orphaning the checkpoint, and did not execute the approved call. | The run paused for ever: the model simply asked again. The event sequence also restarted at 1 and collided with pre-pause events. |
+
+## What is still outstanding
+
+| Item | Status |
+|---|---|
+| LangGraph migration | Decision pending with the user |
+| Phases 8, 9, 10 | Outlined in this document, not built |
+| GitHub tool pack | The phase 4 plan named it; web, email, SQL, memory and delegation packs were built instead |
+| Frontend | Not started — the brief was backend first |
+| A real provider key | Everything is tested against stubs and a scripted provider. The wire format of the Gemini and OpenAI adapters has not been exercised against a live API. |
+
+That last row is the honest gap. The adapters are written to the
+documented wire formats and the agent loop around them is well tested,
+but "it works against the real API" is a claim that has not been
+earned yet.
