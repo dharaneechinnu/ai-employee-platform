@@ -3,8 +3,11 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn
+from pydantic import Field, PostgresDsn, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Placeholder, not a credential: Settings rejects it when ENVIRONMENT=prod.
+DEV_JWT_SECRET = "dev-secret-change-me"  # noqa: S105
 
 
 class Settings(BaseSettings):
@@ -31,6 +34,15 @@ class Settings(BaseSettings):
     db_max_overflow: int = 5
     db_echo: bool = False
 
+    # --- auth ---------------------------------------------------------
+    # Dev default only. The validator below refuses to start in prod
+    # with this value still in place.
+    jwt_secret: str = DEV_JWT_SECRET
+    jwt_algorithm: str = "HS256"
+    access_token_minutes: int = 15
+    refresh_token_days: int = 30
+    invite_expiry_hours: int = 72
+
     # --- worker -------------------------------------------------------
     # One job at a time by default: a single agent task makes 10-15 model
     # calls, so two concurrent tasks will exceed a free-tier rate limit.
@@ -45,6 +57,15 @@ class Settings(BaseSettings):
     @property
     def is_testing(self) -> bool:
         return self.environment == "test"
+
+    @model_validator(mode="after")
+    def _reject_dev_secret_in_prod(self) -> "Settings":
+        """A forgotten secret in production is a total auth bypass: anyone
+        who reads this repository could mint a valid token. Fail at
+        startup rather than serve traffic."""
+        if self.environment == "prod" and self.jwt_secret == DEV_JWT_SECRET:
+            raise ValueError("JWT_SECRET must be set to a real value in production")
+        return self
 
 
 @lru_cache

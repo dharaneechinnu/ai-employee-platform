@@ -17,10 +17,11 @@ from app.db.models import Base
 # Tables that are deliberately NOT tenant-scoped, with the reason.
 GLOBAL_TABLES: dict[str, str] = {
     "organizations": "the tenant itself — scoped by its own id",
+    "users": "a person may belong to several companies; the link is memberships",
+    "refresh_tokens": "belongs to a user, who spans companies",
+    "platform_admins": "platform staff, deliberately separate from users",
+    "platform_admin_audit": "platform-level audit trail, not customer data",
     # Added in later phases:
-    # "users":                "a person may belong to several companies",
-    # "platform_admins":      "platform staff, deliberately separate from users",
-    # "platform_admin_audit": "platform-level audit trail",
     # "supported_providers":  "the provider menu, platform-wide",
     # "policy_defaults":      "platform defaults, copied per company on read",
     # "blocked_actions":      "catastrophic blocklist, platform-wide",
