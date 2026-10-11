@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.models.base import Base, StrEnumType, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class EmployeeStatus(StrEnum):
@@ -44,7 +44,7 @@ class AIEmployee(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     department: Mapped[str | None] = mapped_column(String(100))
     avatar: Mapped[str | None] = mapped_column(String(20))
     status: Mapped[EmployeeStatus] = mapped_column(
-        String(20), nullable=False, default=EmployeeStatus.DRAFT
+        StrEnumType(EmployeeStatus, 20), nullable=False, default=EmployeeStatus.DRAFT
     )
     current_version_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     created_by: Mapped[uuid.UUID | None] = mapped_column(

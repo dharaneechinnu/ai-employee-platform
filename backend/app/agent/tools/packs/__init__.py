@@ -1,5 +1,5 @@
 """Tool packs. Importing a pack registers its tools."""
 
-from app.agent.tools.packs import web
+from app.agent.tools.packs import email, sql, web
 
-__all__ = ["web"]
+__all__ = ["email", "sql", "web"]

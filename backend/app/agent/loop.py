@@ -40,6 +40,7 @@ class StopCause(str):
     TIMEOUT = "timeout"
     CANCELLED = "cancelled"
     PROVIDER_ERROR = "provider_error"
+    AWAITING_APPROVAL = "awaiting_approval"
 
 
 @dataclass(slots=True)
@@ -84,13 +85,25 @@ class RunOutcome:
     output_tokens: int
     events: list[AgentEvent]
 
+    # Set only when the run paused for approval. The conversation so
+    # far, plus the call that triggered the pause, so another worker
+    # can pick it up after the human decides.
+    saved_state: dict[str, Any] | None = None
+    pending_tool_call: dict[str, Any] | None = None
+
     @property
     def completed(self) -> bool:
         return self.stop_cause == StopCause.COMPLETED
 
+    @property
+    def paused(self) -> bool:
+        return self.stop_cause == StopCause.AWAITING_APPROVAL
+
 
 EventSink = Callable[[AgentEvent], Awaitable[None]]
 CancelCheck = Callable[[], Awaitable[bool]]
+# Returns (setting, reason). setting is 'auto', 'ask' or 'blocked'.
+PolicyCheck = Callable[[str], tuple[str, str]]
 
 
 class AgentLoop:
@@ -105,6 +118,9 @@ class AgentLoop:
         temperature: float = 0.2,
         on_event: EventSink | None = None,
         is_cancelled: CancelCheck | None = None,
+        check_policy: PolicyCheck | None = None,
+        resume_from: dict[str, Any] | None = None,
+        approved_call: dict[str, Any] | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
@@ -114,6 +130,9 @@ class AgentLoop:
         self.temperature = temperature
         self._on_event = on_event
         self._is_cancelled = is_cancelled
+        self._check_policy = check_policy
+        self._resume_from = resume_from
+        self._approved_call = approved_call
         self._events: list[AgentEvent] = []
 
     async def _emit(self, type_: str, **payload: Any) -> None:
@@ -129,13 +148,37 @@ class AgentLoop:
         ]
 
     async def run(self, *, system_prompt: str, task: str) -> RunOutcome:
-        messages: list[Message] = [
-            Message(role=Role.SYSTEM, content=system_prompt),
-            Message(role=Role.USER, content=task),
-        ]
+        messages: list[Message] = (
+            deserialise(self._resume_from)
+            if self._resume_from
+            else [
+                Message(role=Role.SYSTEM, content=system_prompt),
+                Message(role=Role.USER, content=task),
+            ]
+        )
         prompt_tokens = output_tokens = 0
 
         await self._emit("run_started", model=self.model, tools=list(self.tools))
+
+        if self._approved_call:
+            # A human approved exactly this call, so it runs without
+            # another policy check. Re-checking would pause again on the
+            # same step and the run could never finish.
+            call = ToolCall(
+                id=self._approved_call["id"],
+                name=self._approved_call["name"],
+                arguments=self._approved_call["arguments"],
+            )
+            await self._emit("approval_granted", tool=call.name)
+            result = await self._run_tool(call)
+            messages.append(
+                Message(
+                    role=Role.TOOL,
+                    content=result.as_text(),
+                    tool_call_id=call.id,
+                    name=call.name,
+                )
+            )
 
         while True:
             # Budget first: stop a runaway before it costs anything more.
@@ -185,6 +228,42 @@ class AgentLoop:
                 return self._outcome(StopCause.COMPLETED, reply.text, prompt_tokens, output_tokens)
 
             for call in reply.tool_calls:
+                setting, reason = (
+                    self._check_policy(call.name) if self._check_policy else ("auto", "")
+                )
+
+                if setting == "blocked":
+                    await self._emit("tool_blocked", tool=call.name, reason=reason)
+                    messages.append(
+                        Message(
+                            role=Role.TOOL,
+                            content=(
+                                f"'{call.name}' is not permitted for this company ({reason}). "
+                                "Do not try it again; use a different approach or explain "
+                                "that you cannot complete this."
+                            ),
+                            tool_call_id=call.id,
+                            name=call.name,
+                        )
+                    )
+                    continue
+
+                if setting == "ask":
+                    # Return rather than wait. A human may take hours and
+                    # the worker has other jobs; the saved state lets a
+                    # different process resume this run later.
+                    await self._emit("approval_requested", tool=call.name, reason=reason)
+                    outcome = self._outcome(
+                        StopCause.AWAITING_APPROVAL, None, prompt_tokens, output_tokens
+                    )
+                    outcome.saved_state = serialise(messages)
+                    outcome.pending_tool_call = {
+                        "id": call.id,
+                        "name": call.name,
+                        "arguments": call.arguments,
+                    }
+                    return outcome
+
                 result = await self._run_tool(call)
                 messages.append(
                     Message(
@@ -237,6 +316,39 @@ class AgentLoop:
             output_tokens=output_tokens,
             events=self._events,
         )
+
+
+def serialise(messages: list[Message]) -> dict[str, Any]:
+    return {
+        "messages": [
+            {
+                "role": m.role.value,
+                "content": m.content,
+                "tool_call_id": m.tool_call_id,
+                "name": m.name,
+                "tool_calls": [
+                    {"id": c.id, "name": c.name, "arguments": c.arguments} for c in m.tool_calls
+                ],
+            }
+            for m in messages
+        ]
+    }
+
+
+def deserialise(state: dict[str, Any]) -> list[Message]:
+    return [
+        Message(
+            role=Role(m["role"]),
+            content=m.get("content"),
+            tool_call_id=m.get("tool_call_id"),
+            name=m.get("name"),
+            tool_calls=[
+                ToolCall(id=c["id"], name=c["name"], arguments=c["arguments"])
+                for c in m.get("tool_calls", [])
+            ],
+        )
+        for m in state.get("messages", [])
+    ]
 
 
 def new_run_id() -> uuid.UUID:

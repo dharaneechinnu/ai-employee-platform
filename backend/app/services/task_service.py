@@ -195,14 +195,29 @@ class EventWriter:
         self.session = session
         self.run_id = run_id
         self.org_id = org_id
-        self._seq = 0
+        self._seq: int | None = None
+
+    async def _next_seq(self) -> int:
+        if self._seq is None:
+            # A resumed run already has events from before it paused, so
+            # the sequence continues rather than restarting at 1. seq is
+            # unique per run, and a client resuming the stream relies on
+            # it being gap-free and monotonic.
+            from sqlalchemy import func as sa_func
+
+            highest = await self.session.scalar(
+                select(sa_func.max(RunEvent.seq)).where(RunEvent.run_id == self.run_id)
+            )
+            self._seq = highest or 0
+        self._seq += 1
+        return self._seq
 
     async def append(self, type_: str, payload: dict[str, Any] | None = None) -> RunEvent:
-        self._seq += 1
+        seq = await self._next_seq()
         event = RunEvent(
             run_id=self.run_id,
             org_id=self.org_id,
-            seq=self._seq,
+            seq=seq,
             type=type_,
             payload=_redact(payload or {}),
             created_at=datetime.now(UTC),

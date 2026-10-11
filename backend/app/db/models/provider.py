@@ -22,7 +22,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Index, LargeBinary, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.models.base import Base, StrEnumType, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class ProviderKind(StrEnum):
@@ -43,7 +43,7 @@ class SupportedProvider(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     key: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    kind: Mapped[ProviderKind] = mapped_column(String(20), nullable=False)
+    kind: Mapped[ProviderKind] = mapped_column(StrEnumType(ProviderKind, 20), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Free tiers commonly allow the provider to train on what is sent.
@@ -74,7 +74,7 @@ class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     api_key_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     key_last4: Mapped[str] = mapped_column(String(8), nullable=False)
     status: Mapped[ConnectionStatus] = mapped_column(
-        String(20), nullable=False, default=ConnectionStatus.UNTESTED
+        StrEnumType(ConnectionStatus, 20), nullable=False, default=ConnectionStatus.UNTESTED
     )
     last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(String(500))

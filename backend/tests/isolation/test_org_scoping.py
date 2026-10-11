@@ -22,9 +22,7 @@ GLOBAL_TABLES: dict[str, str] = {
     "platform_admins": "platform staff, deliberately separate from users",
     "platform_admin_audit": "platform-level audit trail, not customer data",
     "supported_providers": "the provider menu, curated platform-wide",
-    # Added in later phases:
-    # "policy_defaults":      "platform defaults, copied per company on read",
-    # "blocked_actions":      "catastrophic blocklist, platform-wide",
+    "policy_defaults": "platform-wide starting values, overridden per company",
 }
 
 

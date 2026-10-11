@@ -21,6 +21,17 @@ from app.db.models.identity import (
     User,
 )
 from app.db.models.organization import Organization, OrgStatus
+from app.db.models.policy import (
+    Approval,
+    ApprovalStatus,
+    Connection,
+    ConnectionKind,
+    Policy,
+    PolicyDefault,
+    PolicyScope,
+    PolicySetting,
+    RunCheckpoint,
+)
 from app.db.models.provider import (
     ConnectionStatus,
     ProviderConfig,
@@ -41,7 +52,11 @@ from app.db.models.task import (
 __all__ = [
     "AIEmployee",
     "AIEmployeeVersion",
+    "Approval",
+    "ApprovalStatus",
     "Base",
+    "Connection",
+    "ConnectionKind",
     "ConnectionStatus",
     "EmployeeStatus",
     "EventType",
@@ -52,11 +67,16 @@ __all__ = [
     "Organization",
     "PlatformAdmin",
     "PlatformAdminAudit",
+    "Policy",
+    "PolicyDefault",
+    "PolicyScope",
+    "PolicySetting",
     "ProviderConfig",
     "ProviderKind",
     "RefreshToken",
     "Role",
     "Run",
+    "RunCheckpoint",
     "RunEvent",
     "RunStatus",
     "SupportedProvider",

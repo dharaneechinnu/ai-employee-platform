@@ -21,7 +21,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Index, LargeBinary, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.models.base import Base, StrEnumType, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class Role(StrEnum):
@@ -58,7 +58,7 @@ class Membership(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     org_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
-    role: Mapped[Role] = mapped_column(String(20), nullable=False)
+    role: Mapped[Role] = mapped_column(StrEnumType(Role, 20), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("user_id", "org_id", name="uq_memberships_user_org"),
@@ -77,7 +77,7 @@ class Invitation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
     )
     email: Mapped[str] = mapped_column(String(320), nullable=False)
-    role: Mapped[Role] = mapped_column(String(20), nullable=False)
+    role: Mapped[Role] = mapped_column(StrEnumType(Role, 20), nullable=False)
 
     # Only the hash is stored. A database leak must not yield usable
     # invite links.

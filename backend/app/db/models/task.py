@@ -37,7 +37,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.models.base import Base, StrEnumType, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class TaskStatus(StrEnum):
@@ -88,7 +88,7 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     title: Mapped[str | None] = mapped_column(String(200))
     input: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[TaskStatus] = mapped_column(
-        String(30), nullable=False, default=TaskStatus.QUEUED
+        StrEnumType(TaskStatus, 30), nullable=False, default=TaskStatus.QUEUED
     )
     dry_run: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_by: Mapped[uuid.UUID] = mapped_column(
@@ -115,7 +115,9 @@ class Run(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
     )
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    status: Mapped[RunStatus] = mapped_column(String(30), nullable=False, default=RunStatus.RUNNING)
+    status: Mapped[RunStatus] = mapped_column(
+        StrEnumType(RunStatus, 30), nullable=False, default=RunStatus.RUNNING
+    )
 
     step_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

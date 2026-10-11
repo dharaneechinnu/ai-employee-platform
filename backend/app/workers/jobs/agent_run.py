@@ -24,10 +24,13 @@ from app.agent.tools.registry import registry
 from app.core.errors import NotFoundError
 from app.core.observability import get_logger
 from app.db.models.ai_employee import AIEmployee, AIEmployeeVersion
+from app.db.models.policy import Approval, ApprovalStatus, RunCheckpoint
 from app.db.models.task import LLMCall, Run, RunStatus, Task, TaskStatus
 from app.db.session import get_sessionmaker
 from app.schemas.ai_employee import EmployeeConfig
+from app.services.approval_service import ApprovalService
 from app.services.employee_service import build_system_prompt
+from app.services.policy_service import PolicyService
 from app.services.provider_service import ProviderService
 from app.services.task_service import EventWriter, estimate_cost
 
@@ -48,7 +51,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             log.warning("run_task_missing", task_id=str(task_id))
             return {"status": "missing"}
 
-        if task.status not in (TaskStatus.QUEUED,):
+        if task.status not in (TaskStatus.QUEUED, TaskStatus.AWAITING_APPROVAL):
             # Already picked up, cancelled, or finished. Re-delivery is
             # normal with a queue, so this is a no-op rather than an error.
             return {"status": str(task.status)}
@@ -62,16 +65,35 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
 
         config = EmployeeConfig.model_validate(version.config)
 
-        run = Run(
-            org_id=task.org_id,
-            task_id=task.id,
-            attempt=1,
-            status=RunStatus.RUNNING,
-            started_at=datetime.now(UTC),
-            heartbeat_at=datetime.now(UTC),
-            worker_id=WORKER_ID,
-        )
-        session.add(run)
+        resuming = task.status is TaskStatus.AWAITING_APPROVAL
+        run = None
+
+        if resuming:
+            # Continue the paused run. A new row would orphan the
+            # checkpoint, which is keyed by run id, and the approved
+            # call would be lost.
+            run = await session.scalar(
+                select(Run)
+                .where(Run.task_id == task.id, Run.status == RunStatus.AWAITING_APPROVAL)
+                .order_by(Run.attempt.desc())
+                .limit(1)
+            )
+            if run is not None:
+                run.status = RunStatus.RUNNING
+                run.heartbeat_at = datetime.now(UTC)
+
+        if run is None:
+            run = Run(
+                org_id=task.org_id,
+                task_id=task.id,
+                attempt=1,
+                status=RunStatus.RUNNING,
+                started_at=datetime.now(UTC),
+                heartbeat_at=datetime.now(UTC),
+                worker_id=WORKER_ID,
+            )
+            session.add(run)
+
         task.status = TaskStatus.RUNNING
         await session.flush()
         await session.commit()
@@ -107,6 +129,31 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             run_db.heartbeat_at = datetime.now(UTC)
             await session.commit()
 
+        resolver = await PolicyService(session, task.org_id).resolver()
+
+        def check_policy(tool_name: str) -> tuple[str, str]:
+            decision = resolver.evaluate(tool_name)
+            return decision.setting.value, decision.reason
+
+        checkpoint = await session.get(RunCheckpoint, run_db.id)
+        approved_call = None
+        if checkpoint is not None:
+            approval = await session.scalar(
+                select(Approval)
+                .where(
+                    Approval.run_id == run_db.id,
+                    Approval.status == ApprovalStatus.APPROVED,
+                )
+                .order_by(Approval.decided_at.desc())
+                .limit(1)
+            )
+            if approval is not None:
+                approved_call = checkpoint.pending_tool_call
+                # Consume it, so a later pause in the same run does
+                # not replay this call a second time.
+                await session.delete(checkpoint)
+                await session.flush()
+
         async def cancelled() -> bool:
             fresh = await session.scalar(select(Task.cancel_requested).where(Task.id == task_id))
             return bool(fresh)
@@ -120,6 +167,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             temperature=config.temperature,
             on_event=sink,
             is_cancelled=cancelled,
+            check_policy=check_policy,
+            resume_from=checkpoint.state if checkpoint else None,
+            approved_call=approved_call,
         )
 
         outcome = await loop.run(
@@ -128,6 +178,29 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             ),
             task=task.input,
         )
+
+        if outcome.paused and outcome.pending_tool_call:
+            call = outcome.pending_tool_call
+            tool_cls = registry.get(call["name"])
+            await ApprovalService(session, task.org_id).create(
+                run_id=run_db.id,
+                tool_name=call["name"],
+                side_effect=tool_cls.side_effect.value if tool_cls else "write",
+                # The full action, so the reviewer sees exactly what
+                # they are agreeing to rather than a summary.
+                proposed=call["arguments"],
+                state=outcome.saved_state or {},
+                pending_tool_call=call,
+            )
+            run_db.step_count = outcome.steps
+            run_db.prompt_tokens = outcome.prompt_tokens
+            run_db.output_tokens = outcome.output_tokens
+            await session.commit()
+            return {
+                "status": "awaiting_approval",
+                "stop_cause": outcome.stop_cause,
+                "run_id": str(run_db.id),
+            }
 
         cost = estimate_cost(provider_key, model, outcome.prompt_tokens, outcome.output_tokens)
         session.add(

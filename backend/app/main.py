@@ -16,6 +16,7 @@ from app.api.v1.routes import (
     health,
     orgs,
     platform,
+    policies,
     providers,
     tasks,
 )
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(orgs.router, prefix=settings.api_v1_prefix)
     app.include_router(ai_employees.router, prefix=settings.api_v1_prefix)
     app.include_router(providers.router, prefix=settings.api_v1_prefix)
+    app.include_router(policies.router, prefix=settings.api_v1_prefix)
     app.include_router(tasks.router, prefix=settings.api_v1_prefix)
     app.include_router(platform.router, prefix=settings.api_v1_prefix)
 
