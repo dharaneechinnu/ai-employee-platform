@@ -21,22 +21,50 @@ from app.db.models.identity import (
     User,
 )
 from app.db.models.organization import Organization, OrgStatus
+from app.db.models.provider import (
+    ConnectionStatus,
+    ProviderConfig,
+    ProviderKind,
+    SupportedProvider,
+)
+from app.db.models.task import (
+    EventType,
+    LLMCall,
+    Run,
+    RunEvent,
+    RunStatus,
+    Task,
+    TaskStatus,
+    ToolInvocation,
+)
 
 __all__ = [
     "AIEmployee",
     "AIEmployeeVersion",
     "Base",
+    "ConnectionStatus",
     "EmployeeStatus",
+    "EventType",
     "Invitation",
+    "LLMCall",
     "Membership",
     "OrgStatus",
     "Organization",
     "PlatformAdmin",
     "PlatformAdminAudit",
+    "ProviderConfig",
+    "ProviderKind",
     "RefreshToken",
     "Role",
+    "Run",
+    "RunEvent",
+    "RunStatus",
+    "SupportedProvider",
+    "Task",
+    "TaskStatus",
     "Template",
     "TimestampMixin",
+    "ToolInvocation",
     "UUIDPrimaryKeyMixin",
     "User",
 ]

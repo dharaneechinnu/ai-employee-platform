@@ -36,8 +36,8 @@ DATABASE_URL = os.environ.get(
 ROOT_TABLES_TO_CLEAR = [
     "platform_admin_audit",  # FK to platform_admins is SET NULL, so clear it first
     "platform_admins",
-    "organizations",  # cascades to memberships, invitations, employees, org templates
-    "users",  # cascades to memberships, refresh_tokens
+    "organizations",  # cascades to memberships, invitations, employees, tasks, org templates
+    "users",  # cascades to memberships, refresh_tokens, tasks
 ]
 
 
@@ -47,19 +47,23 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture(autouse=True)
-async def _fresh_engine_per_test() -> AsyncGenerator[None, None]:
-    """Dispose the app's global engine around every test.
+async def _fresh_connections_per_test() -> AsyncGenerator[None, None]:
+    """Dispose the app's global connection pools around every test.
 
-    `app.db.session` holds the engine as a module-level singleton, which
-    is right in production (one pool for the process lifetime) but wrong
-    under pytest: each test runs on a new event loop, so connections
-    pooled on the previous loop fail with "Event loop is closed".
+    Both the database engine and the arq Redis pool are module-level
+    singletons, which is right in production (one pool for the process
+    lifetime) but wrong under pytest: each test runs on a new event
+    loop, so connections pooled on the previous loop fail with
+    "Event loop is closed".
     """
     from app.db.session import dispose_engine
+    from app.workers.queue import close_pool
 
     await dispose_engine()
+    await close_pool()
     yield
     await dispose_engine()
+    await close_pool()
 
 
 @pytest.fixture(autouse=True)

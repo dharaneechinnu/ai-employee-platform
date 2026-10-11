@@ -10,11 +10,10 @@ rather than retrofitted later.
 
 from typing import Any, ClassVar
 
-from arq.connections import RedisSettings
-
 from app.config import get_settings
 from app.core.observability import configure_logging, get_logger
-from app.workers.jobs import ping
+from app.workers.jobs import ping, run_task
+from app.workers.queue import redis_settings as redis_settings_fn
 
 log = get_logger(__name__)
 
@@ -32,23 +31,19 @@ async def shutdown(ctx: dict[str, Any]) -> None:
     log.info("worker_stopped")
 
 
-def _redis_settings() -> RedisSettings:
-    return RedisSettings.from_dsn(str(get_settings().redis_url))
-
-
 class WorkerSettings:
     """arq looks for this class by name."""
 
     # arq refuses to start with nothing registered, and a worker that
     # cannot start is not a walking skeleton. `ping` also proves the
     # API -> Redis -> worker path, which is the half that matters.
-    functions: ClassVar[list[Any]] = [ping]  # phase 4 adds run_task
+    functions: ClassVar[list[Any]] = [ping, run_task]
     cron_jobs: ClassVar[list[Any]] = []  # phase 5 registers expire_approvals, phase 8 the reaper
 
     on_startup = startup
     on_shutdown = shutdown
 
-    redis_settings = _redis_settings()
+    redis_settings = redis_settings_fn()
 
     # One job at a time while slow_mode is on. A single agent task makes
     # 10-15 model calls, so concurrency here is what trips free-tier
