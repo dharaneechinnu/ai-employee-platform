@@ -28,14 +28,16 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql+asyncpg://app:app@localhost:5433/ai_employee"
 )
 
-TABLES_TO_CLEAR = [
-    "refresh_tokens",
-    "invitations",
-    "memberships",
-    "platform_admin_audit",
+# DELETE rather than TRUNCATE CASCADE. TRUNCATE CASCADE empties every
+# referencing table outright, which wipes the platform templates seeded
+# by migration 0003 (they are rows in `templates` with org_id NULL).
+# DELETE follows the ON DELETE CASCADE foreign keys instead, so
+# company-scoped rows go and platform-wide rows stay.
+ROOT_TABLES_TO_CLEAR = [
+    "platform_admin_audit",  # FK to platform_admins is SET NULL, so clear it first
     "platform_admins",
-    "users",
-    "organizations",
+    "organizations",  # cascades to memberships, invitations, employees, org templates
+    "users",  # cascades to memberships, refresh_tokens
 ]
 
 
@@ -64,7 +66,10 @@ async def _fresh_engine_per_test() -> AsyncGenerator[None, None]:
 async def clean_database() -> AsyncGenerator[None, None]:
     eng = create_async_engine(DATABASE_URL)
     async with eng.begin() as conn:
-        await conn.execute(text(f"TRUNCATE {', '.join(TABLES_TO_CLEAR)} RESTART IDENTITY CASCADE"))
+        for table in ROOT_TABLES_TO_CLEAR:
+            # Table names come from the constant above, never from
+            # input, and an identifier cannot be a bound parameter.
+            await conn.execute(text(f"DELETE FROM {table}"))  # noqa: S608
     await eng.dispose()
     yield
 

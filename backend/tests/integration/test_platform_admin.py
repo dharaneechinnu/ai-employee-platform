@@ -30,9 +30,7 @@ async def _sign_in(api: AsyncClient, email: str, password: str, secret: str) -> 
     return str(response.json()["access_token"])
 
 
-async def test_platform_admin_can_sign_in_with_2fa(
-    api: AsyncClient, session: AsyncSession
-) -> None:
+async def test_platform_admin_can_sign_in_with_2fa(api: AsyncClient, session: AsyncSession) -> None:
     email, password, secret = await _make_admin(session)
     token = await _sign_in(api, email, password, secret)
     assert token
@@ -157,9 +155,7 @@ async def test_suspend_a_company(api: AsyncClient, session: AsyncSession) -> Non
     suspended = await api.post(f"/api/v1/platform/companies/{org_id}/suspend", headers=headers)
     assert suspended.json()["status"] == "suspended"
 
-    reactivated = await api.post(
-        f"/api/v1/platform/companies/{org_id}/reactivate", headers=headers
-    )
+    reactivated = await api.post(f"/api/v1/platform/companies/{org_id}/reactivate", headers=headers)
     assert reactivated.json()["status"] == "active"
 
 
