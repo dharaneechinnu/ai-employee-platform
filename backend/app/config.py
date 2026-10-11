@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # At least 32 bytes: below that, HMAC-SHA256 is weaker than the hash it
 # is built on (RFC 7518 section 3.2), and PyJWT rightly warns about it.
 DEV_JWT_SECRET = "dev-only-insecure-secret-do-not-use-in-production"  # noqa: S105
+DEV_ENCRYPTION_KEY = "dev-only-insecure-encryption-key-change-me"
 
 
 class Settings(BaseSettings):
@@ -45,6 +46,9 @@ class Settings(BaseSettings):
     refresh_token_days: int = 30
     invite_expiry_hours: int = 72
 
+    # Master key for envelope encryption of secrets at rest.
+    encryption_key: str = DEV_ENCRYPTION_KEY
+
     # --- worker -------------------------------------------------------
     # One job at a time by default: a single agent task makes 10-15 model
     # calls, so two concurrent tasks will exceed a free-tier rate limit.
@@ -65,8 +69,11 @@ class Settings(BaseSettings):
         """A forgotten secret in production is a total auth bypass: anyone
         who reads this repository could mint a valid token. Fail at
         startup rather than serve traffic."""
-        if self.environment == "prod" and self.jwt_secret == DEV_JWT_SECRET:
-            raise ValueError("JWT_SECRET must be set to a real value in production")
+        if self.environment == "prod":
+            if self.jwt_secret == DEV_JWT_SECRET:
+                raise ValueError("JWT_SECRET must be set to a real value in production")
+            if self.encryption_key == DEV_ENCRYPTION_KEY:
+                raise ValueError("ENCRYPTION_KEY must be set to a real value in production")
         return self
 
 
