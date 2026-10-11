@@ -167,7 +167,12 @@ def upgrade() -> None:
         -- from its first day rather than retrofitted
         (gen_random_uuid(), 'pack', 'github',   'read',        'auto',    now(), now()),
         (gen_random_uuid(), 'pack', 'github',   'write',       'ask',     now(), now()),
-        (gen_random_uuid(), 'pack', 'github',   'destructive', 'blocked', now(), now())
+        (gen_random_uuid(), 'pack', 'github',   'destructive', 'blocked', now(), now()),
+        -- memory: recalling is free, writing shapes every later run
+        (gen_random_uuid(), 'pack', 'memory',   'read',        'auto',    now(), now()),
+        (gen_random_uuid(), 'pack', 'memory',   'write',       'auto',    now(), now()),
+        -- delegation: one employee spending another's budget
+        (gen_random_uuid(), 'pack', 'delegation','write',      'auto',    now(), now())
         """
     )
 

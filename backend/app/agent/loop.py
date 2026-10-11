@@ -32,6 +32,11 @@ from app.core.observability import get_logger
 
 log = get_logger(__name__)
 
+# Most of a tool call is waiting on the network, so independent
+# calls run together. Capped: each one also costs rate-limit budget,
+# and an unbounded fan-out starves every other task in the queue.
+MAX_PARALLEL_TOOLS = 3
+
 
 class StopCause(str):
     COMPLETED = "completed"
@@ -227,6 +232,11 @@ class AgentLoop:
                 await self._emit("run_finished", cause=StopCause.COMPLETED)
                 return self._outcome(StopCause.COMPLETED, reply.text, prompt_tokens, output_tokens)
 
+            # Split the batch first: a blocked call needs no work, and a
+            # call needing approval ends the turn, so neither should be
+            # started concurrently with the rest.
+            runnable: list[ToolCall] = []
+
             for call in reply.tool_calls:
                 setting, reason = (
                     self._check_policy(call.name) if self._check_policy else ("auto", "")
@@ -264,15 +274,26 @@ class AgentLoop:
                     }
                     return outcome
 
-                result = await self._run_tool(call)
-                messages.append(
-                    Message(
-                        role=Role.TOOL,
-                        content=result.as_text(),
-                        tool_call_id=call.id,
-                        name=call.name,
+                runnable.append(call)
+
+            for batch_start in range(0, len(runnable), MAX_PARALLEL_TOOLS):
+                batch = runnable[batch_start : batch_start + MAX_PARALLEL_TOOLS]
+
+                if len(batch) == 1:
+                    results = [await self._run_tool(batch[0])]
+                else:
+                    await self._emit("parallel_started", count=len(batch))
+                    results = list(await asyncio.gather(*(self._run_tool(c) for c in batch)))
+
+                for call, result in zip(batch, results, strict=True):
+                    messages.append(
+                        Message(
+                            role=Role.TOOL,
+                            content=result.as_text(),
+                            tool_call_id=call.id,
+                            name=call.name,
+                        )
                     )
-                )
 
     async def _run_tool(self, call: ToolCall) -> ToolResult:
         await self._emit("tool_call", tool=call.name, arguments=call.arguments)
