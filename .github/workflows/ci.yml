@@ -66,5 +66,5 @@ jobs:
           alembic downgrade base
           alembic upgrade head
 
-      - name: Tests
+      - name: Tests (unit, isolation and integration)
         run: python -m pytest --cov=app --cov-report=term-missing

@@ -7,7 +7,9 @@ from pydantic import Field, PostgresDsn, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Placeholder, not a credential: Settings rejects it when ENVIRONMENT=prod.
-DEV_JWT_SECRET = "dev-secret-change-me"  # noqa: S105
+# At least 32 bytes: below that, HMAC-SHA256 is weaker than the hash it
+# is built on (RFC 7518 section 3.2), and PyJWT rightly warns about it.
+DEV_JWT_SECRET = "dev-only-insecure-secret-do-not-use-in-production"  # noqa: S105
 
 
 class Settings(BaseSettings):

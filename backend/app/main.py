@@ -10,8 +10,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1.routes import health
+from app.api.v1.routes import auth, health, orgs
 from app.config import Settings, get_settings
+from app.core.error_handlers import register_error_handlers
 from app.core.observability import configure_logging, get_logger
 from app.db.session import dispose_engine
 
@@ -54,7 +55,15 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
+    register_error_handlers(app)
+
+    # Health probes sit at the root so orchestrators do not need to
+    # know the API version.
     app.include_router(health.router)
+
+    app.include_router(auth.router, prefix=settings.api_v1_prefix)
+    app.include_router(orgs.router, prefix=settings.api_v1_prefix)
+
     return app
 
 
