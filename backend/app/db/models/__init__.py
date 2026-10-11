@@ -20,6 +20,19 @@ from app.db.models.identity import (
     Role,
     User,
 )
+from app.db.models.memory import (
+    VECTOR_TABLES,
+    EmbeddingConfig,
+    Memory,
+    MemoryKind,
+    MemoryScope,
+    MemoryVector384,
+    MemoryVector768,
+    MemoryVector1024,
+    MemoryVector1536,
+    ReembedJob,
+    RunSummary,
+)
 from app.db.models.organization import Organization, OrgStatus
 from app.db.models.policy import (
     Approval,
@@ -50,6 +63,7 @@ from app.db.models.task import (
 )
 
 __all__ = [
+    "VECTOR_TABLES",
     "AIEmployee",
     "AIEmployeeVersion",
     "Approval",
@@ -58,11 +72,19 @@ __all__ = [
     "Connection",
     "ConnectionKind",
     "ConnectionStatus",
+    "EmbeddingConfig",
     "EmployeeStatus",
     "EventType",
     "Invitation",
     "LLMCall",
     "Membership",
+    "Memory",
+    "MemoryKind",
+    "MemoryScope",
+    "MemoryVector384",
+    "MemoryVector768",
+    "MemoryVector1024",
+    "MemoryVector1536",
     "OrgStatus",
     "Organization",
     "PlatformAdmin",
@@ -73,12 +95,14 @@ __all__ = [
     "PolicySetting",
     "ProviderConfig",
     "ProviderKind",
+    "ReembedJob",
     "RefreshToken",
     "Role",
     "Run",
     "RunCheckpoint",
     "RunEvent",
     "RunStatus",
+    "RunSummary",
     "SupportedProvider",
     "Task",
     "TaskStatus",

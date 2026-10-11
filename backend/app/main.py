@@ -14,6 +14,7 @@ from app.api.v1.routes import (
     ai_employees,
     auth,
     health,
+    memory,
     orgs,
     platform,
     policies,
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(ai_employees.router, prefix=settings.api_v1_prefix)
     app.include_router(providers.router, prefix=settings.api_v1_prefix)
     app.include_router(policies.router, prefix=settings.api_v1_prefix)
+    app.include_router(memory.router, prefix=settings.api_v1_prefix)
     app.include_router(tasks.router, prefix=settings.api_v1_prefix)
     app.include_router(platform.router, prefix=settings.api_v1_prefix)
 

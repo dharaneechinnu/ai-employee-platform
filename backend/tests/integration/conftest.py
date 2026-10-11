@@ -36,7 +36,7 @@ DATABASE_URL = os.environ.get(
 ROOT_TABLES_TO_CLEAR = [
     "platform_admin_audit",  # FK to platform_admins is SET NULL, so clear it first
     "platform_admins",
-    "organizations",  # cascades to memberships, invitations, employees, tasks, org templates
+    "organizations",  # cascades to memberships, employees, tasks, memory, org templates
     "users",  # cascades to memberships, refresh_tokens, tasks
 ]
 

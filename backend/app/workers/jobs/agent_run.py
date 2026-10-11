@@ -162,7 +162,15 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             provider=build_provider(provider_key, api_key),
             model=model,
             tools=registry.for_employee(config.enabled_tools),
-            tool_context=ToolContext(org_id=task.org_id, run_id=run_db.id, dry_run=task.dry_run),
+            tool_context=ToolContext(
+                org_id=task.org_id,
+                run_id=run_db.id,
+                dry_run=task.dry_run,
+                # The memory tools need a session and to know which
+                # employee is asking, so employee-scoped memories
+                # stay private to that employee.
+                config={"_session": session, "_employee_id": employee.id},
+            ),
             budget=Budget(max_steps=config.max_steps),
             temperature=config.temperature,
             on_event=sink,
