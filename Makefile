@@ -25,7 +25,11 @@ migrate-down:  ## Roll back one migration
 revision:  ## Create a migration: make revision m="add users"
 	$(COMPOSE) run --rm migrate alembic revision --autogenerate -m "$(m)"
 
-test:  ## Run the test suite
+test-db:  ## Create and migrate the separate test database
+	-docker compose exec -T postgres psql -U app -d postgres -c 'CREATE DATABASE ai_employee_test OWNER app'
+	cd backend && DATABASE_URL=postgresql+asyncpg://app:app@localhost:5433/ai_employee_test python -m alembic upgrade head
+
+test: test-db  ## Run the test suite (never touches the dev database)
 	cd backend && python -m pytest
 
 cov:  ## Run tests with a coverage report
@@ -39,4 +43,4 @@ fix:  ## Auto-fix what ruff can
 
 check: lint test  ## Everything CI runs
 
-.PHONY: help up down clean logs migrate migrate-down revision test cov lint fix check
+.PHONY: help up down clean logs migrate migrate-down revision test-db test cov lint fix check

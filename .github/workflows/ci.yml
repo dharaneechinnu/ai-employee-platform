@@ -37,6 +37,7 @@ jobs:
     env:
       ENVIRONMENT: test
       DATABASE_URL: postgresql+asyncpg://app:app@localhost:5433/ai_employee
+      TEST_DATABASE_URL: postgresql+asyncpg://app:app@localhost:5433/ai_employee_test
       REDIS_URL: redis://localhost:6380/0
 
     steps:
@@ -60,11 +61,18 @@ jobs:
       - name: Types (mypy strict)
         run: python -m mypy app
 
+      - name: Create the test database
+        run: |
+          PGPASSWORD=app psql -h localhost -p 5433 -U app -d postgres \n            -c 'CREATE DATABASE ai_employee_test OWNER app'
+
       - name: Migrations run forward and backward
         run: |
           alembic upgrade head
           alembic downgrade base
           alembic upgrade head
+
+      - name: Migrate the test database
+        run: DATABASE_URL=$TEST_DATABASE_URL alembic upgrade head
 
       - name: Tests (unit, isolation and integration)
         run: python -m pytest --cov=app --cov-report=term-missing

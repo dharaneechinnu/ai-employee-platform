@@ -7,6 +7,7 @@ import Employees from "./pages/Employees";
 import Login from "./pages/Login";
 import Members from "./pages/Members";
 import Memory from "./pages/Memory";
+import PlatformAdmin from "./pages/PlatformAdmin";
 import Policies from "./pages/Policies";
 import Providers from "./pages/Providers";
 import Tasks from "./pages/Tasks";
@@ -26,6 +27,7 @@ export default function App() {
   if (!me) {
     return (
       <Routes>
+        <Route path="/platform" element={<PlatformAdmin />} />
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
@@ -34,6 +36,8 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Outside the company layout: separate session, separate token. */}
+      <Route path="/platform" element={<PlatformAdmin />} />
       <Route element={<Layout />}>
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/employees" element={<Employees />} />

@@ -24,9 +24,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 os.environ.setdefault("ENVIRONMENT", "test")
 
+# A SEPARATE database, on purpose. These tests delete every
+# organization between cases, so running them against the development
+# database destroys whatever you were working with. TEST_DATABASE_URL
+# overrides it; DATABASE_URL deliberately does not.
 DATABASE_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+asyncpg://app:app@localhost:5433/ai_employee"
+    "TEST_DATABASE_URL", "postgresql+asyncpg://app:app@localhost:5433/ai_employee_test"
 )
+
+# The app itself reads DATABASE_URL, so point that at the test database
+# too. Without this the API under test would write to the dev database
+# while the fixtures cleaned a different one.
+os.environ["DATABASE_URL"] = DATABASE_URL
 
 # DELETE rather than TRUNCATE CASCADE. TRUNCATE CASCADE empties every
 # referencing table outright, which wipes the platform templates seeded
