@@ -45,3 +45,6 @@ uploads/
 
 # ---- AI test cassettes are COMMITTED on purpose ----
 # (tests must run offline in CI, so do not ignore tests/cassettes/)
+
+# ---- Python virtualenv (local dev) ----
+.venv/
