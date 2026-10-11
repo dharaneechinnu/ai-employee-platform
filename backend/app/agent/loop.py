@@ -1,0 +1,243 @@
+"""The agent loop.
+
+    think -> ask for a tool -> run it -> think again -> ... -> answer
+
+Written by hand rather than taken from a framework, so the behaviour
+that matters is explicit and visible: budgets, cancellation, how tool
+failures reach the model, and where the permission check will slot in.
+Phase 7 swaps the mechanism for LangGraph; these rules stay.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import time
+import uuid
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from typing import Any
+
+from app.agent.providers.base import (
+    LLMError,
+    LLMProvider,
+    LLMReply,
+    Message,
+    Role,
+    StopReason,
+    ToolCall,
+    ToolSchema,
+)
+from app.agent.tools.base import Tool, ToolContext, ToolResult
+from app.core.observability import get_logger
+
+log = get_logger(__name__)
+
+
+class StopCause(str):
+    COMPLETED = "completed"
+    MAX_STEPS = "max_steps"
+    MAX_TOKENS = "max_tokens"
+    TIMEOUT = "timeout"
+    CANCELLED = "cancelled"
+    PROVIDER_ERROR = "provider_error"
+
+
+@dataclass(slots=True)
+class Budget:
+    """Seatbelts.
+
+    A confused agent will loop - try, fail, try again - and every pass
+    costs money and a slice of the free-tier rate limit. Without a cap
+    one bad run can burn a night's quota.
+    """
+
+    max_steps: int = 15
+    max_tokens: int = 200_000
+    max_seconds: float = 600.0
+
+    steps_used: int = 0
+    tokens_used: int = 0
+    started_at: float = field(default_factory=time.monotonic)
+
+    def exceeded(self) -> str | None:
+        if self.steps_used >= self.max_steps:
+            return StopCause.MAX_STEPS
+        if self.tokens_used >= self.max_tokens:
+            return StopCause.MAX_TOKENS
+        if time.monotonic() - self.started_at >= self.max_seconds:
+            return StopCause.TIMEOUT
+        return None
+
+
+@dataclass(slots=True)
+class AgentEvent:
+    type: str
+    payload: dict[str, Any]
+
+
+@dataclass(slots=True)
+class RunOutcome:
+    stop_cause: str
+    output: str | None
+    steps: int
+    prompt_tokens: int
+    output_tokens: int
+    events: list[AgentEvent]
+
+    @property
+    def completed(self) -> bool:
+        return self.stop_cause == StopCause.COMPLETED
+
+
+EventSink = Callable[[AgentEvent], Awaitable[None]]
+CancelCheck = Callable[[], Awaitable[bool]]
+
+
+class AgentLoop:
+    def __init__(
+        self,
+        *,
+        provider: LLMProvider,
+        model: str,
+        tools: list[type[Tool]],
+        tool_context: ToolContext,
+        budget: Budget | None = None,
+        temperature: float = 0.2,
+        on_event: EventSink | None = None,
+        is_cancelled: CancelCheck | None = None,
+    ) -> None:
+        self.provider = provider
+        self.model = model
+        self.tools = {t.name: t for t in tools}
+        self.tool_context = tool_context
+        self.budget = budget or Budget()
+        self.temperature = temperature
+        self._on_event = on_event
+        self._is_cancelled = is_cancelled
+        self._events: list[AgentEvent] = []
+
+    async def _emit(self, type_: str, **payload: Any) -> None:
+        event = AgentEvent(type=type_, payload=payload)
+        self._events.append(event)
+        if self._on_event:
+            await self._on_event(event)
+
+    def _schemas(self) -> list[ToolSchema]:
+        return [
+            ToolSchema(name=t.name, description=t.description, parameters=t.json_schema())
+            for t in self.tools.values()
+        ]
+
+    async def run(self, *, system_prompt: str, task: str) -> RunOutcome:
+        messages: list[Message] = [
+            Message(role=Role.SYSTEM, content=system_prompt),
+            Message(role=Role.USER, content=task),
+        ]
+        prompt_tokens = output_tokens = 0
+
+        await self._emit("run_started", model=self.model, tools=list(self.tools))
+
+        while True:
+            # Budget first: stop a runaway before it costs anything more.
+            if cause := self.budget.exceeded():
+                await self._emit("run_stopped", cause=cause)
+                return self._outcome(cause, None, prompt_tokens, output_tokens)
+
+            # Then cancellation, so Cancel takes effect within one step.
+            if self._is_cancelled and await self._is_cancelled():
+                await self._emit("run_stopped", cause=StopCause.CANCELLED)
+                return self._outcome(StopCause.CANCELLED, None, prompt_tokens, output_tokens)
+
+            await self._emit("thinking", step=self.budget.steps_used + 1)
+
+            try:
+                reply: LLMReply = await self.provider.complete(
+                    messages=messages,
+                    model=self.model,
+                    tools=self._schemas() or None,
+                    temperature=self.temperature,
+                )
+            except LLMError as exc:
+                await self._emit(
+                    "provider_error", error=type(exc).__name__, retryable=exc.retryable
+                )
+                return self._outcome(
+                    StopCause.PROVIDER_ERROR, str(exc), prompt_tokens, output_tokens
+                )
+
+            prompt_tokens += reply.usage.prompt_tokens
+            output_tokens += reply.usage.output_tokens
+            self.budget.tokens_used += reply.usage.total
+            self.budget.steps_used += 1
+
+            await self._emit(
+                "llm_call",
+                model=reply.model,
+                prompt_tokens=reply.usage.prompt_tokens,
+                output_tokens=reply.usage.output_tokens,
+                latency_ms=reply.latency_ms,
+            )
+
+            messages.append(reply.message)
+
+            if reply.stop_reason is not StopReason.TOOL_USE or not reply.tool_calls:
+                await self._emit("run_finished", cause=StopCause.COMPLETED)
+                return self._outcome(StopCause.COMPLETED, reply.text, prompt_tokens, output_tokens)
+
+            for call in reply.tool_calls:
+                result = await self._run_tool(call)
+                messages.append(
+                    Message(
+                        role=Role.TOOL,
+                        content=result.as_text(),
+                        tool_call_id=call.id,
+                        name=call.name,
+                    )
+                )
+
+    async def _run_tool(self, call: ToolCall) -> ToolResult:
+        await self._emit("tool_call", tool=call.name, arguments=call.arguments)
+
+        tool_cls = self.tools.get(call.name)
+        if tool_cls is None:
+            # The model asked for something it does not have. Tell it so
+            # it can pick a real tool, rather than failing the run.
+            result = ToolResult.failure(
+                "unknown_tool",
+                f"There is no tool called '{call.name}'. "
+                f"Available tools: {', '.join(sorted(self.tools)) or 'none'}.",
+            )
+            await self._emit("tool_result", tool=call.name, **result.summary())
+            return result
+
+        try:
+            result = await asyncio.wait_for(
+                tool_cls().execute(self.tool_context, call.arguments),
+                timeout=tool_cls.timeout_s,
+            )
+        except TimeoutError:
+            result = ToolResult.failure(
+                "timeout", f"{call.name} did not finish within {tool_cls.timeout_s} seconds."
+            )
+        except Exception as exc:
+            log.exception("tool_crashed", tool=call.name)
+            result = ToolResult.failure("tool_error", f"{type(exc).__name__}: {exc}")
+
+        await self._emit("tool_result", tool=call.name, **result.summary())
+        return result
+
+    def _outcome(
+        self, cause: str, output: str | None, prompt_tokens: int, output_tokens: int
+    ) -> RunOutcome:
+        return RunOutcome(
+            stop_cause=cause,
+            output=output,
+            steps=self.budget.steps_used,
+            prompt_tokens=prompt_tokens,
+            output_tokens=output_tokens,
+            events=self._events,
+        )
+
+
+def new_run_id() -> uuid.UUID:
+    return uuid.uuid4()
