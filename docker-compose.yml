@@ -109,6 +109,9 @@ services:
       context: ./frontend
     environment:
       NODE_ENV: development
+      # Service name, not localhost: inside this container localhost
+      # is the container itself and the request never reaches the API.
+      VITE_API_TARGET: http://api:8000
     ports:
       - "5173:5173"
     volumes:

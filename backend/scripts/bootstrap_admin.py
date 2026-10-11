@@ -12,6 +12,8 @@ import argparse
 import asyncio
 import secrets
 
+from pydantic import TypeAdapter, ValidationError
+from pydantic.networks import EmailStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.db.session import get_engine
@@ -19,6 +21,14 @@ from app.services.platform_service import PlatformService
 
 
 async def main(email: str, password: str | None) -> None:
+    # Validate exactly as the login endpoint does. Without this the
+    # script happily creates an admin at a reserved domain such as
+    # .local or .test, and that account can never sign in.
+    try:
+        TypeAdapter(EmailStr).validate_python(email)
+    except ValidationError as exc:
+        raise SystemExit(f"That email will be rejected at login: {exc.errors()[0]['msg']}") from exc
+
     password = password or secrets.token_urlsafe(24)
 
     maker = async_sessionmaker(bind=get_engine(), expire_on_commit=False)
