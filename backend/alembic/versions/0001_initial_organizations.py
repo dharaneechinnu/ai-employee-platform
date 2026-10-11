@@ -51,12 +51,11 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id", name="pk_organizations"),
-        sa.UniqueConstraint("slug", name="uq_organizations_slug"),
         sa.CheckConstraint(
             "max_employees >= 0", name="ck_organizations_max_employees_non_negative"
         ),
     )
-    op.create_index("ix_organizations_slug", "organizations", ["slug"])
+    op.create_index("ix_organizations_slug", "organizations", ["slug"], unique=True)
 
 
 def downgrade() -> None:

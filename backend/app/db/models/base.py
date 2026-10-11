@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime, func, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -22,6 +22,9 @@ class UUIDPrimaryKeyMixin:
         PGUUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
+        # Also set in the database, so rows inserted by raw SQL (fixtures,
+        # data migrations, psql) still get a valid id.
+        server_default=text("gen_random_uuid()"),
     )
 
 
