@@ -8,7 +8,10 @@ services:
       POSTGRES_PASSWORD: app
       POSTGRES_DB: ai_employee
     ports:
-      - "5432:5432"
+      # Host port deliberately not 5432: a locally installed
+      # PostgreSQL would win the binding and silently receive our
+      # connections. Containers still talk over 5432 internally.
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +24,8 @@ services:
     image: redis:7-alpine
     command: redis-server --save "" --appendonly no
     ports:
-      - "6379:6379"
+      # Same reasoning as postgres above.
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

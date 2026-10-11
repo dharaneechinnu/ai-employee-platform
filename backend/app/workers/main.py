@@ -3,8 +3,9 @@
 This process runs background jobs. It never serves HTTP — that is the
 API's job. See HLD part 2.3.
 
-In phase 0 there are no jobs yet; this exists so the split process model
-is real from the start rather than retrofitted.
+Phase 0 registers only `ping`, which exists to prove the queue path
+works end to end and to keep the two-process split real from the start
+rather than retrofitted later.
 """
 
 from typing import Any, ClassVar
@@ -13,6 +14,7 @@ from arq.connections import RedisSettings
 
 from app.config import get_settings
 from app.core.observability import configure_logging, get_logger
+from app.workers.jobs import ping
 
 log = get_logger(__name__)
 
@@ -37,7 +39,10 @@ def _redis_settings() -> RedisSettings:
 class WorkerSettings:
     """arq looks for this class by name."""
 
-    functions: ClassVar[list[Any]] = []  # phase 4 registers run_task here
+    # arq refuses to start with nothing registered, and a worker that
+    # cannot start is not a walking skeleton. `ping` also proves the
+    # API -> Redis -> worker path, which is the half that matters.
+    functions: ClassVar[list[Any]] = [ping]  # phase 4 adds run_task
     cron_jobs: ClassVar[list[Any]] = []  # phase 5 registers expire_approvals, phase 8 the reaper
 
     on_startup = startup
