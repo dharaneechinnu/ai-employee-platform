@@ -41,6 +41,13 @@ services:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/ai_employee
       REDIS_URL: redis://redis:6379/0
     command: ["alembic", "upgrade", "head"]
+    # Same live mount as api and worker. Without it this service runs the
+    # migrations baked into the image, so a newly written migration is
+    # invisible until someone remembers to rebuild - and the failure
+    # looks like "can't locate revision", which does not point at the
+    # real cause.
+    volumes:
+      - ./backend:/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -80,6 +87,17 @@ services:
     volumes:
       - ./backend:/app
     command: ["arq", "app.workers.main.WorkerSettings"]
+    # The image's default healthcheck curls /healthz, but the worker
+    # serves no HTTP - that is the whole point of splitting it from the
+    # API. Use arq's own check, which reads the heartbeat the worker
+    # writes to Redis, so this proves it is consuming jobs rather than
+    # merely running.
+    healthcheck:
+      test: ["CMD", "arq", "app.workers.main.WorkerSettings", "--check"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       redis:
         condition: service_healthy
