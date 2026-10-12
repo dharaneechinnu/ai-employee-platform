@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "../components/icons";
+import { ToolPicker } from "../components/ToolPicker";
 import {
   Avatar,
   Button,
@@ -45,6 +46,10 @@ export default function Employees() {
   const [does, setDoes] = useState("");
   const [never, setNever] = useState("");
   const [askHuman, setAskHuman] = useState("");
+  const [tools, setTools] = useState<string[]>([]);
+  // The employee whose tools are open for editing, if any.
+  const [editing, setEditing] = useState<Employee | null>(null);
+  const [editTools, setEditTools] = useState<string[]>([]);
   const firstField = useRef<HTMLDivElement>(null);
 
   async function load() {
@@ -78,7 +83,9 @@ export default function Employees() {
     setDoes(guided?.what_it_does ?? "");
     setNever(guided?.what_it_must_never_do ?? "");
     setAskHuman(guided?.when_to_ask_a_human ?? "");
+    setTools(template?.config.enabled_tools ?? []);
     setError(null);
+    setEditing(null);
     setCreating(true);
     window.setTimeout(() => firstField.current?.querySelector("input")?.focus(), 50);
   }
@@ -98,6 +105,7 @@ export default function Employees() {
             what_it_must_never_do: never || null,
             when_to_ask_a_human: askHuman || null,
           },
+          enabled_tools: tools,
         },
       });
       setCreating(false);
@@ -105,6 +113,33 @@ export default function Employees() {
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create it.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function openTools(employee: Employee) {
+    setCreating(false);
+    setError(null);
+    setEditing(employee);
+    setEditTools(employee.config.enabled_tools);
+  }
+
+  async function saveTools() {
+    if (!org || !editing) return;
+    setBusy("tools");
+    setError(null);
+    try {
+      // PATCH replaces the whole configuration, so send it all back
+      // with only the tool list changed.
+      await api.patch(`/orgs/${org.id}/ai-employees/${editing.id}`, {
+        config: { ...editing.config, enabled_tools: editTools },
+      });
+      toast(`${editing.name} now has ${editTools.length} tools.`);
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save the tools.");
     } finally {
       setBusy(null);
     }
@@ -200,6 +235,11 @@ export default function Employees() {
                             {detail.config.model} · {detail.config.enabled_tools.length} tools
                           </span>
                         )}
+                        {detail && isAdmin && (
+                          <Button size="sm" variant="ghost" icon="sparkle" onClick={() => openTools(detail)}>
+                            Tools
+                          </Button>
+                        )}
                       </div>
                     </article>
                   );
@@ -280,6 +320,10 @@ export default function Employees() {
                   onChange={setAskHuman}
                   placeholder="Before sending anything outside the company."
                 />
+                <div className="flex flex-col gap-2">
+                  <span className="label">What can it use?</span>
+                  {org && <ToolPicker orgId={org.id} value={tools} onChange={setTools} />}
+                </div>
                 <ErrorNote message={error} />
                 <div className="flex gap-2.5">
                   <Button type="submit" className="flex-1" disabled={busy === "create" || !name.trim() || !does.trim()}>
@@ -290,6 +334,36 @@ export default function Employees() {
                   </Button>
                 </div>
               </form>
+            </aside>
+          )}
+
+          {editing && (
+            <aside
+              className="halo w-full max-w-[460px] flex-[1_1_360px] rounded-[22px] p-[1.5px]"
+              style={{ animation: "ring 5s linear infinite, slide-in .5s cubic-bezier(.16,1,.3,1) both" }}
+              aria-label={`Tools for ${editing.name}`}
+            >
+              <div className="flex flex-col gap-4 rounded-[21px] bg-panel p-5">
+                <div className="flex items-center gap-2.5">
+                  <h2 className="flex-1 font-display text-[19px] font-semibold">Tools for {editing.name}</h2>
+                  <button type="button" className="icon-btn h-10 w-10" aria-label="Close" onClick={() => setEditing(null)}>
+                    <Icon name="x" />
+                  </button>
+                </div>
+                <p className="text-[13px] leading-normal text-muted">
+                  Anything left unticked does not exist as far as it is concerned. Sends and invites still wait for approval.
+                </p>
+                {org && <ToolPicker orgId={org.id} value={editTools} onChange={setEditTools} />}
+                <ErrorNote message={error} />
+                <div className="flex gap-2.5">
+                  <Button className="flex-1" disabled={busy === "tools"} onClick={() => void saveTools()}>
+                    {busy === "tools" ? "Saving…" : `Save ${editTools.length} tools`}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setEditing(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
             </aside>
           )}
         </div>

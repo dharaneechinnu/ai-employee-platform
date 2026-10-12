@@ -260,6 +260,7 @@ export interface ToolEntry {
   effective_setting: "auto" | "ask" | "blocked";
   reason: string;
   permanently_blocked: boolean;
+  requires_connection?: string | null;
 }
 
 export interface PolicyRow {
@@ -307,4 +308,63 @@ export interface Company {
   max_employees: number;
   employees_used: number;
   member_count: number;
+}
+
+export interface ConnectionField {
+  key: string;
+  label: string;
+  placeholder?: string;
+}
+
+export interface AvailableConnection {
+  kind: string;
+  display_name: string;
+  description: string;
+  auth: "oauth" | "manual";
+  apps: string[];
+  configured: boolean;
+  tools: string[];
+  fields: ConnectionField[];
+  secret_label: string | null;
+}
+
+export interface ConnectionItem {
+  id: string;
+  kind: string;
+  display_name: string;
+  label: string;
+  account: string | null;
+  status: "connected" | "untested" | "failed" | "needs_reconnect";
+  credential_last4: string;
+  last_tested_at: string | null;
+  last_error: string | null;
+  enabled: boolean;
+  created_at: string;
+  config: Record<string, unknown>;
+}
+
+export interface NotificationSettings {
+  email_enabled: boolean;
+  email_available: boolean;
+  slack_enabled: boolean;
+  slack_connected: boolean;
+  slack_webhook_last4: string | null;
+  on_approval_requested: boolean;
+  on_task_completed: boolean;
+  on_task_failed: boolean;
+}
+
+export interface ApprovalLinkView {
+  approval_id: string;
+  org_name: string;
+  task_title: string | null;
+  task_id: string | null;
+  employee_name: string | null;
+  tool_name: string;
+  side_effect: string;
+  proposed: Record<string, unknown>;
+  status: "pending" | "approved" | "rejected" | "expired";
+  expires_at: string;
+  requires_sign_in: boolean;
+  acting_as: string | null;
 }

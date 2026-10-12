@@ -56,6 +56,9 @@ class ToolCatalogueEntry(BaseModel):
     effective_setting: PolicySetting
     reason: str
     permanently_blocked: bool
+    # The connection kind this tool needs, so the tool picker can say
+    # "connect Google first" instead of letting it fail at run time.
+    requires_connection: str | None = None
 
 
 class ApprovalResponse(BaseModel):
@@ -127,6 +130,7 @@ async def tool_catalogue(ctx: CanRead, session: SessionDep) -> list[ToolCatalogu
                 effective_setting=decision.setting,
                 reason=decision.reason,
                 permanently_blocked=tool.name in BLOCKED_ACTIONS,
+                requires_connection=tool.requires_connection,
             )
         )
     return entries

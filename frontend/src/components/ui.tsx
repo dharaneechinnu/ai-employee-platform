@@ -361,9 +361,9 @@ export type Tone = "run" | "ok" | "ask" | "bad" | "brand" | "mute";
 /** Colour by meaning, so a run's state is readable at a glance. */
 export function statusTone(status: string): Tone {
   if (["running", "queued", "working"].includes(status)) return status === "working" ? "ok" : "run";
-  if (["completed", "active", "auto"].includes(status)) return "ok";
+  if (["completed", "active", "auto", "connected", "approved"].includes(status)) return "ok";
   if (["awaiting_approval", "ask", "paused", "untested"].includes(status)) return "ask";
-  if (["failed", "cancelled", "blocked", "destructive", "suspended", "closed"].includes(status)) return "bad";
+  if (["failed", "cancelled", "blocked", "destructive", "suspended", "closed", "needs_reconnect", "rejected", "expired"].includes(status)) return "bad";
   if (["draft", "write"].includes(status)) return "brand";
   return "mute";
 }
