@@ -28,6 +28,10 @@ Result         →  the work done, with a full audit trail and the cost of the r
 
 ## Product videos
 
+▶️ **Watch on Google Drive:** [AI Employees – Product Videos](https://drive.google.com/drive/folders/1UvPBz49-xYwfs9tHebLO8B7bEaPvwV1m)
+
+The same files are in this repository under `docs/`:
+
 | Video | What it shows |
 |---|---|
 | 🎬 **[Narrated ad](docs/product-ad.mp4)** (1:08) | Six features with title cards, zooms and spotlights, a voiceover in sync with subtitles, and music |
