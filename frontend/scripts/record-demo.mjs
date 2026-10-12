@@ -160,9 +160,11 @@ await go("/employees");
 const ravi = app.locator("article", { hasText: "Operations Analyst" });
 await click(ravi.getByRole("button", { name: "Tools" }), 700);
 const panel = app.locator("aside", { hasText: "Tools for Ravi" });
-await zoom(panel, 1.5, [1100, 470], 900);
 const googlePack = panel.locator("details", { hasText: "Google Workspace" });
+await zoom(googlePack.locator("summary"), 1.45, [1060, 330], 900);
 await click(googlePack.locator("summary"), 600);
+await wait(250);
+await zoom(googlePack, 1.45, [1060, 560], 700);
 for (const tool of ["gmail_search", "gmail_send"]) {
   await click(googlePack.locator("label").filter({ has: app.getByText(tool, { exact: true }) }).locator("input"), 450);
 }

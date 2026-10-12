@@ -363,12 +363,15 @@ function api(method, path, body, req, res) {
   if ((p = r(/^\/runs\/([^/]+)\/events$/))) {
     const run = runs[p[1]];
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
+    res.write(": connected\n\n");
     const last = Number(new URL(req.url, "http://x").searchParams.get("last_event_id") ?? 0);
     for (const e of run?.events.filter((x) => x.seq > last) ?? []) res.write(`id: ${e.seq}\ndata: ${JSON.stringify(e)}\n\n`);
     if (!run || run.status === "completed" || run.status === "failed") return res.end("event: done\ndata: {}\n\n");
     if (!listeners.has(run.id)) listeners.set(run.id, new Set());
     listeners.get(run.id).add(res);
-    req.on("close", () => listeners.get(run.id)?.delete(res));
+    // res, not req: the request "closes" as soon as its (empty) body is
+    // read, which would drop the listener before the first event.
+    res.on("close", () => listeners.get(run.id)?.delete(res));
     return;
   }
 
