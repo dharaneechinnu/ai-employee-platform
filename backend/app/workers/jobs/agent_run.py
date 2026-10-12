@@ -29,7 +29,9 @@ from app.db.models.task import LLMCall, Run, RunStatus, Task, TaskStatus
 from app.db.session import get_sessionmaker
 from app.schemas.ai_employee import EmployeeConfig
 from app.services.approval_service import ApprovalService
+from app.services.connection_service import ConnectionService
 from app.services.employee_service import build_system_prompt
+from app.services.notification_service import NotificationService, notify_safely
 from app.services.policy_service import PolicyService
 from app.services.provider_service import ProviderService
 from app.services.task_service import EventWriter, estimate_cost
@@ -154,6 +156,13 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 await session.delete(checkpoint)
                 await session.flush()
 
+        # The company's connected apps, resolved once per run (and
+        # again on resume, so a token refreshed while the run waited
+        # for approval is picked up). Tools receive only the grant
+        # they declare; the model never sees any of it.
+        grants = await ConnectionService(session, task.org_id).resolve_grants()
+        await session.commit()
+
         async def cancelled() -> bool:
             fresh = await session.scalar(select(Task.cancel_requested).where(Task.id == task_id))
             return bool(fresh)
@@ -166,6 +175,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 org_id=task.org_id,
                 run_id=run_db.id,
                 dry_run=task.dry_run,
+                grants=grants,
                 # The memory tools need a session and to know which
                 # employee is asking, so employee-scoped memories
                 # stay private to that employee.
@@ -190,7 +200,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         if outcome.paused and outcome.pending_tool_call:
             call = outcome.pending_tool_call
             tool_cls = registry.get(call["name"])
-            await ApprovalService(session, task.org_id).create(
+            approval = await ApprovalService(session, task.org_id).create(
                 run_id=run_db.id,
                 tool_name=call["name"],
                 side_effect=tool_cls.side_effect.value if tool_cls else "write",
@@ -204,6 +214,11 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             run_db.prompt_tokens = outcome.prompt_tokens
             run_db.output_tokens = outcome.output_tokens
             await session.commit()
+            # After the commit, so the approval exists by the time
+            # anyone clicks the link in the message.
+            await notify_safely(
+                NotificationService(session, task.org_id).approval_requested(approval)
+            )
             return {
                 "status": "awaiting_approval",
                 "stop_cause": outcome.stop_cause,
@@ -268,6 +283,8 @@ async def _finish(
 
     await session.commit()
     log.info("run_finished", run_id=str(run.id), status=str(status), cause=stop_cause)
+    if task is not None:
+        await notify_safely(NotificationService(session, run.org_id).task_finished(task, run))
     return {"status": str(status), "stop_cause": stop_cause, "run_id": str(run.id)}
 
 

@@ -21,6 +21,7 @@ dependencies = [
     "pyotp>=2.9.0",
     "pgvector>=0.3.0",
     "cryptography>=43.0.0",
+    "httpx>=0.28.0",
 ]
 
 [project.optional-dependencies]

@@ -33,6 +33,7 @@ from app.db.models.memory import (
     ReembedJob,
     RunSummary,
 )
+from app.db.models.notification import NotificationSettings
 from app.db.models.organization import Organization, OrgStatus
 from app.db.models.policy import (
     Approval,
@@ -85,6 +86,7 @@ __all__ = [
     "MemoryVector768",
     "MemoryVector1024",
     "MemoryVector1536",
+    "NotificationSettings",
     "OrgStatus",
     "Organization",
     "PlatformAdmin",

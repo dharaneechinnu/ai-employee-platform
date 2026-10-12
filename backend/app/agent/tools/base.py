@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any, ClassVar
 
@@ -36,6 +36,19 @@ class SideEffect(StrEnum):
     DESTRUCTIVE = "destructive"  # deletes or sends; cannot be undone
 
 
+@dataclass(slots=True, frozen=True)
+class Grant:
+    """One connected app, resolved for a run.
+
+    `credential` is the secret the tool authenticates with: an OAuth
+    access token, or a password for a manual connection. `config` holds
+    the non-secret settings (account name, host, and so on).
+    """
+
+    credential: str
+    config: dict[str, Any] = field(default_factory=dict)
+
+
 @dataclass(slots=True)
 class ToolContext:
     """What a tool is given at call time.
@@ -51,6 +64,10 @@ class ToolContext:
     credential: str | None = None
     config: dict[str, Any] | None = None
     dry_run: bool = False
+    # The company's connected apps, keyed by connection kind. Resolved
+    # by the worker at the start of a run; a tool sees only the one
+    # grant it declares in `requires_connection`.
+    grants: dict[str, Grant] | None = None
 
 
 @dataclass(slots=True)
@@ -114,6 +131,25 @@ class Tool(ABC):
                 f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()
             )
             return ToolResult.failure("invalid_arguments", problems)
+
+        if self.requires_connection:
+            grant = (ctx.grants or {}).get(self.requires_connection)
+            if grant is None and ctx.credential is None:
+                # Said plainly, so the model can tell the user what to do
+                # rather than retrying a call that can never work.
+                return ToolResult.failure(
+                    "not_connected",
+                    f"This company has not connected {self.requires_connection} yet. "
+                    "Tell the user an admin can connect it under Settings > Connections.",
+                )
+            if grant is not None:
+                # A copy per call: parallel tool calls share the run's
+                # context, so it must never be mutated in place.
+                ctx = replace(
+                    ctx,
+                    credential=grant.credential,
+                    config={**(ctx.config or {}), **grant.config},
+                )
 
         return await self.run(ctx, args)
 

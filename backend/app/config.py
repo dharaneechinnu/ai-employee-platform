@@ -49,6 +49,32 @@ class Settings(BaseSettings):
     # Master key for envelope encryption of secrets at rest.
     encryption_key: str = DEV_ENCRYPTION_KEY
 
+    # --- public addresses ------------------------------------------
+    # Where people reach the app and the API. Used to build OAuth
+    # redirect URIs and the links in notification messages.
+    public_app_url: str = "http://localhost:5173"
+    public_api_url: str = "http://localhost:8000"
+
+    # --- one-click connections (OAuth) -------------------------------
+    # Register one OAuth app per provider for the whole platform. Each
+    # company then connects its own account through it; tokens are
+    # stored per company, encrypted like provider keys.
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    microsoft_client_id: str | None = None
+    microsoft_client_secret: str | None = None
+    # "common" accepts work, school and personal Microsoft accounts.
+    microsoft_tenant: str = "common"
+
+    # --- outgoing email (notifications) ------------------------------
+    # Unset means email notifications are unavailable; Slack still works.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_use_ssl: bool = False  # True for port 465; otherwise STARTTLS
+
     # --- worker -------------------------------------------------------
     # One job at a time by default: a single agent task makes 10-15 model
     # calls, so two concurrent tasks will exceed a free-tier rate limit.
@@ -59,6 +85,10 @@ class Settings(BaseSettings):
     @property
     def effective_worker_concurrency(self) -> int:
         return 1 if self.slow_mode else self.worker_max_jobs
+
+    @property
+    def email_notifications_available(self) -> bool:
+        return bool(self.smtp_host and (self.smtp_from or self.smtp_username))
 
     @property
     def is_testing(self) -> bool:

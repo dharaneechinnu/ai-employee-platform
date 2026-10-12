@@ -12,9 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import (
     ai_employees,
+    approval_links,
     auth,
+    connections,
     health,
     memory,
+    notifications,
     orgs,
     platform,
     policies,
@@ -79,6 +82,10 @@ def create_app() -> FastAPI:
     app.include_router(memory.router, prefix=settings.api_v1_prefix)
     app.include_router(tasks.router, prefix=settings.api_v1_prefix)
     app.include_router(platform.router, prefix=settings.api_v1_prefix)
+    app.include_router(connections.router, prefix=settings.api_v1_prefix)
+    app.include_router(connections.callback_router, prefix=settings.api_v1_prefix)
+    app.include_router(notifications.router, prefix=settings.api_v1_prefix)
+    app.include_router(approval_links.router, prefix=settings.api_v1_prefix)
 
     return app
 

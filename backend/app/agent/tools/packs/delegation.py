@@ -175,6 +175,10 @@ async def _run_specialist(
         org_id=ctx.org_id,
         run_id=ctx.run_id,
         dry_run=ctx.dry_run,
+        # The specialist works for the same company, so it uses the
+        # same connected apps. Its own tool allowlist still decides
+        # which of them it can reach.
+        grants=ctx.grants,
         config={
             **(ctx.config or {}),
             "_employee_id": specialist.id,  # type: ignore[attr-defined]

@@ -1,0 +1,109 @@
+"""The OAuth apps behind one-click connections.
+
+One OAuth app per provider is registered for the whole platform; each
+company then signs in through it with its own account. What we keep is
+that company's refresh token, encrypted with the company's key.
+
+Scopes are the narrowest that still let the tools do their job. Gmail's
+`gmail.modify` reads, drafts and sends but cannot permanently delete;
+Drive is read-only, so an employee can find a document but not change
+or remove one.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from urllib.parse import urlencode
+
+from app.config import Settings, get_settings
+from app.db.models.policy import ConnectionKind
+
+
+@dataclass(frozen=True, slots=True)
+class OAuthProvider:
+    kind: ConnectionKind
+    display_name: str
+    authorize_url: str
+    token_url: str
+    userinfo_url: str
+    scopes: tuple[str, ...]
+    # Extra parameters for the consent screen. Google only returns a
+    # refresh token with offline access *and* a forced consent prompt.
+    extra_params: tuple[tuple[str, str], ...] = ()
+
+    def client(self, settings: Settings | None = None) -> tuple[str, str] | None:
+        """(client_id, client_secret), or None if the platform has not
+        registered an app for this provider yet."""
+        s = settings or get_settings()
+        if self.kind is ConnectionKind.GOOGLE:
+            pair = (s.google_client_id, s.google_client_secret)
+        else:
+            pair = (s.microsoft_client_id, s.microsoft_client_secret)
+        if pair[0] and pair[1]:
+            return pair[0], pair[1]
+        return None
+
+    def redirect_uri(self, settings: Settings | None = None) -> str:
+        s = settings or get_settings()
+        return f"{s.public_api_url.rstrip('/')}{s.api_v1_prefix}/oauth/{self.kind.value}/callback"
+
+    def authorize(self, *, client_id: str, state: str) -> str:
+        params = {
+            "client_id": client_id,
+            "redirect_uri": self.redirect_uri(),
+            "response_type": "code",
+            "scope": " ".join(self.scopes),
+            "state": state,
+            **dict(self.extra_params),
+        }
+        return f"{self.authorize_url}?{urlencode(params)}"
+
+
+def _microsoft_base() -> str:
+    return f"https://login.microsoftonline.com/{get_settings().microsoft_tenant}/oauth2/v2.0"
+
+
+def get_oauth_provider(kind: str) -> OAuthProvider | None:
+    if kind == ConnectionKind.GOOGLE.value:
+        return OAuthProvider(
+            kind=ConnectionKind.GOOGLE,
+            display_name="Google Workspace",
+            authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
+            token_url="https://oauth2.googleapis.com/token",  # noqa: S106 - a URL, not a secret
+            userinfo_url="https://openidconnect.googleapis.com/v1/userinfo",
+            scopes=(
+                "openid",
+                "email",
+                "profile",
+                "https://www.googleapis.com/auth/gmail.modify",
+                "https://www.googleapis.com/auth/calendar.events",
+                "https://www.googleapis.com/auth/drive.readonly",
+            ),
+            extra_params=(
+                ("access_type", "offline"),
+                ("prompt", "consent"),
+                ("include_granted_scopes", "true"),
+            ),
+        )
+    if kind == ConnectionKind.MICROSOFT.value:
+        base = _microsoft_base()
+        return OAuthProvider(
+            kind=ConnectionKind.MICROSOFT,
+            display_name="Microsoft 365",
+            authorize_url=f"{base}/authorize",
+            token_url=f"{base}/token",
+            userinfo_url="https://graph.microsoft.com/v1.0/me",
+            scopes=(
+                "offline_access",
+                "openid",
+                "email",
+                "profile",
+                "User.Read",
+                "Mail.ReadWrite",
+                "Mail.Send",
+                "Calendars.ReadWrite",
+                "Files.Read.All",
+            ),
+            extra_params=(("prompt", "select_account"),),
+        )
+    return None

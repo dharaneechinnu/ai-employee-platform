@@ -10,9 +10,11 @@ rather than retrofitted later.
 
 from typing import Any, ClassVar
 
+from arq import cron
+
 from app.config import get_settings
 from app.core.observability import configure_logging, get_logger
-from app.workers.jobs import ping, run_task
+from app.workers.jobs import expire_approvals, ping, run_task
 from app.workers.queue import redis_settings as redis_settings_fn
 
 log = get_logger(__name__)
@@ -38,7 +40,11 @@ class WorkerSettings:
     # cannot start is not a walking skeleton. `ping` also proves the
     # API -> Redis -> worker path, which is the half that matters.
     functions: ClassVar[list[Any]] = [ping, run_task]
-    cron_jobs: ClassVar[list[Any]] = []  # phase 5 registers expire_approvals, phase 8 the reaper
+    # Every five minutes: an approval past its expiry fails its run, so
+    # nothing waits for ever on a request nobody will answer.
+    cron_jobs: ClassVar[list[Any]] = [
+        cron(expire_approvals, minute=set(range(0, 60, 5)), run_at_startup=True),
+    ]
 
     on_startup = startup
     on_shutdown = shutdown

@@ -155,6 +155,11 @@ class ConnectionKind(StrEnum):
     EMAIL = "email"
     DATABASE = "database"
     REST = "rest"
+    # One-click OAuth connections. One grant covers several apps:
+    # Google is Gmail, Calendar and Drive; Microsoft is Outlook mail,
+    # calendar and OneDrive.
+    GOOGLE = "google"
+    MICROSOFT = "microsoft"
 
 
 class Connection(Base, UUIDPrimaryKeyMixin, TimestampMixin):
