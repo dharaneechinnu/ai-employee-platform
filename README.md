@@ -5,6 +5,8 @@ A platform where business teams (developers, operations, sales, HR) create and m
 ![The product overview page](docs/screenshots/01-landing.png)
 
 > **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack. 125 tests passing, 71 API operations, 27 agent tools. Full React frontend with dark and light themes.
+>
+> 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
 ## What problem this solves
 
@@ -26,19 +28,6 @@ Anything risky →  pauses and asks a person (in the app, by email or in Slack)
 Result         →  the work done, with a full audit trail and the cost of the run
 ```
 
-## Product videos
-
-▶️ **Watch on Google Drive:** [AI Employees – Product Videos](https://drive.google.com/drive/folders/1UvPBz49-xYwfs9tHebLO8B7bEaPvwV1m)
-
-The same files are in this repository under `docs/`:
-
-| Video | What it shows |
-|---|---|
-| 🎬 **[Narrated ad](docs/product-ad.mp4)** (1:08) | Six features with title cards, zooms and spotlights, a voiceover in sync with subtitles, and music |
-| 🖥️ **[Live demo](docs/product-demo.mp4)** (0:58) | The real app recorded in use, start to finish |
-| ✨ **[Animated overview](docs/product-film.mp4)** (1:05) | An illustrated tour of the features |
-
----
 
 ## Agentic AI features
 
@@ -92,8 +81,6 @@ Admins get an email with their own **Approve / Reject** link, and a Slack channe
 
 ![Approve from an email link](docs/screenshots/07-approve-from-email.png)
 
-![Notification settings: email and Slack](docs/screenshots/11-notifications.png)
-
 ### 8. A manager can delegate to specialists
 
 A manager AI Employee can ask colleagues to do part of the work, and the agent tree shows it live. It's **one level deep on purpose**: errors multiply with every hop, so specialists cannot pass work on again. At most three specialists per run, each with a smaller step budget, and all under the same permission rules.
@@ -103,6 +90,8 @@ A manager AI Employee can ask colleagues to do part of the work, and the agent t
 ### 9. It does independent steps at the same time
 
 When the model asks for several independent tool calls, up to three run in parallel ("Running in parallel · 2 at once" in the log), so a run finishes sooner.
+
+![The log shows two steps running at once](docs/screenshots/14-parallel-steps.png)
 
 ### 10. It remembers your company
 
@@ -114,6 +103,10 @@ AI Employees can **remember** facts and **recall** them in later runs. Search wo
 
 Every run has caps on steps, tokens and time, so a confused agent cannot loop all night. Any run can be cancelled. **Dry run** mode plans the work but sends and changes nothing.
 
+![Dry run switched on before assigning a task](docs/screenshots/15-dry-run.png)
+
+The **Cancel run** button stays on screen while a run is working (see the parallel-steps screenshot above).
+
 ### 12. Every step is on record
 
 Each event (thinking, model call, tool call, result, approval) goes into an append-only log. That one log powers live streaming, reconnecting without losing steps, replay, the agent tree and the audit trail. Steps, tokens and an estimated cost are shown for every run.
@@ -124,9 +117,15 @@ Each event (thinking, model call, tool call, result, approval) goes into an appe
 
 An AI Employee is set up by answering three plain questions: what it should do, what it must never do, and when to ask a person. Those answers become its instructions, and every change is versioned. Each company brings its own model key (**Gemini, Groq, DeepSeek or OpenRouter**), so the bill stays with them and no customer can run up another's costs.
 
+![Creating an AI Employee with three plain questions](docs/screenshots/12-new-employee.png)
+
+![Bring your own AI key](docs/screenshots/13-own-ai-key.png)
+
 ### 14. You hear about it where you work
 
 Email or Slack messages when an approval is needed, when a task fails, or when it finishes. Each event can be turned on or off per company.
+
+![Notification settings: email and Slack](docs/screenshots/11-notifications.png)
 
 ---
 
@@ -224,3 +223,17 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
 | Migrations | 7, each verified forward *and* backward |
 | Frontend | TypeScript strict build; screens checked in dark, light and phone widths |
+
+---
+
+## 🎬 Product videos
+
+▶️ **Watch on Google Drive:** [AI Employees – Product Videos](https://drive.google.com/drive/folders/1UvPBz49-xYwfs9tHebLO8B7bEaPvwV1m)
+
+The same files are in this repository under `docs/`:
+
+| Video | What it shows |
+|---|---|
+| 🎬 **[Narrated ad](docs/product-ad.mp4)** (1:08) | Six features with title cards, zooms and spotlights, a voiceover in sync with subtitles, and music |
+| 🖥️ **[Live demo](docs/product-demo.mp4)** (0:58) | The real app recorded in use, start to finish |
+| ✨ **[Animated overview](docs/product-film.mp4)** (1:05) | An illustrated tour of the features |

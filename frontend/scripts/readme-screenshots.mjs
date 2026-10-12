@@ -68,10 +68,35 @@ try {
   await pack.locator("label").filter({ has: page.getByText("gmail_send", { exact: true }) }).scrollIntoViewIfNeeded();
   await shot("03-tool-picker");
 
+  // Plain-English setup: the three questions that make an AI Employee.
+  await page.goto(`${BASE}/employees`);
+  await page.getByRole("button", { name: "New AI Employee" }).click();
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill("Asha");
+  await page.getByRole("textbox", { name: "Job title", exact: true }).fill("Support Lead");
+  await page.getByPlaceholder("Read bug reports, find the code, and suggest a fix.").fill("Sort the support inbox and draft first replies.");
+  await page.getByPlaceholder("Never delete anything. Never email a customer.").fill("Never promise refunds. Never email without approval.");
+  await page.getByPlaceholder("Before sending anything outside the company.").fill("Before anything goes to a customer.");
+  await shot("12-new-employee");
+
+  await page.goto(`${BASE}/providers`);
+  await shot("13-own-ai-key", 1200);
+
   await page.goto(`${BASE}/tasks`);
+  const form = page.locator("form", { hasText: "Assign work" });
   await page.getByPlaceholder(/What should it do/).fill("Why did checkouts fail overnight? Email the ops team a summary.");
+  await form.getByRole("switch", { name: "Dry run" }).click();
+  await form.screenshot({ path: `${OUT}/15-dry-run.png` });
+  console.log("docs/screenshots/15-dry-run.png");
+  await form.getByRole("switch", { name: "Dry run" }).click();
   await page.getByRole("button", { name: /Assign to Ravi/ }).click();
-  await shot("04-live-run", 5200);
+
+  // Wait until the run has started steps in parallel, then show it.
+  const [newest] = await api("/tasks");
+  const runId = (await api(`/tasks/${newest.id}`)).run.id;
+  await until(async () => (await api(`/runs/${runId}/trace`)).events.some((e) => e.type === "tool_result" && e.tool === "get_webpage"));
+  await shot("04-live-run", 900);
+  await page.locator("section[aria-label='Run']").screenshot({ path: `${OUT}/14-parallel-steps.png` });
+  console.log("docs/screenshots/14-parallel-steps.png");
 
   const run = page.locator("section[aria-label='Run']");
   await run.getByRole("button", { name: /Agent tree/ }).click();
