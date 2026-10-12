@@ -123,7 +123,7 @@ await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: 
 // ------------------------------------------------------------------ the demo
 for (const kind of ["unhandledRejection", "uncaughtException"]) process.on(kind, async (err) => {
   console.error(err);
-  await page.screenshot({ path: "demo-failure.png" }).catch(() => {});
+  await page.screenshot({ path: join(tmpdir(), "demo-failure.png") }).catch(() => {});
   server?.kill();
   process.exit(1);
 });
