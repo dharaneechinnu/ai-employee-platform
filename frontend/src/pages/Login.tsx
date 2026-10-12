@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/icons";
 import { BrandMark } from "../components/Layout";
 import { ErrorNote, Input, ThemeToggle } from "../components/ui";
@@ -60,7 +60,10 @@ export default function Login() {
             <div className="flex flex-col gap-1.5">
               <h2 className="font-display text-[28px] font-semibold tracking-[-0.02em]">{inviteToken ? "Join your company" : "Sign in"}</h2>
               <p className="text-sm text-muted">
-                {inviteToken ? "Set a password to accept the invitation." : "Welcome back to your workspace."}
+                {inviteToken ? "Set a password to accept the invitation." : "Welcome back to your workspace."}{" "}
+                <Link to="/" className="text-accent-text hover:underline">
+                  What is this?
+                </Link>
               </p>
             </div>
 

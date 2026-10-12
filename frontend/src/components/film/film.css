@@ -1,0 +1,273 @@
+/*
+ * The product film.
+ *
+ * Every movement is a CSS animation with a delay measured from the
+ * start of its scene. That one rule gives two things at once: smooth
+ * playback in the browser, and frame-exact seeking for the MP4 export
+ * (the recorder pauses every animation and sets its currentTime).
+ *
+ * The film is always shown in the dark Spectrum palette, whatever the
+ * page theme, so it reads as one piece and matches the exported video.
+ */
+
+.film {
+  --bg: #0a0c18;
+  --panel: #12162a;
+  --raised: #1a1f37;
+  --sunken: #080a14;
+  --line: #232842;
+  --line2: #323a5c;
+  --text: #eef0fb;
+  --muted: #aab0cf;
+  --dim: #8389ab;
+  --accent: #7b93ff;
+  --accent2: #a48bff;
+  --spark: #ff8a4c;
+  --on-accent: #0a0c18;
+  --accent-text: #9fb0ff;
+  --accent-soft: #1b2250;
+  --accent-line: #3a4a9a;
+  --glow: rgba(123, 147, 255, 0.45);
+  --run: #3cc8d8;
+  --run-soft: #0c2630;
+  --run-text: #7fdde8;
+  --ok: #5fd08f;
+  --ok-soft: #102a1d;
+  --ok-text: #92e2b4;
+  --ask: #ffb547;
+  --ask-soft: #2e2210;
+  --ask-text: #ffcc7a;
+  --bad: #f06a80;
+  --bad-soft: #2e1220;
+  --jade: #3fc2a0;
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+  font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  position: relative;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.film * {
+  box-sizing: border-box;
+}
+
+.film .f-display {
+  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.film .f-mono {
+  font-family: "Geist Mono", ui-monospace, Menlo, monospace;
+}
+
+.film .f-spectrum {
+  background: linear-gradient(90deg, #7b93ff, #a48bff 45%, #ff8a4c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.film .f-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 30px 80px -40px rgba(0, 0, 0, 0.9);
+}
+
+.film .f-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.film .f-chip i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.f-chip-run { background: var(--run-soft); color: var(--run-text); }
+.f-chip-ok { background: var(--ok-soft); color: var(--ok-text); }
+.f-chip-ask { background: var(--ask-soft); color: var(--ask-text); }
+.f-chip-bad { background: var(--bad-soft); color: var(--bad); }
+.f-chip-brand { background: var(--accent-soft); color: var(--accent-text); }
+.f-chip-mute { background: var(--raised); color: var(--muted); }
+
+.film .f-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse at 60% 40%, black 20%, transparent 75%);
+  opacity: 0.55;
+}
+
+/* ------------------------------------------------------------ scenes */
+
+@keyframes f-scene-in {
+  from { opacity: 0; transform: scale(1.035); filter: blur(10px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
+}
+@keyframes f-scene-out {
+  from { opacity: 1; transform: none; filter: blur(0); }
+  to { opacity: 0; transform: scale(0.97); filter: blur(8px); }
+}
+@keyframes f-wipe {
+  0% { transform: translateX(-110%) skewX(-18deg); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateX(160%) skewX(-18deg); opacity: 0; }
+}
+
+/* ------------------------------------------------------------ elements */
+
+@keyframes f-rise {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes f-fall {
+  from { opacity: 0; transform: translateY(-26px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes f-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes f-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes f-dim {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
+}
+@keyframes f-pop {
+  0% { opacity: 0; transform: scale(0.6); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes f-slide-left {
+  from { opacity: 0; transform: translateX(60px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes f-slide-right {
+  from { opacity: 0; transform: translateX(-60px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes f-slide-up {
+  from { opacity: 0; transform: translateY(80px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes f-slide-away {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(40px) scale(0.96); }
+}
+@keyframes f-type {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes f-grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes f-draw {
+  from { stroke-dashoffset: var(--len, 600); }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes f-flow {
+  to { stroke-dashoffset: -40; }
+}
+@keyframes f-pulse {
+  0% { box-shadow: 0 0 0 0 var(--pulse, rgba(60, 200, 216, 0.55)); }
+  70% { box-shadow: 0 0 0 14px rgba(0, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+@keyframes f-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes f-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, -30px) scale(1.12); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+@keyframes f-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes f-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@keyframes f-press {
+  0%, 100% { transform: scale(1); }
+  40% { transform: scale(0.92); }
+}
+@keyframes f-ripple {
+  from { opacity: 0.7; transform: translate(-50%, -50%) scale(0.2); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(2.6); }
+}
+@keyframes f-cursor {
+  from { transform: translate(var(--x0), var(--y0)); }
+  to { transform: translate(var(--x1), var(--y1)); }
+}
+@keyframes f-knob {
+  from { transform: translateX(0); }
+  to { transform: translateX(22px); }
+}
+@keyframes f-track-on {
+  from { background: var(--line2); }
+  to { background: var(--ok); }
+}
+@keyframes f-glow-ring {
+  0% { box-shadow: 0 0 0 0 rgba(123, 147, 255, 0); border-color: var(--line); }
+  100% { box-shadow: 0 0 0 4px rgba(123, 147, 255, 0.25), 0 0 40px rgba(123, 147, 255, 0.35); border-color: var(--accent); }
+}
+@keyframes f-beam {
+  0% { left: 0%; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+@keyframes f-burst {
+  from { opacity: 1; transform: translate(-50%, -50%) rotate(var(--r)) translateY(0) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) rotate(var(--r)) translateY(-70px) scale(0.4); }
+}
+@keyframes f-sheen {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(220%); }
+}
+
+/* ------------------------------------------------------------ player */
+
+.film-player-bar {
+  background: linear-gradient(to top, rgba(6, 8, 18, 0.92), rgba(6, 8, 18, 0));
+}
+
+.film-chapter {
+  position: relative;
+  height: 4px;
+  flex: 1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.film-chapter > span {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  background: linear-gradient(90deg, #7b93ff, #a48bff, #ff8a4c);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .film-autoplay-hint {
+    display: none;
+  }
+}

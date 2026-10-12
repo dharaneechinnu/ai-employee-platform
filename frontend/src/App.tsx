@@ -6,12 +6,14 @@ import ApproveLink from "./pages/ApproveLink";
 import Approvals from "./pages/Approvals";
 import Connections from "./pages/Connections";
 import Employees from "./pages/Employees";
+import FilmStage from "./pages/FilmStage";
 import Login from "./pages/Login";
 import Members from "./pages/Members";
 import Memory from "./pages/Memory";
 import Notifications from "./pages/Notifications";
 import PlatformAdmin from "./pages/PlatformAdmin";
 import Policies from "./pages/Policies";
+import Product from "./pages/Product";
 import Providers from "./pages/Providers";
 import Tasks from "./pages/Tasks";
 
@@ -39,6 +41,9 @@ export default function App() {
   if (!me) {
     return (
       <Routes>
+        <Route path="/" element={<Product />} />
+        <Route path="/product" element={<Product />} />
+        <Route path="/film" element={<FilmStage />} />
         <Route path="/platform" element={<PlatformAdmin />} />
         <Route path="/approve/:token" element={<ApproveLink />} />
         <Route path="/login" element={<Login />} />
@@ -52,6 +57,8 @@ export default function App() {
       {/* Outside the company layout: separate session, separate token. */}
       <Route path="/platform" element={<PlatformAdmin />} />
       <Route path="/approve/:token" element={<ApproveLink />} />
+      <Route path="/product" element={<Product />} />
+      <Route path="/film" element={<FilmStage />} />
       <Route path="/login" element={<AfterSignIn />} />
       <Route element={<Layout />}>
         <Route path="/connections" element={<Connections />} />
