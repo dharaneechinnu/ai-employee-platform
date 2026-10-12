@@ -228,7 +228,7 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 ## 🎬 Product videos
 
-▶️ **Watch on Google Drive:** [AI Employees – Product Videos](https://drive.google.com/drive/folders/1UvPBz49-xYwfs9tHebLO8B7bEaPvwV1m)
+▶️ **Watch on Google Drive:** [AI Employees – Product Videos](https://drive.google.com/file/d/1L8DQJJeDJeSN5XoC2bQ4jBIS5LagYWRL/view?usp=sharing)
 
 The same files are in this repository under `docs/`:
 
