@@ -9,7 +9,8 @@
     {
       "at": "intro",
       "offset": 0.6,
-      "text": "Imagine an AI team that does real work, and *still checks with you first*."
+      "text": "Imagine an AI team that does real work, and *still checks with you first*.",
+      "pace": 0.88
     },
     {
       "at": "01",
@@ -49,7 +50,8 @@
     {
       "at": "06",
       "offset": 0.5,
-      "text": "Then it finishes the job, and *every step is on record*."
+      "text": "Then it finishes the job, and *every step is on record*.",
+      "pace": 0.82
     },
     {
       "at": "outro",

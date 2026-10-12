@@ -1,39 +1,39 @@
 1
-00:00:00,600 --> 00:00:05,790
+00:00:00,600 --> 00:00:05,236
 Imagine an AI team that does real work, and still checks with you first.
 
 2
-00:00:05,890 --> 00:00:10,300
+00:00:05,890 --> 00:00:10,239
 First, connect Google Workspace. One click, and no passwords to copy.
 
 3
-00:00:13,900 --> 00:00:19,390
+00:00:13,900 --> 00:00:19,881
 Then choose exactly which tools each AI Employee gets. Sending email? It asks first.
 
 4
-00:00:20,600 --> 00:00:24,290
+00:00:20,600 --> 00:00:24,144
 Reading is automatic. Anything risky waits for a person.
 
 5
-00:00:26,850 --> 00:00:31,620
+00:00:26,850 --> 00:00:30,887
 Now just ask, in plain words, and watch every step happen live.
 
 6
-00:00:32,750 --> 00:00:37,520
+00:00:32,750 --> 00:00:36,703
 It checks what your company already knows, then pulls the numbers itself.
 
 7
-00:00:40,850 --> 00:00:45,260
+00:00:40,850 --> 00:00:44,699
 Ravi, the manager, brings in two specialists to split the work.
 
 8
-00:00:46,680 --> 00:00:51,810
+00:00:46,680 --> 00:00:50,825
 Before an email goes out, you decide. Approve it straight from your inbox.
 
 9
-00:00:55,610 --> 00:01:00,020
+00:00:55,610 --> 00:00:59,503
 Then it finishes the job, and every step is on record.
 
 10
-00:01:03,780 --> 00:01:07,110
+00:01:03,780 --> 00:01:06,931
 AI Employees. Your AI team, already at work.

@@ -6,10 +6,16 @@
 Inputs: the demo MP4 and its `.marks.json` (chapter start times, written
 by record-demo.mjs). Adds, in order:
 
-1. Voiceover: each line in script.json, spoken by a Google Cloud
-   Text-to-Speech natural voice and placed at its chapter. Needs the
-   GOOGLE_TTS_API_KEY environment variable; without it the ad is built
-   with music and subtitles only, and says so.
+1. Voiceover: each line in script.json, spoken aloud and placed at its
+   chapter, in sync with its subtitle. Two voices:
+   - Kokoro (default): a natural neural voice that runs on this machine,
+     no account needed. Install once, see kokoro_tts.cjs. AD_VOICE picks
+     the speaker (default af_bella).
+   - Google Cloud Text-to-Speech, used instead when GOOGLE_TTS_API_KEY
+     is set (en-IN natural voices).
+   A line that would not finish before the next one starts is spoken a
+   little faster, never cut and never overlapped. With no voice
+   available the ad is built with music and subtitles only, and says so.
 2. Music: an original upbeat track, synthesised here from scratch, so
    there is no licence to worry about. It ducks under the voice.
 3. Subtitles: every spoken line burned in, YouTube-ad style, with the
@@ -90,25 +96,84 @@ def synthesize(text: str, voice: dict, key: str) -> np.ndarray:
     return frames.astype(np.float32) / 32768.0
 
 
-def voice_track(lines: list[dict], duration: float) -> np.ndarray | None:
+KOKORO = HERE / "kokoro_tts.cjs"
+KOKORO_MODEL = HERE / ".voice" / "node_modules" / "n8n-nodes-ttsbro" / "kokoro-int8-en-v0_19"
+
+
+def decode(path: Path) -> np.ndarray:
+    """Any audio file as mono float samples at RATE (ffmpeg resamples)."""
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path), "-f", "f32le", "-ac", "1", "-ar", str(RATE), "-"],
+        capture_output=True, check=True,
+    ).stdout
+    return np.frombuffer(raw, dtype=np.float32).copy()
+
+
+def tidy(clip: np.ndarray) -> np.ndarray:
+    """Trim the model's leading and trailing silence, and even out levels
+    so every line sits at the same loudness."""
+    loud = np.flatnonzero(np.abs(clip) > 0.015)
+    if len(loud):
+        pad = int(0.04 * RATE)
+        clip = clip[max(0, loud[0] - pad) : loud[-1] + pad]
+    rms = float(np.sqrt(np.mean(clip**2))) or 1.0
+    return clip * (0.1 / rms)
+
+
+def kokoro_clips(texts: list[str], speeds: list[float], voice: str) -> list[np.ndarray]:
+    work = Path(tempfile.mkdtemp(prefix="voice-"))
+    items = [
+        {"text": t, "voice": voice, "speed": round(sp, 3), "out": str(work / f"{i}.wav")}
+        for i, (t, sp) in enumerate(zip(texts, speeds, strict=True))
+    ]
+    (work / "jobs.json").write_text(json.dumps({"items": items}))
+    subprocess.run(["node", str(KOKORO), str(work / "jobs.json")], check=True, capture_output=True)
+    return [tidy(decode(Path(it["out"]))) for it in items]
+
+
+def voice_track(lines: list[dict], duration: float) -> tuple[np.ndarray, str] | None:
     key = os.environ.get("GOOGLE_TTS_API_KEY")
-    if not key:
+    texts = [plain(line["text"]) for line in lines]
+
+    # How long each line may last: until just before the next one starts.
+    windows = []
+    for i, line in enumerate(lines):
+        until = lines[i + 1]["start"] - 0.25 if i + 1 < len(lines) else duration - 0.4
+        windows.append(until - line["start"])
+
+    if key:
+        voice = json.loads((HERE / "script.json").read_text())["voice"]
+        voice["name"] = os.environ.get("GOOGLE_TTS_VOICE", voice["name"])
+        clips = [tidy(synthesize(t, voice, key)) for t in texts]
+        label = f"Google {voice['name']}"
+    elif KOKORO_MODEL.exists():
+        name = os.environ.get("AD_VOICE", "af_bella")
+        base = float(os.environ.get("AD_VOICE_SPEED", "0.93"))
+        # A line may set its own "pace" in script.json, relative to the base.
+        clips = kokoro_clips(texts, [base * line.get("pace", 1.0) for line in lines], name)
+        # Any line too long for its window is re-spoken a touch faster,
+        # so it ends with its subtitle instead of running into the next.
+        slow = [i for i, c in enumerate(clips) if len(c) / RATE > windows[i]]
+        if slow:
+            again = kokoro_clips(
+                [texts[i] for i in slow],
+                [min(1.3, base * lines[i].get("pace", 1.0) * (len(clips[i]) / RATE) / windows[i] * 1.04) for i in slow],
+                name,
+            )
+            for i, clip in zip(slow, again, strict=True):
+                clips[i] = clip
+        label = f"Kokoro {name}"
+    else:
         return None
-    voice = json.loads((HERE / "script.json").read_text())["voice"]
-    voice["name"] = os.environ.get("GOOGLE_TTS_VOICE", voice["name"])
+
     track = np.zeros(int(duration * RATE) + RATE, dtype=np.float32)
-    cursor = 0.0
-    for line in lines:
-        clip = synthesize(plain(line["text"]), voice, key)
-        # Never let two lines talk over each other: a line that would
-        # start before the previous one ends waits for it.
-        start = max(line["start"], cursor + 0.15)
-        line["start"] = start
-        line["end"] = start + len(clip) / RATE
-        cursor = line["end"]
-        i = int(start * RATE)
+    for line, clip, window in zip(lines, clips, windows, strict=True):
+        if len(clip) / RATE > window + 0.05:
+            print(f"warning: '{plain(line['text'])[:40]}…' runs {len(clip) / RATE - window:.2f}s past its window")
+        line["end"] = line["start"] + len(clip) / RATE
+        i = int(line["start"] * RATE)
         track[i : i + len(clip)] += clip[: len(track) - i]
-    return track[: int(duration * RATE)]
+    return track[: int(duration * RATE)], label
 
 
 def estimate_ends(lines: list[dict]) -> None:
@@ -307,6 +372,31 @@ def duration_of(video: Path) -> float:
     return float(out.stdout.strip())
 
 
+def loudness(path: Path) -> float:
+    report = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-i", str(path), "-map", "0:a", "-af", "ebur128", "-f", "null", "-"],
+        capture_output=True, text=True, check=True,
+    ).stderr
+    summary = report[report.rfind("Summary:") :]
+    return float(summary.split("I:")[1].split("LUFS")[0])
+
+
+def level(path: Path, target: float = -16.0) -> None:
+    """Bring the whole ad to a standard online loudness with one fixed
+    gain, which keeps the balance between voice and music as mixed."""
+    gain = target - loudness(path)
+    if abs(gain) < 0.5:
+        return
+    tmp = path.with_suffix(".tmp.mp4")
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-c:v", "copy",
+         "-af", f"volume={gain:.2f}dB,alimiter=limit=0.75:level=false",
+         "-c:a", "aac", "-b:a", "192k", "-ar", str(RATE), "-movflags", "+faststart", str(tmp)],
+        check=True,
+    )
+    tmp.replace(path)
+
+
 def main() -> None:
     if len(sys.argv) != 3:
         sys.exit(__doc__)
@@ -316,12 +406,14 @@ def main() -> None:
     lines = load_lines(marks)
 
     work = Path(tempfile.mkdtemp(prefix="ad-"))
-    voice = voice_track(lines, duration)
-    if voice is None:
+    spoken = voice_track(lines, duration)
+    voice = spoken[0] if spoken else None
+    if spoken is None:
         estimate_ends(lines)
-        print("GOOGLE_TTS_API_KEY is not set: building with music and subtitles only, no voiceover.")
+        print("No voice available (no Google key, no local Kokoro model): music and subtitles only.")
     else:
-        write_wav(work / "voice.wav", voice)
+        write_wav(work / "voice.wav", spoken[0])
+        print(f"Voiceover: {spoken[1]}")
     write_wav(work / "music.wav", music(duration))
     subtitles(lines, work / "subs.ass")
 
@@ -330,9 +422,13 @@ def main() -> None:
     if voice is not None:
         # The voice pushes the music down while it speaks, then lets it back up.
         audio = (
-            "[1:a]volume=0.55[m];[2:a]aformat=channel_layouts=stereo,volume=1.6,asplit=2[vk][vm];"
-            "[m][vk]sidechaincompress=threshold=0.02:ratio=10:attack=15:release=450[duck];"
-            "[duck][vm]amix=inputs=2:normalize=0,loudnorm=I=-16:TP=-1.5:LRA=11[a]"
+            # Music sits well under the voice and dips further while she
+            # speaks; a limiter, not a normaliser, so the voice stays on top.
+            "[1:a]volume=0.32[m];"
+            "[2:a]aformat=channel_layouts=stereo,highpass=f=80,"
+            "acompressor=threshold=0.12:ratio=3:attack=5:release=150:makeup=1.4,volume=1.5,asplit=2[vk][vm];"
+            "[m][vk]sidechaincompress=threshold=0.012:ratio=14:attack=10:release=550[duck];"
+            "[duck][vm]amix=inputs=2:normalize=0,alimiter=limit=0.75:level=false[a]"
         )
         inputs = ["-i", str(video), "-i", str(work / "music.wav"), "-i", str(work / "voice.wav")]
     else:
@@ -348,6 +444,7 @@ def main() -> None:
          "-movflags", "+faststart", "-shortest", str(out)],
         check=True,
     )
+    level(out)
     (out.with_suffix(".srt")).write_text(
         "\n".join(
             f"{i}\n{srt_time(l['start'])} --> {srt_time(l['end'])}\n{plain(l['text'])}\n"
