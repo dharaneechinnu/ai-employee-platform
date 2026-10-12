@@ -141,8 +141,9 @@ export default function Product() {
             <div className="halo rounded-[26px] p-[1.5px]" style={{ boxShadow: "0 60px 160px -60px var(--glow)" }}>
               <div className="overflow-hidden rounded-[25px] bg-[#070915]">
                 <AutoVideo
-                  src="/media/product-demo.mp4"
-                  poster="/media/product-demo.jpg"
+                  sound
+                  src="/media/product-ad.mp4"
+                  poster="/media/product-ad.jpg"
                   label="A one-minute live demo: connecting Google, giving an AI Employee tools, assigning a task, watching it run and delegate, approving from email, and the finished result."
                 />
               </div>

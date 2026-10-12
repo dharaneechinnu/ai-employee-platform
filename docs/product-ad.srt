@@ -1,0 +1,35 @@
+1
+00:00:00,500 --> 00:00:03,830
+Meet AI Employees: your AI team, at work.
+
+2
+00:00:04,080 --> 00:00:08,130
+Connect Google Workspace in one click. No passwords to copy.
+
+3
+00:00:11,000 --> 00:00:16,490
+Give each AI Employee only the tools it needs. Sending email? It asks first.
+
+4
+00:00:21,360 --> 00:00:26,130
+Assign a task in plain words, and watch every step happen live.
+
+5
+00:00:27,160 --> 00:00:32,290
+It checks company memory, queries the data, and reads the vendor's status page.
+
+6
+00:00:35,250 --> 00:00:39,300
+The manager, Ravi, hands parts of the job to specialists.
+
+7
+00:00:40,510 --> 00:00:46,360
+Before anything risky goes out, a person decides. Approve right from your inbox, or Slack.
+
+8
+00:00:47,570 --> 00:00:52,340
+Then the run picks up where it paused, with every step logged.
+
+9
+00:00:55,550 --> 00:00:57,800
+AI Employees. Already at work.

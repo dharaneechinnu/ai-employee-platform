@@ -1,0 +1,55 @@
+{
+  "voice": {
+    "languageCode": "en-IN",
+    "name": "en-IN-Neural2-A",
+    "speakingRate": 1.04,
+    "pitch": 0.0
+  },
+  "lines": [
+    {
+      "at": "intro",
+      "offset": 0.5,
+      "text": "Meet AI Employees: your AI team, *at work*."
+    },
+    {
+      "at": "01",
+      "offset": 0.4,
+      "text": "Connect Google Workspace in *one click*. No passwords to copy."
+    },
+    {
+      "at": "02",
+      "offset": 0.4,
+      "text": "Give each AI Employee only the tools it needs. Sending email? *It asks first.*"
+    },
+    {
+      "at": "03",
+      "offset": 0.4,
+      "text": "Assign a task in plain words, and watch every step happen *live*."
+    },
+    {
+      "at": "03",
+      "offset": 6.2,
+      "text": "It checks company memory, queries the data, and reads the vendor's status page."
+    },
+    {
+      "at": "04",
+      "offset": 0.3,
+      "text": "The manager, Ravi, hands parts of the job to *specialists*."
+    },
+    {
+      "at": "05",
+      "offset": 0.3,
+      "text": "Before anything risky goes out, *a person decides*. Approve right from your inbox, or Slack."
+    },
+    {
+      "at": "06",
+      "offset": 0.3,
+      "text": "Then the run picks up where it paused, with *every step logged*."
+    },
+    {
+      "at": "outro",
+      "offset": 0.3,
+      "text": "AI Employees. *Already at work.*"
+    }
+  ]
+}

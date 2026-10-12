@@ -99,8 +99,20 @@ async function zoom(locator, scale, at, ms = 1100) {
   await wait(ms + 100);
 }
 
+// When each chapter starts, in finished-video seconds. Written next to
+// the MP4 so the ad's voiceover and subtitles can be timed to it.
+const marks = [];
+function mark(id, text) {
+  marks.push({ id, text, t: frames.length ? frames.at(-1).t : null });
+}
+
+// DEMO_CAPTIONS=0 records without the chapter pills, for the narrated
+// ad, whose subtitles take their place. The chapter times are still kept.
+const SHOW_CAPTIONS = process.env.DEMO_CAPTIONS !== "0";
+
 async function caption(n, text) {
-  await stage("caption", n, text);
+  mark(n, text);
+  if (SHOW_CAPTIONS) await stage("caption", n, text);
   await wait(500);
 }
 
@@ -228,6 +240,7 @@ await wait(2300);
 // Outro (~3.5s)
 await stage("hideCaption");
 await stage("showCursor", false);
+mark("outro", "Outro");
 await stage("outro");
 await wait(3600);
 
@@ -257,6 +270,15 @@ await new Promise((done, fail) => {
   ff.on("close", (code) => (code === 0 ? done() : fail(new Error(`ffmpeg exited ${code}`))));
 });
 rmSync(FRAMES, { recursive: true, force: true });
+const t0 = frames[0].t;
+writeFileSync(
+  OUT.replace(/\.mp4$/, ".marks.json"),
+  JSON.stringify(
+    marks.map((m) => ({ ...m, t: Math.round(((m.t ?? t0) - t0) / SLOW * 100) / 100 })),
+    null,
+    2,
+  ),
+);
 
 console.log(`${OUT} · ${frames.length} frames captured`);
 if (errors.length) console.error("page errors:\n" + errors.join("\n"));
