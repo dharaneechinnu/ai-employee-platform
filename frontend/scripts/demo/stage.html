@@ -42,6 +42,42 @@
   .ripple { position: absolute; z-index: 49; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 99px; border: 3px solid rgba(255,255,255,.9); pointer-events: none; animation: ripple 650ms ease-out forwards; }
   @keyframes ripple { from { opacity: .9; transform: scale(.2); } to { opacity: 0; transform: scale(1.5); } }
 
+
+  /* Feature title: one fixed treatment for every feature. It arrives big,
+     then docks into a corner tag that names the feature on screen. */
+  #scrim { position: absolute; inset: 0; z-index: 44; background: radial-gradient(ellipse at 30% 50%, rgba(4,6,14,.9), rgba(4,6,14,.68)); backdrop-filter: blur(10px); opacity: 0; transition: opacity 600ms ease; pointer-events: none; }
+  #scrim.on { opacity: 1; }
+  #featBig { position: absolute; z-index: 47; left: 140px; top: 50%; max-width: 1240px; pointer-events: none; opacity: 0; transform: translateY(-40%) scale(.96);
+    transition: opacity 650ms ease, transform 900ms cubic-bezier(.16,1,.3,1); }
+  #featBig.on { opacity: 1; transform: translateY(-50%) scale(1); }
+  #featBig.away { opacity: 0; transform: translate(-60px, -64%) scale(.7); transition-duration: 600ms, 700ms; }
+  #featBig .kick { display: flex; align-items: center; gap: 16px; font-family: "Geist Mono", monospace; font-size: 24px; letter-spacing: .14em; color: var(--spark); text-transform: uppercase; }
+  #featBig .kick i { width: 64px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--spark)); }
+  #featBig .ttl { margin-top: 18px; font-family: Outfit, sans-serif; font-weight: 700; font-size: 104px; line-height: 1.0; letter-spacing: -.035em; }
+  #featBig .sub { margin-top: 20px; font-size: 32px; color: var(--muted); }
+  #featTag { position: absolute; z-index: 46; left: 28px; top: 22px; display: inline-flex; align-items: center; gap: 14px; padding: 10px 22px 10px 10px; border-radius: 999px;
+    background: rgba(10,12,24,.88); border: 1px solid rgba(255,255,255,.12); box-shadow: 0 20px 50px -20px rgba(0,0,0,.8); backdrop-filter: blur(12px);
+    opacity: 0; transform: translateY(-14px); transition: opacity 450ms ease, transform 600ms cubic-bezier(.16,1,.3,1); pointer-events: none; }
+  #featTag.on { opacity: 1; transform: none; }
+  #featTag .n { font-family: "Geist Mono", monospace; font-size: 16px; font-weight: 500; color: #0a0c18; background: linear-gradient(135deg, var(--accent), var(--spark)); border-radius: 999px; padding: 5px 11px; }
+  #featTag .t { font-family: Outfit, sans-serif; font-weight: 700; font-size: 26px; letter-spacing: -.01em; }
+
+  /* Spotlight: dims everything except the part being talked about. */
+  #spot { position: absolute; z-index: 43; border-radius: 18px; pointer-events: none; opacity: 0;
+    box-shadow: 0 0 0 3px rgba(123,147,255,.95), 0 0 40px 6px rgba(123,147,255,.45), 0 0 0 4000px rgba(4,6,14,.6);
+    transition: left 700ms cubic-bezier(.65,0,.25,1), top 700ms cubic-bezier(.65,0,.25,1), width 700ms cubic-bezier(.65,0,.25,1), height 700ms cubic-bezier(.65,0,.25,1), opacity 500ms ease; }
+  #spot.on { opacity: 1; }
+
+  /* Callout: a short label pointing at the spotlit feature. */
+  #callout { position: absolute; z-index: 48; pointer-events: none; display: inline-flex; align-items: center; gap: 12px; padding: 14px 22px; border-radius: 16px; white-space: nowrap;
+    background: linear-gradient(135deg, #ff9a5a, #ff7a2f); color: #1a0a00; font-family: Outfit, sans-serif; font-weight: 700; font-size: 28px; letter-spacing: -.01em;
+    box-shadow: 0 24px 60px -20px rgba(255,122,47,.7); opacity: 0; transform: scale(.7); transform-origin: var(--ox, left) center; transition: opacity 300ms ease, transform 500ms cubic-bezier(.16,1.4,.3,1); }
+  #callout.on { opacity: 1; transform: scale(1); }
+  #callout::before { content: ""; position: absolute; width: 18px; height: 18px; background: #ff8a4c; transform: rotate(45deg); }
+  #callout[data-side="right"]::before { left: -8px; top: calc(50% - 9px); }
+  #callout[data-side="left"]::before { right: -8px; top: calc(50% - 9px); }
+  #callout[data-side="top"]::before { bottom: -8px; left: calc(50% - 9px); }
+  #callout[data-side="bottom"]::before { top: -8px; left: calc(50% - 9px); }
   .overlay { position: absolute; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--bg); transition: opacity 900ms ease; }
   .overlay.gone { opacity: 0; pointer-events: none; }
   .logo { position: relative; width: 120px; height: 120px; border-radius: 34px; background: linear-gradient(135deg, var(--accent), var(--accent2) 55%, var(--spark)); box-shadow: 0 30px 100px -20px rgba(123,147,255,.75); animation: pop 900ms cubic-bezier(.16,1,.3,1) both; }
@@ -93,6 +129,12 @@
     <div class="btns"><span class="approve" id="mail-approve">Approve</span><span class="reject">Reject</span></div>
   </div>
 
+  <div id="scrim"></div>
+  <div id="featBig"><div class="kick"><i></i><span id="fb-n">Feature 01</span></div><div class="ttl" id="fb-t"></div><div class="sub" id="fb-s"></div></div>
+  <div id="featTag"><span class="n" id="ft-n">01</span><span class="t" id="ft-t"></span></div>
+  <div id="spot"></div>
+  <div id="callout" data-side="right"></div>
+
   <div id="caption"><div class="cap out" id="cap"><span class="n" id="cap-n">01</span><span class="t" id="cap-t"></span></div></div>
 
   <div id="cursor"><svg width="30" height="30" viewBox="0 0 24 24"><path d="M4 3l7 17 2.5-7.2L21 10z" fill="#fff" stroke="#0a0c18" stroke-width="1.4" stroke-linejoin="round" /></svg></div>
@@ -119,6 +161,56 @@
     load(src) { document.getElementById("app").src = src; },
     path(p) { document.getElementById("path").textContent = p; },
     showWindow() { document.getElementById("intro").classList.add("gone"); win.classList.add("shown"); },
+    /** A feature's title: big over a dimmed screen, then a corner tag. */
+    feature(n, title, sub, holdMs = 1700) {
+      const big = document.getElementById("featBig"), tag = document.getElementById("featTag"), scrim = document.getElementById("scrim");
+      tag.classList.remove("on");
+      document.getElementById("fb-n").textContent = `Feature ${n}`;
+      document.getElementById("fb-t").textContent = title;
+      document.getElementById("fb-s").textContent = sub;
+      big.classList.remove("away");
+      big.classList.add("on");
+      scrim.classList.add("on");
+      setTimeout(() => {
+        big.classList.add("away");
+        big.classList.remove("on");
+        scrim.classList.remove("on");
+        document.getElementById("ft-n").textContent = n;
+        document.getElementById("ft-t").textContent = title;
+        setTimeout(() => tag.classList.add("on"), 250);
+      }, holdMs);
+    },
+    hideFeature() { document.getElementById("featTag").classList.remove("on"); },
+    /** Spotlight a rectangle of the app (iframe coordinates). */
+    spotlightApp(x, y, w, h, pad = 12) {
+      const a = this.point(x - pad, y - pad), b = this.point(x + w + pad, y + h + pad);
+      const spot = document.getElementById("spot");
+      Object.assign(spot.style, { left: a.x + "px", top: a.y + "px", width: b.x - a.x + "px", height: b.y - a.y + "px" });
+      spot.classList.add("on");
+      return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+    },
+    clearSpotlight() { document.getElementById("spot").classList.remove("on"); },
+    /** A label pointing at a stage point, from the given side. */
+    callout(x, y, text, side = "right") {
+      const c = document.getElementById("callout");
+      c.textContent = text;
+      c.dataset.side = side;
+      c.classList.remove("on");
+      // Measure without the entrance scale applied.
+      const r = { width: c.offsetWidth, height: c.offsetHeight };
+      const gap = 22;
+      const pos = {
+        right: [x + gap, y - r.height / 2, "left"],
+        left: [x - gap - r.width, y - r.height / 2, "right"],
+        top: [x - r.width / 2, y - gap - r.height, "center"],
+        bottom: [x - r.width / 2, y + gap, "center"],
+      }[side];
+      c.style.left = Math.max(16, Math.min(1920 - r.width - 16, pos[0])) + "px";
+      c.style.top = Math.max(16, Math.min(1080 - r.height - 16, pos[1])) + "px";
+      c.style.setProperty("--ox", pos[2]);
+      requestAnimationFrame(() => c.classList.add("on"));
+    },
+    hideCallout() { document.getElementById("callout").classList.remove("on"); },
     caption(n, text) {
       const cap = document.getElementById("cap");
       cap.classList.add("out");

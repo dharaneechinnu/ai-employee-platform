@@ -8,48 +8,53 @@
   "lines": [
     {
       "at": "intro",
-      "offset": 0.5,
-      "text": "Meet AI Employees: your AI team, *at work*."
+      "offset": 0.6,
+      "text": "Imagine an AI team that does real work, and *still checks with you first*."
     },
     {
       "at": "01",
-      "offset": 0.4,
-      "text": "Connect Google Workspace in *one click*. No passwords to copy."
+      "offset": 0.5,
+      "text": "First, connect Google Workspace. *One click*, and no passwords to copy."
     },
     {
       "at": "02",
-      "offset": 0.4,
-      "text": "Give each AI Employee only the tools it needs. Sending email? *It asks first.*"
+      "offset": 0.5,
+      "text": "Then choose exactly which tools each AI Employee gets. Sending email? *It asks first.*"
+    },
+    {
+      "at": "02",
+      "offset": 7.2,
+      "text": "Reading is automatic. Anything risky *waits for a person*."
     },
     {
       "at": "03",
-      "offset": 0.4,
-      "text": "Assign a task in plain words, and watch every step happen *live*."
+      "offset": 0.5,
+      "text": "Now just ask, in plain words, and watch every step happen *live*."
     },
     {
       "at": "03",
-      "offset": 6.2,
-      "text": "It checks company memory, queries the data, and reads the vendor's status page."
+      "offset": 6.4,
+      "text": "It checks what your company already knows, then *pulls the numbers itself*."
     },
     {
       "at": "04",
-      "offset": 0.3,
-      "text": "The manager, Ravi, hands parts of the job to *specialists*."
+      "offset": 0.5,
+      "text": "Ravi, the manager, brings in *two specialists* to split the work."
     },
     {
       "at": "05",
-      "offset": 0.3,
-      "text": "Before anything risky goes out, *a person decides*. Approve right from your inbox, or Slack."
+      "offset": 0.5,
+      "text": "Before an email goes out, *you decide*. Approve it straight from your inbox."
     },
     {
       "at": "06",
-      "offset": 0.3,
-      "text": "Then the run picks up where it paused, with *every step logged*."
+      "offset": 0.5,
+      "text": "Then it finishes the job, and *every step is on record*."
     },
     {
       "at": "outro",
-      "offset": 0.3,
-      "text": "AI Employees. *Already at work.*"
+      "offset": 0.5,
+      "text": "AI Employees. Your AI team, *already at work*."
     }
   ]
 }

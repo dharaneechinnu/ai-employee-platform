@@ -11,7 +11,7 @@
     "film": "node scripts/record-film.mjs --out ../docs/product-film.mp4",
     "demo": "node scripts/demo/server.mjs",
     "demo:record": "node scripts/record-demo.mjs ../docs/product-demo.mp4",
-    "ad": "DEMO_CAPTIONS=0 node scripts/record-demo.mjs /tmp/demo-clean.mp4 && python3 scripts/ad/make_ad.py /tmp/demo-clean.mp4 ../docs/product-ad.mp4 && cp ../docs/product-ad.mp4 public/media/product-ad.mp4"
+    "ad": "DEMO_AD=1 node scripts/record-demo.mjs /tmp/demo-ad.mp4 && python3 scripts/ad/make_ad.py /tmp/demo-ad.mp4 ../docs/product-ad.mp4 && cp ../docs/product-ad.mp4 public/media/product-ad.mp4"
   },
   "dependencies": {
     "react": "18.3.1",

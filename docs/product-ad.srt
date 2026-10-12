@@ -1,35 +1,39 @@
 1
-00:00:00,500 --> 00:00:03,830
-Meet AI Employees: your AI team, at work.
+00:00:00,600 --> 00:00:05,790
+Imagine an AI team that does real work, and still checks with you first.
 
 2
-00:00:04,080 --> 00:00:08,130
-Connect Google Workspace in one click. No passwords to copy.
+00:00:05,890 --> 00:00:10,300
+First, connect Google Workspace. One click, and no passwords to copy.
 
 3
-00:00:11,000 --> 00:00:16,490
-Give each AI Employee only the tools it needs. Sending email? It asks first.
+00:00:13,900 --> 00:00:19,390
+Then choose exactly which tools each AI Employee gets. Sending email? It asks first.
 
 4
-00:00:21,360 --> 00:00:26,130
-Assign a task in plain words, and watch every step happen live.
+00:00:20,600 --> 00:00:24,290
+Reading is automatic. Anything risky waits for a person.
 
 5
-00:00:27,160 --> 00:00:32,290
-It checks company memory, queries the data, and reads the vendor's status page.
+00:00:26,850 --> 00:00:31,620
+Now just ask, in plain words, and watch every step happen live.
 
 6
-00:00:35,250 --> 00:00:39,300
-The manager, Ravi, hands parts of the job to specialists.
+00:00:32,750 --> 00:00:37,520
+It checks what your company already knows, then pulls the numbers itself.
 
 7
-00:00:40,510 --> 00:00:46,360
-Before anything risky goes out, a person decides. Approve right from your inbox, or Slack.
+00:00:40,850 --> 00:00:45,260
+Ravi, the manager, brings in two specialists to split the work.
 
 8
-00:00:47,570 --> 00:00:52,340
-Then the run picks up where it paused, with every step logged.
+00:00:46,680 --> 00:00:51,810
+Before an email goes out, you decide. Approve it straight from your inbox.
 
 9
-00:00:55,550 --> 00:00:57,800
-AI Employees. Already at work.
+00:00:55,610 --> 00:01:00,020
+Then it finishes the job, and every step is on record.
+
+10
+00:01:03,780 --> 00:01:07,110
+AI Employees. Your AI team, already at work.

@@ -106,14 +106,44 @@ function mark(id, text) {
   marks.push({ id, text, t: frames.length ? frames.at(-1).t : null });
 }
 
-// DEMO_CAPTIONS=0 records without the chapter pills, for the narrated
-// ad, whose subtitles take their place. The chapter times are still kept.
-const SHOW_CAPTIONS = process.env.DEMO_CAPTIONS !== "0";
+// DEMO_AD=1 records the ad cut: each feature opens with its title card
+// (one fixed type treatment for every feature) instead of a caption
+// pill, and the subtitles added afterwards carry the explanation. The
+// chapter times are kept either way. (DEMO_CAPTIONS=0 is the old name.)
+const AD = process.env.DEMO_AD === "1" || process.env.DEMO_CAPTIONS === "0";
 
-async function caption(n, text) {
-  mark(n, text);
-  if (SHOW_CAPTIONS) await stage("caption", n, text);
-  await wait(500);
+async function chapter(n, caption, title, sub) {
+  mark(n, caption);
+  await stage("clearSpotlight");
+  await stage("hideCallout");
+  if (AD) {
+    await stage("feature", n, title, sub, 1700);
+    await wait(1250);
+  } else {
+    await stage("caption", n, caption);
+    await wait(500);
+  }
+}
+
+/** Dim everything but this element, and point a label at it. */
+async function spotlight(locator, text, side = "right", pad = 12) {
+  const r = await rect(locator);
+  const s = await stage("spotlightApp", r.x, r.y, r.w, r.h, pad);
+  await wait(650);
+  if (text) {
+    const at = {
+      right: [s.x + s.w, s.y + s.h / 2],
+      left: [s.x, s.y + s.h / 2],
+      top: [s.x + s.w / 2, s.y],
+      bottom: [s.x + s.w / 2, s.y + s.h],
+    }[side];
+    await stage("callout", at[0], at[1], text, side);
+  }
+}
+
+async function unspot() {
+  await stage("hideCallout");
+  await stage("clearSpotlight");
 }
 
 async function go(path) {
@@ -144,7 +174,7 @@ for (const kind of ["unhandledRejection", "uncaughtException"]) process.on(kind,
 
 // Intro card, while the app loads behind it.
 await app.getByRole("link", { name: "Tasks" }).first().waitFor();
-await wait(2600);
+await wait(AD ? 4300 : 2600);
 await stage("zoom", 800, 450, 0.9, [960, 540], 0);
 await stage("showWindow");
 await wait(100);
@@ -153,60 +183,71 @@ await stage("showCursor");
 await stage("moveTo", 1500, 900, 0);
 await wait(900);
 
-// 1 · Connect Google (~7s)
-await caption("01", "Connect Google Workspace in one click");
+// 1 · Connect Google
+await chapter("01", "Connect Google Workspace in one click", "One-click connections", "Google Workspace and Microsoft 365, no passwords");
 await click(app.getByRole("link", { name: "Connections" }), 700);
 await go("/connections");
 const google = app.locator("article", { hasText: "Google Workspace" });
-await zoom(google, 1.45, [960, 470], 900);
+await zoom(google, 1.55, [960, 500], 900);
 await click(google.getByRole("button", { name: "Connect Google Workspace" }), 700);
-await wait(1100);
-await point(google.getByText("ops@victopia.com").first(), 600);
 await wait(900);
+await spotlight(google, "Connected in one click", "right", 10);
+await wait(1500);
+await unspot();
 await stage("unzoom", 800);
 
-// 2 · Give Ravi the Gmail tools (~8s)
-await caption("02", "Give an AI Employee exactly the tools it needs");
+// 2 · Give Ravi the Gmail tools
+await chapter("02", "Give an AI Employee exactly the tools it needs", "Tools with guardrails", "Each AI Employee gets only what it needs");
 await click(app.getByRole("link", { name: "AI Employees" }), 700);
 await go("/employees");
 const ravi = app.locator("article", { hasText: "Operations Analyst" });
 await click(ravi.getByRole("button", { name: "Tools" }), 700);
 const panel = app.locator("aside", { hasText: "Tools for Ravi" });
 const googlePack = panel.locator("details", { hasText: "Google Workspace" });
-await zoom(googlePack.locator("summary"), 1.45, [1060, 330], 900);
+await zoom(googlePack.locator("summary"), 1.6, [1060, 330], 900);
 await click(googlePack.locator("summary"), 600);
 await wait(250);
-await zoom(googlePack, 1.45, [1060, 560], 700);
+await zoom(googlePack, 1.6, [1100, 560], 700);
+const toolRow = (tool) => googlePack.locator("label").filter({ has: app.getByText(tool, { exact: true }) });
 for (const tool of ["gmail_search", "gmail_send"]) {
-  await click(googlePack.locator("label").filter({ has: app.getByText(tool, { exact: true }) }).locator("input"), 450);
+  await click(toolRow(tool).locator("input"), 450);
 }
+await spotlight(toolRow("gmail_send"), "Sending email asks first", "left", 8);
+await wait(1500);
+await unspot();
 await click(panel.getByRole("button", { name: /^Save/ }), 600);
-await wait(700);
+await wait(500);
 await stage("unzoom", 800);
 
-// 3 · Assign and watch (~12s)
-await caption("03", "Assign work and watch every step, live");
+// 3 · Assign and watch
+await chapter("03", "Assign work and watch every step, live", "Live runs", "Watch every step as it happens");
 await click(app.getByRole("link", { name: "Tasks" }).first(), 700);
 await go("/tasks");
 const composer = app.getByPlaceholder(/What should it do/);
-await zoom(composer, 1.35, [960, 460], 900);
-await type(composer, "Why did checkouts fail overnight? Email the ops team a summary.", 26);
+await zoom(composer, 1.45, [960, 460], 900);
+await type(composer, "Why did checkouts fail overnight? Email the ops team a summary.", 24);
 await click(app.getByRole("button", { name: /Assign to Ravi/ }), 600);
 await stage("unzoom", 700);
-await wait(600);
+await wait(500);
 const run = app.locator("section[aria-label='Run']");
-await zoom(run, 1.32, [1000, 560], 900);
-await stage("moveTo", 1700, 960, 700);
-await wait(4300);
+await zoom(run, 1.4, [1000, 600], 900);
+await stage("moveTo", 1760, 980, 700);
+await wait(1400);
+await spotlight(run.locator("ol").first(), "Every step, as it happens", "left", 10);
+await wait(2400);
+await unspot();
 
-// 4 · Agent tree (~5s)
-await caption("04", "A manager hands work to specialists");
+// 4 · Agent tree
+await chapter("04", "A manager hands work to specialists", "Agent teamwork", "A manager delegates to specialists");
 await click(run.getByRole("button", { name: /Agent tree/ }), 600);
-await stage("moveTo", 1750, 980, 600);
-await wait(3600);
+await stage("moveTo", 1760, 990, 600);
+await wait(700);
+await spotlight(run.locator(".dot-grid").first(), "Two specialists, one manager", "top", 10);
+await wait(2000);
+await unspot();
 
-// 5 · Approve from the inbox (~9s)
-await caption("05", "Risky actions wait — approve from email or Slack");
+// 5 · Approve from the inbox
+await chapter("05", "Risky actions wait — approve from email or Slack", "Human approval", "Approve from your inbox or Slack");
 await stage("unzoom", 700);
 await stage("mail", true);
 await wait(1100);
@@ -221,28 +262,35 @@ const approval = await page.evaluate(async (base) => (await (await fetch(`${base
 await frame().goto(`${BASE}/approve/${approval}?action=approve`);
 await go("/approve");
 const approve = app.getByRole("button", { name: /^Approve/ });
-await zoom(approve, 1.3, [960, 640], 900);
-await wait(700);
+await zoom(app.locator("dl").first(), 1.45, [960, 470], 900);
+await spotlight(app.locator("dl").first(), "Exactly what will be sent", "right", 10);
+await wait(1300);
+await unspot();
 await click(approve, 600);
-await wait(1100);
+await wait(900);
 await stage("unzoom", 700);
 
-// 6 · The run finishes (~8s)
-await caption("06", "The run resumes and finishes, every step logged");
+// 6 · The run finishes
+await chapter("06", "The run resumes and finishes, every step logged", "Full audit trail", "Every step logged, every result kept");
 const taskId = await page.evaluate(async (base) => (await (await fetch(`${base}/api/v1/orgs/victopia/tasks`)).json())[0].id, BASE);
 await frame().goto(`${BASE}/tasks?task=${taskId}`);
 await go("/tasks");
-await zoom(app.locator("section[aria-label='Run']"), 1.3, [1000, 560], 900);
-await wait(2600);
-await click(app.locator("section[aria-label='Run']").getByRole("button", { name: /Result/ }), 600);
-await wait(2300);
+const runDone = app.locator("section[aria-label='Run']");
+await zoom(runDone, 1.4, [1000, 560], 900);
+await wait(1600);
+await click(runDone.getByRole("button", { name: /Result/ }), 600);
+await wait(500);
+await spotlight(runDone.getByText("Est. cost").locator("xpath=ancestor::div[contains(@class,'grid')][1]"), "Steps, tokens and cost, on record", "bottom", 10);
+await wait(1800);
+await unspot();
 
-// Outro (~3.5s)
+// Outro
 await stage("hideCaption");
+await stage("hideFeature");
 await stage("showCursor", false);
 mark("outro", "Outro");
 await stage("outro");
-await wait(3600);
+await wait(AD ? 4500 : 3600);
 
 await cdp.send("Page.stopScreencast");
 await browser.close();
