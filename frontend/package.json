@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "film": "node scripts/record-film.mjs --out ../docs/product-film.mp4"
+    "film": "node scripts/record-film.mjs --out ../docs/product-film.mp4",
+    "demo": "node scripts/demo/server.mjs",
+    "demo:record": "node scripts/record-demo.mjs ../docs/product-demo.mp4"
   },
   "dependencies": {
     "react": "18.3.1",

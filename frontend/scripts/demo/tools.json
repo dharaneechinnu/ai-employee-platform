@@ -1,0 +1,272 @@
+[
+ {
+  "name": "describe_table",
+  "pack": "database",
+  "description": "Show the columns and types of one table.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for database read actions",
+  "permanently_blocked": false,
+  "requires_connection": "database"
+ },
+ {
+  "name": "list_tables",
+  "pack": "database",
+  "description": "List the tables available in the connected database.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for database read actions",
+  "permanently_blocked": false,
+  "requires_connection": "database"
+ },
+ {
+  "name": "run_query",
+  "pack": "database",
+  "description": "Run one SELECT query and return the rows. Read-only; at most 1000 rows are returned.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for database read actions",
+  "permanently_blocked": false,
+  "requires_connection": "database"
+ },
+ {
+  "name": "delegate_to_specialist",
+  "pack": "delegation",
+  "description": "Ask another AI Employee in this company to do part of the work and return the result. Use it when the task needs expertise or tools you do not have. Always check what comes back before relying on it.",
+  "side_effect": "write",
+  "effective_setting": "auto",
+  "reason": "platform default for delegation write actions",
+  "permanently_blocked": false,
+  "requires_connection": null
+ },
+ {
+  "name": "list_emails",
+  "pack": "email",
+  "description": "List recent emails: sender, subject and date. Does not read bodies.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for email read actions",
+  "permanently_blocked": false,
+  "requires_connection": "email"
+ },
+ {
+  "name": "read_email",
+  "pack": "email",
+  "description": "Read the full text of one email.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for email read actions",
+  "permanently_blocked": false,
+  "requires_connection": "email"
+ },
+ {
+  "name": "save_draft",
+  "pack": "email",
+  "description": "Save a reply as a draft for a human to review and send. Prefer this over sending directly.",
+  "side_effect": "write",
+  "effective_setting": "auto",
+  "reason": "platform default for email write actions",
+  "permanently_blocked": false,
+  "requires_connection": "email"
+ },
+ {
+  "name": "send_email",
+  "pack": "email",
+  "description": "Send an email immediately. This cannot be undone, so it normally requires a human to approve it first.",
+  "side_effect": "destructive",
+  "effective_setting": "ask",
+  "reason": "platform default for email destructive actions",
+  "permanently_blocked": false,
+  "requires_connection": "email"
+ },
+ {
+  "name": "gmail_create_draft",
+  "pack": "google",
+  "description": "Save an email as a Gmail draft for a person to review and send. Prefer this to sending when unsure.",
+  "side_effect": "write",
+  "effective_setting": "auto",
+  "reason": "platform default for this tool",
+  "permanently_blocked": false,
+  "requires_connection": "google"
+ },
+ {
+  "name": "gmail_read",
+  "pack": "google",
+  "description": "Read one Gmail message in full, by the id gmail_search returned.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for google read actions",
+  "permanently_blocked": false,
+  "requires_connection": "google"
+ },
+ {
+  "name": "gmail_search",
+  "pack": "google",
+  "description": "Search the connected Gmail inbox. Returns sender, subject, date and a snippet.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for google read actions",
+  "permanently_blocked": false,
+  "requires_connection": "google"
+ },
+ {
+  "name": "gmail_send",
+  "pack": "google",
+  "description": "Send an email from the connected Gmail account. It cannot be unsent.",
+  "side_effect": "destructive",
+  "effective_setting": "ask",
+  "reason": "platform default for google destructive actions",
+  "permanently_blocked": false,
+  "requires_connection": "google"
+ },
+ {
+  "name": "google_calendar_create",
+  "pack": "google",
+  "description": "Create an event on the connected Google Calendar. Attendees receive an invitation.",
+  "side_effect": "write",
+  "effective_setting": "ask",
+  "reason": "platform default for google write actions",
+  "permanently_blocked": false,
+  "requires_connection": "google"
+ },
+ {
+  "name": "google_calendar_list",
+  "pack": "google",
+  "description": "List upcoming events on the connected Google Calendar.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for google read actions",
+  "permanently_blocked": false,
+  "requires_connection": "google"
+ },
+ {
+  "name": "google_drive_read",
+  "pack": "google",
+  "description": "Read the text of a Google Drive file by id: Docs, Sheets (as CSV), Slides, and plain-text files.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for google read actions",
+  "permanently_blocked": false,
+  "requires_connection": "google"
+ },
+ {
+  "name": "google_drive_search",
+  "pack": "google",
+  "description": "Search the connected Google Drive by file name and contents.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for google read actions",
+  "permanently_blocked": false,
+  "requires_connection": "google"
+ },
+ {
+  "name": "recall",
+  "pack": "memory",
+  "description": "Search what this company has told you before: facts, corrections and lessons from past tasks. Use it before guessing or asking the user something they may already have answered.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for memory read actions",
+  "permanently_blocked": false,
+  "requires_connection": null
+ },
+ {
+  "name": "remember",
+  "pack": "memory",
+  "description": "Save something worth knowing next time: a correction you were given, a convention this company follows, or a lesson from this task.",
+  "side_effect": "write",
+  "effective_setting": "auto",
+  "reason": "platform default for memory write actions",
+  "permanently_blocked": false,
+  "requires_connection": null
+ },
+ {
+  "name": "onedrive_read",
+  "pack": "microsoft",
+  "description": "Read the text of a OneDrive file by id: Word documents and plain-text files.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for microsoft read actions",
+  "permanently_blocked": false,
+  "requires_connection": "microsoft"
+ },
+ {
+  "name": "onedrive_search",
+  "pack": "microsoft",
+  "description": "Search the connected OneDrive by file name and contents.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for microsoft read actions",
+  "permanently_blocked": false,
+  "requires_connection": "microsoft"
+ },
+ {
+  "name": "outlook_calendar_create",
+  "pack": "microsoft",
+  "description": "Create an event on the connected Outlook calendar. Attendees are invited.",
+  "side_effect": "write",
+  "effective_setting": "ask",
+  "reason": "platform default for microsoft write actions",
+  "permanently_blocked": false,
+  "requires_connection": "microsoft"
+ },
+ {
+  "name": "outlook_calendar_list",
+  "pack": "microsoft",
+  "description": "List upcoming events on the connected Outlook calendar (times in UTC).",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for microsoft read actions",
+  "permanently_blocked": false,
+  "requires_connection": "microsoft"
+ },
+ {
+  "name": "outlook_create_draft",
+  "pack": "microsoft",
+  "description": "Save an email as an Outlook draft for a person to review and send. Prefer this to sending when unsure.",
+  "side_effect": "write",
+  "effective_setting": "auto",
+  "reason": "platform default for this tool",
+  "permanently_blocked": false,
+  "requires_connection": "microsoft"
+ },
+ {
+  "name": "outlook_read",
+  "pack": "microsoft",
+  "description": "Read one Outlook message in full, by the id outlook_search returned.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for microsoft read actions",
+  "permanently_blocked": false,
+  "requires_connection": "microsoft"
+ },
+ {
+  "name": "outlook_search",
+  "pack": "microsoft",
+  "description": "Search the connected Outlook mailbox. Returns sender, subject, date and preview.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for microsoft read actions",
+  "permanently_blocked": false,
+  "requires_connection": "microsoft"
+ },
+ {
+  "name": "outlook_send",
+  "pack": "microsoft",
+  "description": "Send an email from the connected Outlook account. It cannot be unsent.",
+  "side_effect": "destructive",
+  "effective_setting": "ask",
+  "reason": "platform default for microsoft destructive actions",
+  "permanently_blocked": false,
+  "requires_connection": "microsoft"
+ },
+ {
+  "name": "get_webpage",
+  "pack": "web",
+  "description": "Fetch a web page and return its text. Use this to read documentation or any public page. Only addresses allowed by this company can be read.",
+  "side_effect": "read",
+  "effective_setting": "auto",
+  "reason": "platform default for web read actions",
+  "permanently_blocked": false,
+  "requires_connection": null
+ }
+]
