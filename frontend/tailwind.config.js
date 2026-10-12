@@ -9,7 +9,7 @@ const token = (name) => `var(--${name})`;
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   // Built as `chip-${tone}`, which the content scan cannot see.
-  safelist: ["chip-run", "chip-ok", "chip-ask", "chip-bad", "chip-gold", "chip-mute"],
+  safelist: ["chip-run", "chip-ok", "chip-ask", "chip-bad", "chip-brand", "chip-mute"],
   theme: {
     extend: {
       colors: {
@@ -31,14 +31,15 @@ export default {
           soft: token("accent-soft"),
           line: token("accent-line"),
         },
+        spark: token("spark"),
         run: { DEFAULT: token("run"), soft: token("run-soft"), text: token("run-text") },
         ok: { DEFAULT: token("ok"), soft: token("ok-soft"), text: token("ok-text"), on: token("on-ok") },
         ask: { DEFAULT: token("ask"), soft: token("ask-soft"), text: token("ask-text"), on: token("on-ask") },
         bad: { DEFAULT: token("bad"), soft: token("bad-soft"), text: token("bad-text"), on: token("on-bad") },
       },
       fontFamily: {
-        display: ["Sora", "ui-sans-serif", "system-ui", "sans-serif"],
-        sans: ["Geist", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Outfit", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["'DM Sans'", "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["'Geist Mono'", "ui-monospace", "Menlo", "monospace"],
       },
       boxShadow: {

@@ -1,8 +1,8 @@
 /**
- * Shared pieces of the "Gilded" interface.
+ * Shared pieces of the "Spectrum" interface.
  *
  * Colour lives in CSS variables (src/index.css), so nothing here knows
- * whether it is dark or light. One gold button per screen; status is a
+ * whether it is dark or light. One primary button per screen; status is a
  * word plus a dot shape, never colour alone.
  */
 
@@ -21,11 +21,11 @@ import { Icon, type IconName } from "./icons";
 
 // ------------------------------------------------------------- buttons
 
-type Variant = "gold" | "primary" | "ghost" | "ok" | "danger" | "danger-ghost";
+type Variant = "brand" | "primary" | "ghost" | "ok" | "danger" | "danger-ghost";
 
 const VARIANT_CLASS: Record<Variant, string> = {
-  gold: "btn-gold",
-  primary: "btn-gold",
+  brand: "btn-primary",
+  primary: "btn-primary",
   ghost: "btn-ghost",
   ok: "btn-ok",
   danger: "btn-danger",
@@ -34,7 +34,7 @@ const VARIANT_CLASS: Record<Variant, string> = {
 
 export function Button({
   children,
-  variant = "gold",
+  variant = "brand",
   size = "md",
   icon,
   className = "",
@@ -356,7 +356,7 @@ export function Tabs<K extends string>({
 
 // ------------------------------------------------------------- status
 
-export type Tone = "run" | "ok" | "ask" | "bad" | "gold" | "mute";
+export type Tone = "run" | "ok" | "ask" | "bad" | "brand" | "mute";
 
 /** Colour by meaning, so a run's state is readable at a glance. */
 export function statusTone(status: string): Tone {
@@ -364,7 +364,7 @@ export function statusTone(status: string): Tone {
   if (["completed", "active", "auto"].includes(status)) return "ok";
   if (["awaiting_approval", "ask", "paused", "untested"].includes(status)) return "ask";
   if (["failed", "cancelled", "blocked", "destructive", "suspended", "closed"].includes(status)) return "bad";
-  if (["draft", "write"].includes(status)) return "gold";
+  if (["draft", "write"].includes(status)) return "brand";
   return "mute";
 }
 
@@ -405,12 +405,13 @@ export function Badge({ children, tone = "mute" }: { children: ReactNode; tone?:
   );
 }
 
+// Stops along the brand spectrum, from blue to the orange spark.
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg,#D4A84B,#F0CF7A)",
-  "linear-gradient(135deg,#5AB8F0,#A8DDF9)",
-  "linear-gradient(135deg,#7BC99A,#BDE7CC)",
-  "linear-gradient(135deg,#E8677A,#F6B3BD)",
-  "linear-gradient(135deg,#B48CF0,#DCC8FA)",
+  "linear-gradient(135deg,#6F8BFF,#B9C6FF)",
+  "linear-gradient(135deg,#9C7BFF,#D3C6FF)",
+  "linear-gradient(135deg,#FF8A4C,#FFC6A3)",
+  "linear-gradient(135deg,#3CC8D8,#A9EAF1)",
+  "linear-gradient(135deg,#F06A9A,#F8BBD2)",
 ];
 
 function hash(text: string): number {
@@ -439,7 +440,7 @@ export function Avatar({
         width: size,
         height: size,
         fontSize: Math.round(size * 0.4),
-        color: "#1A1306",
+        color: "#0F1430",
         background: AVATAR_GRADIENTS[hash(name) % AVATAR_GRADIENTS.length],
         opacity: muted ? 0.55 : 1,
       }}
@@ -462,7 +463,7 @@ export function UsageMeter({ used, limit, label }: { used: number; limit: number
       <div className="h-1.5 overflow-hidden rounded-full bg-raised" role="presentation">
         <div
           className="grow-x h-full rounded-full"
-          style={{ width: `${pct}%`, background: "linear-gradient(90deg,var(--accent),var(--accent2))" }}
+          style={{ width: `${pct}%`, background: "linear-gradient(90deg,var(--accent),var(--accent2) 65%,var(--spark))" }}
         />
       </div>
     </div>

@@ -225,7 +225,7 @@ export default function Employees() {
                       <span className="flex min-w-0 flex-col gap-0.5">
                         <span className="flex items-center gap-2 font-medium">
                           {template.name}
-                          {!template.is_platform_template && <Chip tone="gold" dot={false}>yours</Chip>}
+                          {!template.is_platform_template && <Chip tone="brand" dot={false}>yours</Chip>}
                         </span>
                         <span className="line-clamp-2 text-[13px] text-muted">{template.description}</span>
                       </span>

@@ -177,7 +177,7 @@ export default function Providers() {
                   </div>
 
                   <div className="mt-auto flex gap-2">
-                    <Button size="sm" variant={provider.status === "untested" ? "gold" : "ghost"} disabled={isTesting} onClick={() => void test(provider)}>
+                    <Button size="sm" variant={provider.status === "untested" ? "brand" : "ghost"} disabled={isTesting} onClick={() => void test(provider)}>
                       {provider.status === "untested" ? "Test connection" : "Test again"}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => void disconnect(provider)}>
@@ -200,7 +200,7 @@ export default function Providers() {
               options={available.map((option) => ({ value: option.key, label: option.display_name }))}
             />
             <Input label="API key" type="password" value={apiKey} onChange={setApiKey} required mono autoComplete="off" placeholder="Paste key" />
-            <Button type="submit" variant={connected.length ? "ghost" : "gold"} disabled={!apiKey || saving}>
+            <Button type="submit" variant={connected.length ? "ghost" : "brand"} disabled={!apiKey || saving}>
               {saving ? "Saving…" : "Connect"}
             </Button>
           </div>

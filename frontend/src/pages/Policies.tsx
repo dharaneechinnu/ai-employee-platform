@@ -251,7 +251,7 @@ export default function Policies() {
                       <span className="font-mono">{row.scope_value}</span>
                       {row.side_effect && <span className="ml-2 text-xs text-dim">{row.side_effect}</span>}
                     </span>
-                    {!row.is_default && <Chip tone="gold">changed</Chip>}
+                    {!row.is_default && <Chip tone="brand">changed</Chip>}
                     <Segmented
                       value={row.setting}
                       label={`${label} setting`}

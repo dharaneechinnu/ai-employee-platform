@@ -24,7 +24,7 @@ import { AuthStage } from "./Login";
  * type, its own sign-in, and no shared session. A Company Admin's
  * token is rejected here even though its holder is an admin of their
  * own company. It also looks different on purpose: the .staff class
- * turns the gold accent jade, so staff always know where they are.
+ * turns the blue-violet accent jade, so staff always know where they are.
  *
  * Note what is absent. There is no way to read a customer's tasks,
  * memory, credentials or API keys, because no endpoint returns them.
@@ -162,7 +162,7 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
               <p className="mt-2 text-xs text-dim">Paste the whole code into any box; it fills them all.</p>
             </fieldset>
             <ErrorNote message={error} />
-            <button type="submit" disabled={busy || code.length !== 6} className="btn btn-gold h-[50px] rounded-[14px] text-[15px]">
+            <button type="submit" disabled={busy || code.length !== 6} className="btn btn-primary h-[50px] rounded-[14px] text-[15px]">
               {busy ? "Checking…" : "Enter control room"}
             </button>
             <p className="border-t border-line pt-3.5 text-[13px] leading-normal text-dim">
@@ -414,7 +414,7 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
                             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
                               <span
                                 className="grow-x block h-full rounded-full"
-                                style={{ width: `${pct}%`, background: "linear-gradient(90deg,var(--accent),var(--accent2))", opacity: active ? 1 : 0.5 }}
+                                style={{ width: `${pct}%`, background: "linear-gradient(90deg,var(--accent),var(--accent2) 65%,var(--spark))", opacity: active ? 1 : 0.5 }}
                               />
                             </span>
                             <span className="font-mono text-[13px] text-muted">

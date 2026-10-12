@@ -94,7 +94,7 @@ export default function Members() {
                   </div>
                   <div className="truncate text-[13px] text-muted">{member.email}</div>
                 </div>
-                <Chip tone={member.role === "admin" ? "gold" : "mute"} dot={false}>
+                <Chip tone={member.role === "admin" ? "brand" : "mute"} dot={false}>
                   {member.role}
                 </Chip>
               </div>

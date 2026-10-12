@@ -49,14 +49,14 @@ export function BrandMark({ size = 34 }: { size?: number }) {
       style={{
         width: size,
         height: size,
-        background: "linear-gradient(135deg,var(--accent),var(--accent2))",
+        background: "linear-gradient(135deg,var(--accent),var(--accent2) 60%,var(--spark))",
         boxShadow: "0 8px 20px -10px var(--glow)",
       }}
     >
       <span className="orbit absolute -inset-1.5">
         <span
           className="absolute left-1/2 top-0 h-[5px] w-[5px] -translate-x-1/2 rounded-full"
-          style={{ background: "var(--accent2)", boxShadow: "0 0 8px var(--accent2)" }}
+          style={{ background: "var(--spark)", boxShadow: "0 0 8px var(--spark)" }}
         />
       </span>
       <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: "var(--on-accent)" }} />
@@ -104,7 +104,7 @@ export default function Layout() {
           </label>
         )}
 
-        <button type="button" className="btn btn-gold mb-0.5 mt-2.5 w-full" onClick={() => navigate("/tasks?new=1")}>
+        <button type="button" className="btn btn-primary mb-0.5 mt-2.5 w-full" onClick={() => navigate("/tasks?new=1")}>
           <Icon name="plus" size={16} strokeWidth={2.4} />
           New task
         </button>

@@ -441,7 +441,7 @@ function RunPanel({
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <StatusChip status={task.status} />
-            {task.dry_run && <Chip tone="gold">dry run</Chip>}
+            {task.dry_run && <Chip tone="brand">dry run</Chip>}
           </div>
         </div>
 
@@ -531,8 +531,8 @@ const EVENT_LABELS: Record<string, string> = {
   provider_error: "Provider error",
 };
 
-function eventStyle(event: RunEvent): { tone: "run" | "ok" | "ask" | "bad" | "gold" | "mute"; icon?: IconName } {
-  if (event.tool === "delegate_to_specialist" && event.type === "tool_call") return { tone: "gold", icon: "tree" };
+function eventStyle(event: RunEvent): { tone: "run" | "ok" | "ask" | "bad" | "brand" | "mute"; icon?: IconName } {
+  if (event.tool === "delegate_to_specialist" && event.type === "tool_call") return { tone: "brand", icon: "tree" };
   switch (event.type) {
     case "tool_blocked":
     case "provider_error":
@@ -547,7 +547,7 @@ function eventStyle(event: RunEvent): { tone: "run" | "ok" | "ask" | "bad" | "go
     case "run_stopped":
       return { tone: "bad", icon: "x" };
     case "parallel_started":
-      return { tone: "gold", icon: "tree" };
+      return { tone: "brand", icon: "tree" };
     default:
       return { tone: "mute" };
   }
@@ -574,7 +574,7 @@ const TONE_STEP: Record<string, string> = {
   ok: "bg-ok-soft border-ok text-ok-text",
   ask: "bg-ask-soft border-ask text-ask-text",
   bad: "bg-bad-soft border-bad text-bad-text",
-  gold: "bg-accent-soft border-accent-line text-accent-text",
+  brand: "bg-accent-soft border-accent-line text-accent-text",
   mute: "bg-raised border-line2 text-dim",
 };
 

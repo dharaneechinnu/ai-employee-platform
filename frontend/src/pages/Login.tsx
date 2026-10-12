@@ -95,7 +95,7 @@ export default function Login() {
 
             <ErrorNote message={error} />
 
-            <button type="submit" disabled={busy} className="btn btn-gold h-[50px] rounded-[14px] text-[15px]">
+            <button type="submit" disabled={busy} className="btn btn-primary h-[50px] rounded-[14px] text-[15px]">
               {busy ? "Working…" : inviteToken ? "Join" : "Sign in"}
               {!busy && <Icon name="arrow" size={18} strokeWidth={2} />}
             </button>
@@ -146,7 +146,7 @@ export function AuthStage({
         }}
       />
       <div aria-hidden="true" className="absolute left-[-120px] top-[10%] h-[520px] w-[520px] rounded-full opacity-40 blur-[70px]" style={{ background: "var(--accent)", animation: "drift 16s ease-in-out infinite" }} />
-      <div aria-hidden="true" className="absolute -bottom-16 -right-24 h-[420px] w-[420px] rounded-full opacity-20 blur-[70px]" style={{ background: "var(--accent2)", animation: "drift 16s ease-in-out -6s infinite" }} />
+      <div aria-hidden="true" className="absolute -bottom-16 -right-24 h-[420px] w-[420px] rounded-full opacity-20 blur-[70px]" style={{ background: "var(--spark)", animation: "drift 16s ease-in-out -6s infinite" }} />
 
       <div className="rise relative flex items-center gap-3">
         <BrandMark size={40} />
@@ -173,14 +173,14 @@ export function AuthStage({
           ))}
         </div>
         <div className="halo float h-[120px] w-[120px] rounded-[34px] p-0.5" style={{ animation: "ring 5s linear infinite, float 5s ease-in-out infinite" }}>
-          <div className="flex h-full w-full items-center justify-center rounded-[32px]" style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2))" }}>
+          <div className="flex h-full w-full items-center justify-center rounded-[32px]" style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2) 60%,var(--spark))" }}>
             <div className="h-[30px] w-[30px] rounded-[9px]" style={{ background: "var(--on-accent)" }} />
           </div>
         </div>
       </div>
 
       <div className="relative flex max-w-[520px] flex-col gap-3.5">
-        <h1 className="rise gold-text text-balance font-display text-[40px] font-bold leading-[1.05] tracking-[-0.035em] sm:text-[52px]" style={{ animationDelay: ".1s" }}>
+        <h1 className="rise spectrum-text text-balance font-display text-[40px] font-bold leading-[1.05] tracking-[-0.035em] sm:text-[52px]" style={{ animationDelay: ".1s" }}>
           {headline}
         </h1>
         <p className="rise font-mono text-sm text-accent-text" style={{ animationDelay: ".2s" }}>

@@ -34,7 +34,7 @@ interface SearchHit {
 
 type Scope = "all" | "org" | "employee";
 
-const KIND_TONE: Record<string, Tone> = { fact: "run", correction: "ask", summary: "ok", document: "gold" };
+const KIND_TONE: Record<string, Tone> = { fact: "run", correction: "ask", summary: "ok", document: "brand" };
 
 export default function Memory() {
   const { org } = useAuth();

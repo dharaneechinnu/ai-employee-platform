@@ -3,103 +3,109 @@
 @tailwind utilities;
 
 /*
- * The "Gilded" theme.
+ * The "Spectrum" theme.
  *
- * Every colour on screen is one of these names. Dark is the default;
- * [data-theme="light"] swaps the values. Gold marks what you can do and
- * where you are; the four status colours say what the AI team is doing
- * and never borrow the brand colour.
+ * Every colour on screen is one of these names; [data-theme="light"]
+ * swaps the values. The brand is a continuous run from blue through
+ * violet to a warm orange spark: blue-violet marks what you can do and
+ * where you are, the spark is reserved for highlights. The four status
+ * colours say what the AI team is doing and never borrow the brand hues.
  *
  * .staff re-points the accent at jade for the Platform Admin screens, so
  * staff never mistake the control room for a company workspace.
  */
 :root {
   color-scheme: dark;
-  --bg: #0c0b09;
-  --side: #0f0e0b;
-  --panel: #16140f;
-  --raised: #1f1c16;
-  --sunken: #0a0907;
-  --line: #2a2620;
-  --line2: #3b352b;
-  --text: #f5efe3;
-  --muted: #bdb3a0;
-  --dim: #948a78;
-  --accent: #d4a84b;
-  --accent2: #f0cf7a;
-  --on-accent: #1a1306;
-  --accent-text: #e9c46a;
-  --accent-soft: #2a2213;
-  --accent-line: #5c4a22;
-  --glow: rgba(212, 168, 75, 0.45);
-  --run: #5ab8f0;
-  --run-soft: #10222e;
-  --run-text: #8fd0f7;
-  --run-glow: rgba(90, 184, 240, 0.5);
-  --ok: #7bc99a;
-  --ok-soft: #13241a;
-  --ok-text: #a3ddb9;
-  --on-ok: #07170d;
-  --ask: #ff9447;
-  --ask-soft: #2e1c0e;
-  --ask-text: #ffb680;
-  --ask-glow: rgba(255, 148, 71, 0.5);
-  --on-ask: #1f0e02;
-  --bad: #e8677a;
-  --bad-soft: #2c1217;
-  --bad-text: #f49aa7;
-  --on-bad: #1f0a0e;
+  --bg: #0a0c18;
+  --side: #0d1020;
+  --panel: #12162a;
+  --raised: #1a1f37;
+  --sunken: #080a14;
+  --line: #232842;
+  --line2: #323a5c;
+  --text: #eef0fb;
+  --muted: #aab0cf;
+  --dim: #8389ab;
+  --accent: #7b93ff;
+  --accent2: #a48bff;
+  --spark: #ff8a4c;
+  --on-accent: #0a0c18;
+  --accent-text: #9fb0ff;
+  --accent-soft: #1b2250;
+  --accent-line: #3a4a9a;
+  --glow: rgba(123, 147, 255, 0.45);
+  --run: #3cc8d8;
+  --run-soft: #0c2630;
+  --run-text: #7fdde8;
+  --run-glow: rgba(60, 200, 216, 0.5);
+  --ok: #5fd08f;
+  --ok-soft: #102a1d;
+  --ok-text: #92e2b4;
+  --on-ok: #06180e;
+  --ask: #ffb547;
+  --ask-soft: #2e2210;
+  --ask-text: #ffcc7a;
+  --ask-glow: rgba(255, 181, 71, 0.5);
+  --on-ask: #1f1400;
+  --bad: #f06a80;
+  --bad-soft: #2e1220;
+  --bad-text: #f7a0ae;
+  --on-bad: #22060d;
   --shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.85);
-  --hero: radial-gradient(1000px 420px at 85% -10%, rgba(212, 168, 75, 0.1), transparent 60%);
-  --dot: rgba(212, 168, 75, 0.13);
-  --grid: rgba(212, 168, 75, 0.07);
+  --hero: radial-gradient(900px 420px at 88% -12%, rgba(123, 147, 255, 0.14), transparent 60%),
+    radial-gradient(700px 360px at 8% -10%, rgba(255, 138, 76, 0.07), transparent 60%);
+  --dot: rgba(123, 147, 255, 0.14);
+  --grid: rgba(123, 147, 255, 0.07);
 }
 
 [data-theme="light"] {
   color-scheme: light;
-  --bg: #faf7f0;
-  --side: #f4efe4;
+  --bg: #f6f7fb;
+  --side: #ffffff;
   --panel: #ffffff;
-  --raised: #f5f0e5;
-  --sunken: #fcfaf5;
-  --line: #e8e0cf;
-  --line2: #d9cdb4;
-  --text: #1c1810;
-  --muted: #574f41;
-  --dim: #746a58;
-  --accent: #c9982f;
-  --accent2: #e2b955;
-  --on-accent: #1a1306;
-  --accent-text: #8a6418;
-  --accent-soft: #fbf1da;
-  --accent-line: #e5c987;
-  --glow: rgba(201, 152, 47, 0.4);
-  --run: #1f7ac2;
-  --run-soft: #e6f2fb;
-  --run-text: #16609a;
-  --run-glow: rgba(31, 122, 194, 0.35);
-  --ok: #2e8a57;
-  --ok-soft: #e5f4ea;
-  --ok-text: #22703f;
+  --raised: #f0f2f9;
+  --sunken: #fafbfe;
+  --line: #e4e7f1;
+  --line2: #d2d7e8;
+  --text: #0f1430;
+  --muted: #474e70;
+  --dim: #656c8e;
+  --accent: #2b4ee0;
+  --accent2: #6a46e5;
+  --spark: #ff7a2f;
+  --on-accent: #ffffff;
+  --accent-text: #2442c7;
+  --accent-soft: #eaeefe;
+  --accent-line: #b9c5fa;
+  --glow: rgba(43, 78, 224, 0.35);
+  --run: #0a8fa3;
+  --run-soft: #e2f6f9;
+  --run-text: #076b7a;
+  --run-glow: rgba(10, 143, 163, 0.35);
+  --ok: #187a49;
+  --ok-soft: #e3f5ec;
+  --ok-text: #157443;
   --on-ok: #ffffff;
-  --ask: #d96a14;
-  --ask-soft: #fdeedf;
-  --ask-text: #9e4a0a;
-  --ask-glow: rgba(217, 106, 20, 0.35);
-  --on-ask: #1f0e02;
-  --bad: #c23a50;
-  --bad-soft: #fbe7ea;
-  --bad-text: #a12c40;
+  --ask: #c27a00;
+  --ask-soft: #fdf2dc;
+  --ask-text: #8a5300;
+  --ask-glow: rgba(194, 122, 0, 0.35);
+  --on-ask: #1f1400;
+  --bad: #cc2f4c;
+  --bad-soft: #fce8ec;
+  --bad-text: #a8213c;
   --on-bad: #ffffff;
-  --shadow: 0 24px 50px -30px rgba(90, 64, 20, 0.35);
-  --hero: radial-gradient(1000px 420px at 85% -10%, rgba(201, 152, 47, 0.14), transparent 60%);
-  --dot: rgba(138, 100, 24, 0.16);
-  --grid: rgba(138, 100, 24, 0.08);
+  --shadow: 0 24px 50px -30px rgba(30, 40, 90, 0.3);
+  --hero: radial-gradient(900px 420px at 88% -12%, rgba(43, 78, 224, 0.1), transparent 60%),
+    radial-gradient(700px 360px at 8% -10%, rgba(255, 122, 47, 0.08), transparent 60%);
+  --dot: rgba(43, 78, 224, 0.13);
+  --grid: rgba(43, 78, 224, 0.07);
 }
 
 .staff {
   --accent: #3fc2a0;
   --accent2: #7fe0c4;
+  --spark: #b8f0de;
   --on-accent: #04140f;
   --accent-text: #7fe0c4;
   --accent-soft: #0e2620;
@@ -113,6 +119,7 @@
 [data-theme="light"] .staff {
   --accent: #12806a;
   --accent2: #0e6a57;
+  --spark: #2ba488;
   --on-accent: #ffffff;
   --accent-text: #0e6a57;
   --accent-soft: #e3f3ee;
@@ -172,12 +179,12 @@
   .btn-sm {
     @apply h-9 rounded-[10px] px-3 text-[13px];
   }
-  .btn-gold {
+  .btn-primary {
     background: linear-gradient(135deg, var(--accent), var(--accent2));
     color: var(--on-accent);
     box-shadow: 0 10px 26px -14px var(--glow);
   }
-  .btn-gold::after {
+  .btn-primary::after {
     content: "";
     position: absolute;
     inset: 0 auto 0 0;
@@ -185,12 +192,12 @@
     background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
     transform: translateX(-120%) skewX(-20deg);
   }
-  .btn-gold:not(:disabled):hover {
+  .btn-primary:not(:disabled):hover {
     transform: translateY(-1px);
     box-shadow: 0 16px 34px -12px var(--glow);
     color: var(--on-accent);
   }
-  .btn-gold:not(:disabled):hover::after {
+  .btn-primary:not(:disabled):hover::after {
     animation: sheen 0.9s ease;
   }
   .btn-ghost {
@@ -283,10 +290,10 @@
     background: var(--bad);
     border-radius: 2px;
   }
-  .chip-gold {
+  .chip-brand {
     @apply bg-accent-soft text-accent-text;
   }
-  .chip-gold > i {
+  .chip-brand > i {
     background: var(--accent);
     border-radius: 2px;
   }
@@ -326,15 +333,16 @@
       from var(--angle),
       var(--accent),
       var(--accent2),
-      transparent 35%,
+      var(--spark) 22%,
+      transparent 38%,
       transparent 60%,
       var(--accent)
     );
     animation: ring 5s linear infinite;
   }
 
-  .gold-text {
-    background: linear-gradient(100deg, var(--text) 0%, var(--text) 40%, var(--accent) 50%, var(--text) 60%, var(--text) 100%);
+  .spectrum-text {
+    background: linear-gradient(100deg, var(--text) 0%, var(--text) 38%, var(--accent) 46%, var(--spark) 54%, var(--text) 62%, var(--text) 100%);
     background-size: 250% 100%;
     -webkit-background-clip: text;
     background-clip: text;
