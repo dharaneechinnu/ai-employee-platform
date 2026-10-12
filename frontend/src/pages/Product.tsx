@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { AutoVideo } from "../components/AutoVideo";
 import { Film } from "../components/film/Film";
 import { Icon, type IconName } from "../components/icons";
 import { BrandMark } from "../components/Layout";
@@ -94,7 +95,7 @@ export default function Product() {
           </Link>
           <div className="ml-6 hidden items-center gap-1 md:flex">
             {[
-              ["#film", "Film"],
+              ["#film", "Demo"],
               ["#features", "Features"],
               ["#how", "How it works"],
               ["#trust", "Trust"],
@@ -132,17 +133,21 @@ export default function Product() {
               {primary.label} <Icon name="arrow" size={16} />
             </Link>
             <a href="#film" className="btn btn-ghost">
-              <Icon name="eye" size={16} /> Watch the film
+              <Icon name="eye" size={16} /> Watch the demo
             </a>
           </div>
 
           <div id="film" className="rise mt-14 w-full scroll-mt-24" style={{ animationDelay: ".32s" }}>
             <div className="halo rounded-[26px] p-[1.5px]" style={{ boxShadow: "0 60px 160px -60px var(--glow)" }}>
-              <div className="overflow-hidden rounded-[25px]">
-                <Film />
+              <div className="overflow-hidden rounded-[25px] bg-[#070915]">
+                <AutoVideo
+                  src="/media/product-demo.mp4"
+                  poster="/media/product-demo.jpg"
+                  label="A one-minute live demo: connecting Google, giving an AI Employee tools, assigning a task, watching it run and delegate, approving from email, and the finished result."
+                />
               </div>
             </div>
-            <p className="mt-3 text-[13px] text-dim">65 seconds · plays inline · click a chapter to jump</p>
+            <p className="mt-3 text-[13px] text-dim">The real product, recorded live · under a minute</p>
           </div>
         </div>
       </section>

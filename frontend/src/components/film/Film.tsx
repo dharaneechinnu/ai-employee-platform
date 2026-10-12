@@ -351,16 +351,7 @@ export function Film({
           clock={clock}
         />
       )}
-      {mode === "player" && compact && (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={playing ? "Pause animation" : "Play animation"}
-          className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white opacity-70 backdrop-blur transition hover:opacity-100"
-        >
-          <PlayIcon playing={playing} />
-        </button>
-      )}
+      {/* Beside a feature it is part of the page, not a player: no controls. */}
     </div>
   );
 }

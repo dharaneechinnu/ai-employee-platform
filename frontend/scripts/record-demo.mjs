@@ -121,6 +121,12 @@ cdp.on("Page.screencastFrame", async ({ data, metadata, sessionId }) => {
 await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: 1920, maxHeight: 1080, everyNthFrame: 1 });
 
 // ------------------------------------------------------------------ the demo
+for (const kind of ["unhandledRejection", "uncaughtException"]) process.on(kind, async (err) => {
+  console.error(err);
+  await page.screenshot({ path: "demo-failure.png" }).catch(() => {});
+  server?.kill();
+  process.exit(1);
+});
 // Timed to land just under a minute: ~4s intro, six short chapters,
 // ~3.5s outro. Waits are in finished-video time.
 
@@ -158,7 +164,7 @@ await zoom(panel, 1.5, [1100, 470], 900);
 const googlePack = panel.locator("details", { hasText: "Google Workspace" });
 await click(googlePack.locator("summary"), 600);
 for (const tool of ["gmail_search", "gmail_send"]) {
-  await click(googlePack.locator("label", { hasText: tool }).locator("input"), 450);
+  await click(googlePack.locator("label").filter({ has: app.getByText(tool, { exact: true }) }).locator("input"), 450);
 }
 await click(panel.getByRole("button", { name: /^Save/ }), 600);
 await wait(700);
