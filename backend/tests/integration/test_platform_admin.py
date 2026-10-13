@@ -174,3 +174,37 @@ async def test_a_customer_token_cannot_reach_platform_routes(
         headers={"Authorization": f"Bearer {company.admin_token}"},
     )
     assert response.status_code == 401
+
+
+async def test_company_list_counts_members_and_employees_independently(
+    api: AsyncClient, session: AsyncSession
+) -> None:
+    """Counting both in one query multiplies the rows together.
+
+    A company with 2 members and 3 AI Employees would report 6 of each.
+    This caught a real bug where the list always showed 0 employees
+    while the detail view showed the right number.
+    """
+    from tests.integration.conftest import seed_company
+
+    acme = await seed_company(session, api, name="Acme", slug="acme")  # 2 members
+    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+
+    for i in range(3):
+        created = await api.post(
+            f"/api/v1/orgs/{acme.org_id}/ai-employees",
+            json={"name": f"Bot {i}", "config": {"guided": {"what_it_does": "work"}}},
+            headers=headers,
+        )
+        assert created.status_code == 201
+
+    email, password, secret = await _make_admin(session)
+    token = await _sign_in(api, email, password, secret)
+
+    listed = await api.get(
+        "/api/v1/platform/companies", headers={"Authorization": f"Bearer {token}"}
+    )
+    row = next(r for r in listed.json() if r["slug"] == "acme")
+
+    assert row["member_count"] == 2
+    assert row["employees_used"] == 3

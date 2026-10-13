@@ -22,6 +22,7 @@ from app.core.crypto import decrypt, encrypt
 from app.core.errors import ConflictError, InvalidCredentialsError, NotFoundError
 from app.core.observability import get_logger
 from app.core.security import create_access_token, hash_password, hash_token, verify_password
+from app.db.models.ai_employee import COUNTS_TOWARD_LIMIT, AIEmployee
 from app.db.models.identity import Invitation, Membership, PlatformAdmin, Role
 from app.db.models.organization import Organization, OrgStatus
 from app.db.repositories.identity_repo import OrganizationRepository, PlatformAdminRepository
@@ -144,14 +145,39 @@ class PlatformService:
         return org, raw_token
 
     async def list_companies(self) -> list[CompanyStats]:
-        """Counts and health only. No customer content."""
+        """Counts and health only. No customer content.
+
+        Members and AI Employees are counted in separate subqueries
+        rather than two joins: joining both at once multiplies the rows
+        together, so a company with 2 members and 3 employees would
+        report 6 of each.
+        """
+        member_counts = (
+            select(Membership.org_id, func.count().label("members"))
+            .group_by(Membership.org_id)
+            .subquery()
+        )
+        employee_counts = (
+            select(AIEmployee.org_id, func.count().label("employees"))
+            .where(AIEmployee.status.in_(COUNTS_TOWARD_LIMIT))
+            .group_by(AIEmployee.org_id)
+            .subquery()
+        )
+
         rows = await self.session.execute(
-            select(Organization, func.count(Membership.id))
-            .outerjoin(Membership, Membership.org_id == Organization.id)
-            .group_by(Organization.id)
+            select(
+                Organization,
+                func.coalesce(member_counts.c.members, 0),
+                func.coalesce(employee_counts.c.employees, 0),
+            )
+            .outerjoin(member_counts, member_counts.c.org_id == Organization.id)
+            .outerjoin(employee_counts, employee_counts.c.org_id == Organization.id)
             .order_by(Organization.created_at)
         )
-        return [CompanyStats(org=org, member_count=count) for org, count in rows.all()]
+        return [
+            CompanyStats(org=org, member_count=members, employee_count=employees)
+            for org, members, employees in rows.all()
+        ]
 
     async def set_status(
         self, *, admin_id: uuid.UUID, org_id: uuid.UUID, status: OrgStatus

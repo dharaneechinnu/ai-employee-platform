@@ -11,6 +11,7 @@ import {
   Spinner,
   Tabs,
   ThemeToggle,
+  relativeTime,
   statusTone,
   useToast,
 } from "../components/ui";
@@ -32,6 +33,31 @@ import { AuthStage } from "./Login";
  */
 
 const BASE = "/api/v1/platform";
+
+/** One line of the diary: who did what to which company, never content. */
+interface AuditEntry {
+  id: string;
+  admin_email: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  detail: string | null;
+  created_at: string;
+}
+
+/** Whether a provider is connected. Never the key, not even masked. */
+interface ProviderStatus {
+  provider_key: string;
+  connected: boolean;
+  status: string;
+  last_tested_at: string | null;
+}
+
+interface CompanyDetail extends Company {
+  created_at: string;
+  task_count: number;
+  providers: ProviderStatus[];
+}
 
 let platformToken: string | null = null;
 
@@ -189,6 +215,10 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
   const [search, setSearch] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [view, setView] = useState<"companies" | "audit">("companies");
+  const [audit, setAudit] = useState<AuditEntry[] | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<CompanyDetail | null>(null);
 
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -202,6 +232,32 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     void load().catch(() => setError("Could not load companies."));
   }, []);
+
+  // The diary is fetched the first time it is opened, not on sign in:
+  // most visits never look at it.
+  useEffect(() => {
+    if (view !== "audit" || audit) return;
+    void call<AuditEntry[]>("/audit")
+      .then(setAudit)
+      .catch(() => toast("Could not load the audit log.", "bad"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, audit]);
+
+  /** Opens one company's counts. A second click closes it again. */
+  async function openDetail(company: Company) {
+    if (openId === company.id) {
+      setOpenId(null);
+      return;
+    }
+    setOpenId(company.id);
+    setDetail(null);
+    try {
+      setDetail(await call<CompanyDetail>(`/companies/${company.id}`));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not load that company.", "bad");
+      setOpenId(null);
+    }
+  }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -306,17 +362,32 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
 
       <main className="mx-auto flex max-w-[1280px] flex-col gap-5 px-4 pb-16 pt-7 sm:px-6 lg:px-10" style={{ background: "var(--hero)" }}>
         <div className="rise flex flex-wrap items-center gap-4">
-          <h1 className="font-display text-[30px] font-semibold tracking-[-0.025em]">Companies</h1>
+          <h1 className="font-display text-[30px] font-semibold tracking-[-0.025em]">
+            {view === "audit" ? "Audit log" : "Companies"}
+          </h1>
+          <Tabs
+            label="View"
+            value={view}
+            onChange={setView}
+            items={[
+              { key: "companies", label: "Companies" },
+              { key: "audit", label: "Audit log" },
+            ]}
+          />
           <span className="flex items-center gap-2 text-[13px] text-muted">
             <Icon name="lock" size={16} className="text-accent-text" />
             Counts and health only. Customer content is not readable here, by design.
           </span>
-          <Button icon={creating ? "x" : "plus"} className="ml-auto" onClick={() => setCreating((v) => !v)} aria-expanded={creating}>
-            {creating ? "Close" : "New company"}
-          </Button>
+          {view === "companies" && (
+            <Button icon={creating ? "x" : "plus"} className="ml-auto" onClick={() => setCreating((v) => !v)} aria-expanded={creating}>
+              {creating ? "Close" : "New company"}
+            </Button>
+          )}
         </div>
 
-        {!companies ? (
+        {view === "audit" ? (
+          <AuditLog entries={audit} />
+        ) : !companies ? (
           error ? <ErrorNote message={error} /> : <Spinner />
         ) : (
           <>
@@ -399,13 +470,23 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
                           className="slide-in grid grid-cols-[minmax(220px,1.4fr)_120px_90px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3.5 text-sm transition-colors last:border-0 hover:bg-raised"
                           style={{ animationDelay: `${Math.min(i, 10) * 0.04}s` }}
                         >
-                          <span className="flex min-w-0 items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => void openDetail(company)}
+                            aria-expanded={openId === company.id}
+                            className="flex min-w-0 items-center gap-3 rounded-[10px] text-left transition-opacity hover:opacity-80"
+                          >
                             <Avatar name={company.name} size={34} rounded="rounded-[10px]" muted={!active} />
                             <span className="flex min-w-0 flex-col">
                               <span className="truncate font-medium">{company.name}</span>
                               <span className="truncate font-mono text-xs text-dim">{company.slug}</span>
                             </span>
-                          </span>
+                            <Icon
+                              name="arrow"
+                              size={15}
+                              className={`shrink-0 text-dim transition-transform ${openId === company.id ? "rotate-90" : ""}`}
+                            />
+                          </button>
                           <span>
                             <Chip tone={statusTone(company.status)}>{company.status}</Chip>
                           </span>
@@ -467,6 +548,11 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
                               </Button>
                             </div>
                           )}
+                          {openId === company.id && (
+                            <div className="rise col-span-full">
+                              <CompanyPanel detail={detail} />
+                            </div>
+                          )}
                         </div>
                       );
                     })
@@ -504,5 +590,106 @@ function Stat({
         {suffix && <span className="text-lg text-dim">{suffix}</span>}
       </div>
     </div>
+  );
+}
+
+// ------------------------------------------------------------ detail panel
+
+/**
+ * Everything a Platform Admin may see about one company: how many, and
+ * how healthy. There is no tab here for tasks, memory or keys, because
+ * there is no endpoint that would fill one.
+ */
+function CompanyPanel({ detail }: { detail: CompanyDetail | null }) {
+  if (!detail) return <Spinner rows={1} />;
+
+  return (
+    <div className="flex flex-col gap-4 rounded-xl bg-sunken p-4">
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))]">
+        <Fact label="Members" value={String(detail.member_count)} />
+        <Fact label="AI Employees" value={`${detail.employees_used} / ${detail.max_employees}`} />
+        <Fact label="Tasks ever run" value={String(detail.task_count)} />
+        <Fact label="Customer since" value={new Date(detail.created_at).toLocaleDateString()} />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-dim">AI providers</span>
+        {detail.providers.length === 0 ? (
+          <span className="text-[13px] text-muted">None connected. Their AI Employees cannot run yet.</span>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {detail.providers.map((provider) => (
+              <Chip key={provider.provider_key} tone={statusTone(provider.status)}>
+                {provider.provider_key}
+                {provider.last_tested_at ? ` \u00b7 tested ${relativeTime(provider.last_tested_at)}` : ""}
+              </Chip>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <p className="flex items-center gap-2 border-t border-line pt-3 text-[13px] text-dim">
+        <Icon name="lock" size={14} className="text-accent-text" />
+        Counts and health only. Their tasks, memory and API keys are not readable from here.
+      </p>
+    </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[13px] text-dim">{label}</div>
+      <div className="font-mono text-[17px]">{value}</div>
+    </div>
+  );
+}
+
+// --------------------------------------------------------------- audit log
+
+/**
+ * The diary. Append-only in the database, so a Platform Admin cannot
+ * delete the record of their own actions - which is the only reason an
+ * audit log is worth having.
+ */
+function AuditLog({ entries }: { entries: AuditEntry[] | null }) {
+  if (!entries) return <Spinner />;
+  if (entries.length === 0) {
+    return <Empty message="Nothing recorded yet" hint="Every sign in, company created, limit changed and suspension lands here." />;
+  }
+
+  return (
+    <section className="card rise overflow-hidden">
+      <div className="overflow-x-auto">
+        <div className="min-w-[760px]">
+          <div className="grid grid-cols-[170px_minmax(200px,1fr)_180px_minmax(200px,1.2fr)] items-center gap-3 border-b border-line px-5 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
+            <span>When</span>
+            <span>Who</span>
+            <span>Did what</span>
+            <span>To what</span>
+          </div>
+          {entries.map((entry, i) => (
+            <div
+              key={entry.id}
+              className="slide-in grid grid-cols-[170px_minmax(200px,1fr)_180px_minmax(200px,1.2fr)] items-center gap-3 border-b border-line px-5 py-3 text-sm last:border-0 hover:bg-raised"
+              style={{ animationDelay: `${Math.min(i, 12) * 0.03}s` }}
+            >
+              <span className="font-mono text-[13px] text-muted" title={new Date(entry.created_at).toLocaleString()}>
+                {relativeTime(entry.created_at)}
+              </span>
+              <span className="truncate">{entry.admin_email ?? "\u2014"}</span>
+              <span>
+                <Chip tone={entry.action.includes("suspend") ? "bad" : "mute"} dot={false}>
+                  {entry.action.replace(/_/g, " ")}
+                </Chip>
+              </span>
+              <span className="truncate text-muted" title={entry.detail ?? undefined}>
+                {entry.detail ?? entry.target_id ?? "\u2014"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
