@@ -252,3 +252,4 @@ The same files are in this repository under `docs/`:
 | 🎬 **[Narrated ad](docs/product-ad.mp4)** (1:08) | Six features with title cards, zooms and spotlights, a voiceover in sync with subtitles, and music |
 | 🖥️ **[Live demo](docs/product-demo.mp4)** (0:58) | The real app recorded in use, start to finish |
 | ✨ **[Animated overview](docs/product-film.mp4)** (1:05) | An illustrated tour of the features |
+| 🧭 **[Welcome and tips](docs/coachmarks-demo.mp4)** (0:48) | The first-sign-in welcome, then the spotlight tour gliding across Tasks and AI Employees |
