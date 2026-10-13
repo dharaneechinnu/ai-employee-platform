@@ -15,6 +15,7 @@ import {
   useToast,
 } from "../components/ui";
 import { ApiError, api, type ConnectedProvider, type ProviderOption } from "../lib/api";
+import { formatDateTime } from "../lib/labels";
 import { useAuth } from "../lib/auth";
 
 /**
@@ -23,6 +24,10 @@ import { useAuth } from "../lib/auth";
  * A saved key is never shown again, to anyone, so this form only ever
  * writes. The last four characters are all the UI gets back.
  */
+const FREE_TIER = ["gemini", "groq"];
+const ORDER = ["gemini", "groq", "deepseek", "openrouter", "openai"];
+const rank = (key: string) => (ORDER.includes(key) ? ORDER.indexOf(key) : ORDER.length);
+
 export default function Providers() {
   const { org } = useAuth();
   const toast = useToast();
@@ -36,7 +41,10 @@ export default function Providers() {
 
   async function load() {
     if (!org) return;
-    const options = await api.get<ProviderOption[]>(`/orgs/${org.id}/providers/available`);
+    // Free tiers first, so a new company's first choice costs nothing.
+    const options = (await api.get<ProviderOption[]>(`/orgs/${org.id}/providers/available`)).sort(
+      (a, b) => rank(a.key) - rank(b.key),
+    );
     setAvailable(options);
     setConnected(await api.get<ConnectedProvider[]>(`/orgs/${org.id}/providers`));
     setSelected((current) => current || options[0]?.key || "");
@@ -170,7 +178,7 @@ export default function Providers() {
                     </div>
                     <div>
                       <div className="text-dim">Last tested</div>
-                      <div className="font-mono" title={provider.last_tested_at ? new Date(provider.last_tested_at).toLocaleString() : undefined}>
+                      <div className="font-mono" title={provider.last_tested_at ? formatDateTime(provider.last_tested_at) : undefined}>
                         {provider.last_tested_at ? relativeTime(provider.last_tested_at) : "never"}
                       </div>
                     </div>
@@ -197,7 +205,10 @@ export default function Providers() {
               label="Provider"
               value={selected}
               onChange={setSelected}
-              options={available.map((option) => ({ value: option.key, label: option.display_name }))}
+              options={available.map((option) => ({
+                value: option.key,
+                label: FREE_TIER.includes(option.key) ? `${option.display_name} (free tier)` : option.display_name,
+              }))}
             />
             <Input label="API key" type="password" value={apiKey} onChange={setApiKey} required mono autoComplete="off" placeholder="Paste key" />
             <Button type="submit" variant={connected.length ? "ghost" : "brand"} disabled={!apiKey || saving}>

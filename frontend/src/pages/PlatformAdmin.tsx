@@ -295,7 +295,7 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
             <Icon name="shield" size={18} strokeWidth={2.2} />
           </span>
           <span className="font-display text-base font-semibold">Platform admin</span>
-          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 font-mono text-[11px] tracking-[0.12em] text-accent-text">STAFF</span>
+          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 font-mono text-xs tracking-[0.12em] text-accent-text">STAFF</span>
           <span className="ml-auto" />
           <ThemeToggle />
           <Button variant="ghost" size="sm" onClick={onSignOut}>
@@ -377,7 +377,7 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
             <section className="card rise overflow-hidden">
               <div className="overflow-x-auto">
                 <div className="min-w-[940px]">
-                  <div className="grid grid-cols-[minmax(220px,1.4fr)_120px_90px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
+                  <div className="grid grid-cols-[minmax(220px,1.4fr)_120px_90px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3 font-mono text-xs uppercase tracking-[0.1em] text-dim">
                     <span>Company</span>
                     <span>Status</span>
                     <span>Members</span>

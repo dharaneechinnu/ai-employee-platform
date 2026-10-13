@@ -66,11 +66,15 @@ export function HoldButton({
   onConfirm,
   variant = "ok",
   ms = 1200,
+  className = "",
+  disabled,
 }: {
   children: ReactNode;
   onConfirm: () => void;
   variant?: Variant;
   ms?: number;
+  className?: string;
+  disabled?: boolean;
 }) {
   const [holding, setHolding] = useState(false);
   const [armed, setArmed] = useState(false);
@@ -108,7 +112,8 @@ export function HoldButton({
   return (
     <button
       type="button"
-      className={`btn hold ${VARIANT_CLASS[variant]}`}
+      className={`btn hold ${VARIANT_CLASS[variant]} ${className}`}
+      disabled={disabled}
       data-holding={holding}
       onPointerDown={start}
       onPointerUp={stop}
@@ -347,7 +352,7 @@ export function Tabs<K extends string>({
           onClick={() => onChange(item.key)}
         >
           {item.label}
-          {item.count !== undefined && <b className="font-mono text-[11px] font-medium text-dim">{item.count}</b>}
+          {item.count !== undefined && <b className="font-mono text-xs font-medium text-dim">{item.count}</b>}
         </button>
       ))}
     </div>

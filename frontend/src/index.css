@@ -321,7 +321,7 @@
   }
 
   .kbd {
-    @apply rounded-md border border-line2 px-1.5 py-0.5 font-mono text-[11px] text-dim;
+    @apply rounded-md border border-line2 px-1.5 py-0.5 font-mono text-xs text-dim;
   }
 
   .eyebrow {
@@ -418,7 +418,7 @@
   }
 
   .nav-link {
-    @apply flex h-10 items-center gap-3 rounded-[10px] px-3 text-sm text-muted no-underline;
+    @apply flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm text-muted no-underline;
     transition: background-color 0.2s, color 0.2s;
   }
   .nav-link:hover {
@@ -525,6 +525,23 @@
     box-shadow: 0 0 0 0 transparent;
   }
 }
+/* Touch screens: every tappable thing at least 44 px tall, the size a
+   thumb can hit reliably. Desktops keep the denser sizes. */
+@media (pointer: coarse), (max-width: 1023px) {
+  .btn-sm,
+  .tab,
+  .seg-btn {
+    min-height: 44px;
+  }
+  /* The switch keeps its look; an invisible margin makes it 44 px tall
+     to a finger. */
+  .switch::before {
+    content: "";
+    position: absolute;
+    inset: -9px 0;
+  }
+}
+
 /* The mic button while recording: a soft red ring, so it is obvious
    the microphone is live. */
 .voice-rec {

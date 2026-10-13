@@ -10,6 +10,7 @@ import {
   Input,
   PageBody,
   PageHeader,
+  Select,
   Spinner,
   StatusChip,
   Switch,
@@ -19,6 +20,9 @@ import {
 } from "../components/ui";
 import { ApiError, api, type Employee, type EmployeeList, type Template } from "../lib/api";
 import { useAuth, useIsAdmin } from "../lib/auth";
+import { isAutoModel, modelLabel } from "../lib/labels";
+
+type ModelChoice = { provider_key: string; display_name: string; model: string };
 
 /**
  * Phase 2. The creation form asks three guided questions rather than
@@ -50,6 +54,8 @@ export default function Employees() {
   // The employee whose tools are open for editing, if any.
   const [editing, setEditing] = useState<Employee | null>(null);
   const [editTools, setEditTools] = useState<string[]>([]);
+  const [editModel, setEditModel] = useState("auto");
+  const [models, setModels] = useState<ModelChoice[]>([]);
   const firstField = useRef<HTMLDivElement>(null);
 
   async function load() {
@@ -123,6 +129,13 @@ export default function Employees() {
     setError(null);
     setEditing(employee);
     setEditTools(employee.config.enabled_tools);
+    setEditModel(isAutoModel(employee.config.model) ? "auto" : employee.config.model);
+    if (org) {
+      void api
+        .get<ModelChoice[]>(`/orgs/${org.id}/models`)
+        .then(setModels)
+        .catch(() => setModels([]));
+    }
   }
 
   async function saveTools() {
@@ -133,9 +146,9 @@ export default function Employees() {
       // PATCH replaces the whole configuration, so send it all back
       // with only the tool list changed.
       await api.patch(`/orgs/${org.id}/ai-employees/${editing.id}`, {
-        config: { ...editing.config, enabled_tools: editTools },
+        config: { ...editing.config, enabled_tools: editTools, model: editModel },
       });
-      toast(`${editing.name} now has ${editTools.length} tools.`);
+      toast(`Saved. ${editing.name} has ${editTools.length} tools and uses ${modelLabel(editModel)}.`);
       setEditing(null);
       await load();
     } catch (err) {
@@ -231,13 +244,13 @@ export default function Employees() {
                       <div className="mt-auto flex flex-wrap items-center gap-2">
                         <StatusChip status={employee.status} />
                         {detail && (
-                          <span className="ml-auto font-mono text-xs text-dim">
-                            {detail.config.model} · {detail.config.enabled_tools.length} tools
+                          <span className="ml-auto text-xs text-dim">
+                            {modelLabel(detail.config.model)} · {detail.config.enabled_tools.length} tools
                           </span>
                         )}
                         {detail && isAdmin && (
                           <Button size="sm" variant="ghost" icon="sparkle" onClick={() => openTools(detail)}>
-                            Tools
+                            Tools &amp; AI
                           </Button>
                         )}
                       </div>
@@ -302,7 +315,7 @@ export default function Employees() {
                   rows={2}
                   value={does}
                   onChange={setDoes}
-                  placeholder="Read bug reports, find the code, and suggest a fix."
+                  placeholder="Read new support emails and draft a reply to each one."
                 />
                 <TextArea
                   label="What must it never do?"
@@ -310,7 +323,7 @@ export default function Employees() {
                   rows={2}
                   value={never}
                   onChange={setNever}
-                  placeholder="Never delete anything. Never email a customer."
+                  placeholder="Never promise a refund. Never email a customer without approval."
                 />
                 <TextArea
                   label="When should it ask a human first?"
@@ -318,7 +331,7 @@ export default function Employees() {
                   rows={2}
                   value={askHuman}
                   onChange={setAskHuman}
-                  placeholder="Before sending anything outside the company."
+                  placeholder="Before anything goes to a customer."
                 />
                 <div className="flex flex-col gap-2">
                   <span className="label">What can it use?</span>
@@ -345,7 +358,7 @@ export default function Employees() {
             >
               <div className="flex flex-col gap-4 rounded-[21px] bg-panel p-5">
                 <div className="flex items-center gap-2.5">
-                  <h2 className="flex-1 font-display text-[19px] font-semibold">Tools for {editing.name}</h2>
+                  <h2 className="flex-1 font-display text-[19px] font-semibold">Tools and AI for {editing.name}</h2>
                   <button type="button" className="icon-btn h-10 w-10" aria-label="Close" onClick={() => setEditing(null)}>
                     <Icon name="x" />
                   </button>
@@ -353,11 +366,27 @@ export default function Employees() {
                 <p className="text-[13px] leading-normal text-muted">
                   Anything left unticked does not exist as far as it is concerned. Sends and invites still wait for approval.
                 </p>
+                <Select
+                  label="Which AI does the thinking?"
+                  value={editModel}
+                  onChange={setEditModel}
+                  options={[
+                    { value: "auto", label: "Automatic: the AI your company connected" },
+                    ...models.map((m) => ({
+                      value: `${m.provider_key}:${m.model}`,
+                      label: `${m.display_name} · ${m.model}`,
+                    })),
+                    // Keep a pinned model visible even if its provider was disconnected.
+                    ...(editModel !== "auto" && !models.some((m) => `${m.provider_key}:${m.model}` === editModel)
+                      ? [{ value: editModel, label: `${modelLabel(editModel)} (not connected)` }]
+                      : []),
+                  ]}
+                />
                 {org && <ToolPicker orgId={org.id} value={editTools} onChange={setEditTools} />}
                 <ErrorNote message={error} />
                 <div className="flex gap-2.5">
                   <Button className="flex-1" disabled={busy === "tools"} onClick={() => void saveTools()}>
-                    {busy === "tools" ? "Saving…" : `Save ${editTools.length} tools`}
+                    {busy === "tools" ? "Saving…" : `Save · ${editTools.length} tools`}
                   </Button>
                   <Button variant="ghost" onClick={() => setEditing(null)}>
                     Cancel
@@ -374,7 +403,7 @@ export default function Employees() {
 
 function StepNumber({ n }: { n: number }) {
   return (
-    <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[7px] bg-accent-soft font-mono text-[11px] font-semibold text-accent-text">
+    <span className="flex h-[22px] w-[22px] items-center justify-center rounded-[7px] bg-accent-soft font-mono text-xs font-semibold text-accent-text">
       {n}
     </span>
   );

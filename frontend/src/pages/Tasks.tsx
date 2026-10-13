@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import AgentTree from "../components/AgentTree";
+import SetupGuide, { type SetupStatus } from "../components/SetupGuide";
 import VoiceInput from "../components/VoiceInput";
 import { Icon, type IconName } from "../components/icons";
 import {
@@ -31,7 +32,8 @@ import {
   type Task,
   type TaskListItem,
 } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { useAuth, useIsAdmin } from "../lib/auth";
+import { formatDateTime, toolLabel } from "../lib/labels";
 
 /**
  * Phase 4. Assigning a task returns immediately; the run happens in a
@@ -73,10 +75,13 @@ export default function Tasks() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  const isAdmin = useIsAdmin();
+  const [setup, setSetup] = useState<SetupStatus | null>(null);
 
   async function loadTasks() {
     if (!org) return;
     setTasks(await api.get<TaskListItem[]>(`/orgs/${org.id}/tasks`));
+    setSetup(await api.get<SetupStatus>(`/orgs/${org.id}/setup`).catch(() => null));
   }
 
   useEffect(() => {
@@ -190,6 +195,7 @@ export default function Tasks() {
       </PageHeader>
 
       <PageBody>
+        {setup && <SetupGuide status={setup} isAdmin={isAdmin} />}
         <form onSubmit={assign} className="card rise flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="flex-1 font-display text-[17px] font-semibold">Assign work</h2>
@@ -204,7 +210,7 @@ export default function Tasks() {
                       role="radio"
                       aria-checked={on}
                       onClick={() => setEmployeeId(employee.id)}
-                      className={`flex h-[42px] items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-sm font-medium transition-colors ${
+                      className={`flex h-11 items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-sm font-medium transition-colors ${
                         on
                           ? "border-accent bg-accent-soft text-ink"
                           : "border-line2 text-muted hover:border-accent-line hover:text-ink"
@@ -237,7 +243,7 @@ export default function Tasks() {
                 value={input}
                 onChange={setInput}
                 inputRef={composer}
-                placeholder="What should it do? For example: look at bug 42 and suggest a fix."
+                placeholder="What should it do? For example: summarise yesterday's support emails."
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void assign();
                 }}
@@ -264,7 +270,11 @@ export default function Tasks() {
                   <span className="hidden text-xs text-dim sm:inline">
                     <span className="kbd">Ctrl</span> + <span className="kbd">Enter</span>
                   </span>
-                  <Button type="submit" disabled={busy || !input.trim() || !employeeId}>
+                  <Button
+                    type="submit"
+                    disabled={busy || !input.trim() || !employeeId || setup?.ai_connected === false}
+                    title={setup?.ai_connected === false ? "Connect an AI key first" : undefined}
+                  >
                     {busy ? "Assigning…" : `Assign to ${pickedName ?? "…"}`}
                     <Icon name="arrow" size={16} strokeWidth={2.2} />
                   </Button>
@@ -321,7 +331,7 @@ export default function Tasks() {
                     <span className="flex w-full items-center gap-2 text-[13px] text-muted">
                       <Avatar name={employee?.name ?? "?"} size={20} />
                       {employee?.name ?? "Unknown"}
-                      <span className="ml-auto font-mono text-xs text-dim" title={new Date(task.created_at).toLocaleString()}>
+                      <span className="ml-auto font-mono text-xs text-dim" title={formatDateTime(task.created_at)}>
                         {relativeTime(task.created_at)}
                       </span>
                     </span>
@@ -342,9 +352,9 @@ export default function Tasks() {
                 notifyActivity();
               }}
             />
-          ) : (
+          ) : tasks?.length ? (
             <Empty message="Pick a task" hint="Its live run appears here." />
-          )}
+          ) : null}
         </div>
       </PageBody>
     </>
@@ -461,7 +471,7 @@ function RunPanel({
         {task.run && (
           <div className="grid grid-cols-3 gap-2.5">
             <Stat label="Steps" value={String(task.run.step_count)} />
-            <Stat label="Tokens" value={(task.run.prompt_tokens + task.run.output_tokens).toLocaleString()} />
+            <Stat label="AI usage (tokens)" value={(task.run.prompt_tokens + task.run.output_tokens).toLocaleString("en-IN")} />
             {/* Estimated, not billed: with BYOK we never see their invoice. */}
             <Stat label="Est. cost" value={`~$${Number(task.run.estimated_cost_usd).toFixed(4)}`} />
           </div>
@@ -532,17 +542,46 @@ function Stat({ label, value }: { label: string; value: string }) {
 const EVENT_LABELS: Record<string, string> = {
   run_started: "Started",
   thinking: "Thinking",
-  llm_call: "Model call",
-  tool_call: "Using tool",
-  tool_result: "Tool result",
-  tool_blocked: "Blocked by policy",
-  approval_requested: "Waiting for approval",
+  llm_call: "Asked the AI",
+  tool_call: "Using a tool",
+  tool_result: "Got the result",
+  tool_blocked: "Not allowed by your Permissions",
+  approval_requested: "Waiting for a person to approve",
   approval_granted: "Approved",
   parallel_started: "Running in parallel",
   run_finished: "Finished",
   run_stopped: "Stopped",
-  provider_error: "Provider error",
+  provider_error: "The AI service returned an error",
 };
+
+const STOP_CAUSES: Record<string, string> = {
+  max_steps: "hit its step limit",
+  max_tokens: "hit its usage limit",
+  timeout: "took longer than 10 minutes",
+  cancelled: "cancelled by a person",
+  provider_not_connected: "no AI key is connected",
+  provider_error: "the AI service failed",
+  rejected: "a person said no",
+  expired: "nobody approved in time",
+};
+
+/** The row's headline: the plain name of the tool when there is one. */
+function eventTitle(event: RunEvent): string {
+  const tool = typeof event.tool === "string" ? toolLabel(event.tool) : null;
+  if (tool && event.type === "tool_call" && event.tool !== "delegate_to_specialist") return tool;
+  if (tool && event.type === "tool_result") return event.ok === false ? `Didn't work: ${tool}` : `Done: ${tool}`;
+  if (tool && event.type === "tool_blocked") return `Not allowed: ${tool}`;
+  if (tool && event.type === "approval_requested") return `Waiting for approval: ${tool}`;
+  if (event.type === "tool_call" && event.tool === "delegate_to_specialist") return "Asked a colleague";
+  return EVENT_LABELS[event.type] ?? event.type;
+}
+
+/** The technical detail, kept for the curious as a tooltip. */
+function eventTechnical(event: RunEvent): string {
+  return [event.type, event.tool, event.model, event.prompt_tokens != null ? `${Number(event.prompt_tokens) + Number(event.output_tokens ?? 0)} tokens` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 function eventStyle(event: RunEvent): { tone: "run" | "ok" | "ask" | "bad" | "brand" | "mute"; icon?: IconName } {
   if (event.tool === "delegate_to_specialist" && event.type === "tool_call") return { tone: "brand", icon: "tree" };
@@ -567,19 +606,22 @@ function eventStyle(event: RunEvent): { tone: "run" | "ok" | "ask" | "bad" | "br
 }
 
 function eventDetail(event: RunEvent): string {
+  const args = (event.arguments ?? {}) as Record<string, unknown>;
   if (event.tool === "delegate_to_specialist" && event.type === "tool_call") {
-    const args = (event.arguments ?? {}) as { specialist_name?: string };
-    return `asked ${args.specialist_name ?? "a specialist"}`;
+    return `asked ${String(args.specialist_name ?? "a specialist")}`;
   }
   if (event.type === "parallel_started") return `${event.count} at once`;
-  if (event.type === "llm_call") {
-    const tokens = Number(event.prompt_tokens ?? 0) + Number(event.output_tokens ?? 0);
-    return [event.model, tokens ? `${tokens.toLocaleString()} tok` : null, event.latency_ms ? `${event.latency_ms} ms` : null]
-      .filter(Boolean)
-      .join(" · ");
+  if (event.type === "llm_call") return event.latency_ms ? `answered in ${(Number(event.latency_ms) / 1000).toFixed(1)} s` : "";
+  if (event.type === "tool_call") {
+    // The one argument that says what this step is about.
+    const key = ["url", "query", "to", "subject", "file_id", "content"].find((k) => typeof args[k] === "string");
+    return key ? String(args[key]).slice(0, 90) : "";
   }
-  if (event.type === "tool_result") return [event.tool, event.ok === false ? String(event.error_class ?? "error") : "ok"].join(" · ");
-  return [event.tool, event.model, event.cause, event.reason, event.error].filter(Boolean).join(" · ");
+  if (event.type === "tool_result") return event.ok === false ? String(event.error ?? "it reported a problem") : "";
+  if (event.type === "run_stopped" || event.type === "run_finished") {
+    return event.cause && event.cause !== "completed" ? STOP_CAUSES[String(event.cause)] ?? String(event.cause) : "";
+  }
+  return [event.reason, event.error].filter(Boolean).join(" · ");
 }
 
 const TONE_STEP: Record<string, string> = {
@@ -635,12 +677,12 @@ function Timeline({ events, running }: { events: RunEvent[]; running: boolean })
                 {style.icon ? <Icon name={style.icon} size={17} /> : event.seq}
               </span>
             )}
-            <div className="flex min-w-0 flex-col gap-0.5 pt-0.5">
+            <div className="flex min-w-0 flex-col gap-0.5 pt-0.5" title={eventTechnical(event)}>
               <span className={`text-sm font-medium ${live ? "text-run-text" : ""}`}>
-                {EVENT_LABELS[event.type] ?? event.type}
+                {eventTitle(event)}
                 {live && <span className="caret">_</span>}
               </span>
-              {detail && <span className="truncate font-mono text-xs text-muted">{detail}</span>}
+              {detail && <span className="truncate text-xs text-muted">{detail}</span>}
             </div>
           </li>
         );

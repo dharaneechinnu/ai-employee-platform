@@ -16,6 +16,7 @@ import {
   type Tone,
 } from "../components/ui";
 import { ApiError, api, type EmbeddingConfig, type MemoryItem } from "../lib/api";
+import { formatDateTime } from "../lib/labels";
 import { useAuth, useIsAdmin } from "../lib/auth";
 
 interface SearchHit {
@@ -114,7 +115,7 @@ export default function Memory() {
     if (!org) return;
     await api.post(`/orgs/${org.id}/embedding-config/reembed`);
     setError(null);
-    toast("Re-embedding started.", "info");
+    toast("Refreshing search. It finishes in the background.", "info");
     await load();
   }
 
@@ -151,7 +152,7 @@ export default function Memory() {
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by meaning or exact words, like ERR_4021"
+                  placeholder="Search by meaning or exact words, like refund policy"
                   className="min-w-0 flex-1 border-0 bg-transparent font-mono text-base text-ink outline-none placeholder:font-sans placeholder:text-dim"
                 />
               </label>
@@ -220,7 +221,7 @@ export default function Memory() {
                           <Chip tone="mute" dot={false}>
                             {item.scope === "org" ? "company" : "one employee"}
                           </Chip>
-                          <span className="font-mono text-dim" title={new Date(item.created_at).toLocaleString()}>
+                          <span className="text-dim" title={formatDateTime(item.created_at)}>
                             {relativeTime(item.created_at)}
                           </span>
                         </>
@@ -247,7 +248,7 @@ export default function Memory() {
                   label="What should they remember?"
                   value={draft}
                   onChange={setDraft}
-                  placeholder="We always use tabs, never spaces."
+                  placeholder="Refunds over ₹5,000 need a manager's OK."
                 />
                 <Select
                   label="Kind"
@@ -264,38 +265,44 @@ export default function Memory() {
               </form>
             )}
 
+            {/* The technical detail (embedding model, dimensions) stays
+                out of sight unless someone opens it; what matters is
+                whether search can find everything. */}
             <section className="card rise flex flex-col gap-3 bg-sunken p-5" style={{ animationDelay: ".08s" }}>
-              <h2 className="text-sm font-semibold text-muted">Embeddings</h2>
-              <div className="grid grid-cols-3 gap-2.5 text-xs">
-                <div>
-                  <div className="text-dim">Provider</div>
-                  <div className="truncate font-mono text-[13px]">{config.provider_key}</div>
-                </div>
-                <div className="col-span-1">
-                  <div className="text-dim">Model</div>
-                  <div className="truncate font-mono text-[13px]" title={config.model}>{config.model}</div>
-                </div>
-                <div>
-                  <div className="text-dim">Dimensions</div>
-                  <div className="font-mono text-[13px]">{config.dim}</div>
-                </div>
-              </div>
+              <h2 className="text-sm font-semibold text-muted">Search health</h2>
               {config.memories_needing_reembedding > 0 ? (
                 <div className="flex flex-wrap items-center gap-2.5 text-[13px] text-ask-text">
                   <Icon name="warn" size={16} />
-                  {config.memories_needing_reembedding} memories are on an older model and will not be found.
+                  {config.memories_needing_reembedding} memories can't be found by meaning until they are refreshed.
                   {isAdmin && (
                     <Button size="sm" variant="ghost" onClick={() => void reembed()}>
-                      Re-embed now
+                      Refresh now
                     </Button>
                   )}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 text-[13px] text-ok-text">
                   <span className="h-[7px] w-[7px] rounded-full bg-ok" />
-                  Every memory is on the current model.
+                  Every memory can be found.
                 </div>
               )}
+              <details className="text-xs text-dim">
+                <summary className="cursor-pointer hover:text-muted">Technical details</summary>
+                <dl className="mt-2 grid grid-cols-3 gap-2.5">
+                  <div>
+                    <dt>Provider</dt>
+                    <dd className="truncate font-mono text-[13px] text-muted">{config.provider_key}</dd>
+                  </div>
+                  <div>
+                    <dt>Model</dt>
+                    <dd className="truncate font-mono text-[13px] text-muted" title={config.model}>{config.model}</dd>
+                  </div>
+                  <div>
+                    <dt>Dimensions</dt>
+                    <dd className="font-mono text-[13px] text-muted">{config.dim}</dd>
+                  </div>
+                </dl>
+              </details>
             </section>
           </div>
         </div>

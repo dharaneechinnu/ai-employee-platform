@@ -217,7 +217,7 @@ export default function Connections() {
                       </Button>
                     )}
                     {oauth && !option.configured && (
-                      <span className="text-xs text-dim">Not set up on this platform yet. Ask your platform operator.</span>
+                      <span className="text-xs text-dim">One-click sign-in isn't switched on yet. Whoever set up AI Employees for your company can turn it on.</span>
                     )}
                   </div>
                 )}

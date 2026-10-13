@@ -158,17 +158,17 @@ async def _run_specialist(
     from app.schemas.ai_employee import EmployeeConfig
     from app.services.employee_service import build_system_prompt
     from app.services.provider_service import ProviderService
-    from app.workers.jobs.agent_run import _split_model
 
     config = EmployeeConfig.model_validate(version.config)  # type: ignore[attr-defined]
-    provider_key, model = _split_model(config.model)
+    providers = ProviderService(session, ctx.org_id)  # type: ignore[arg-type]
 
     try:
-        api_key = await ProviderService(session, ctx.org_id).resolve_api_key(provider_key)  # type: ignore[arg-type]
+        provider_key, model = await providers.resolve_model(config.model)
+        api_key = await providers.resolve_api_key(provider_key)
     except Exception:  # noqa: BLE001 - reported to the manager, not raised
         return ToolResult.failure(
             "not_connected",
-            f"{specialist.name} cannot run: no API key is connected for {provider_key}.",  # type: ignore[attr-defined]
+            f"{specialist.name} cannot run: no AI key is connected for its model.",  # type: ignore[attr-defined]
         )
 
     nested_context = ToolContext(

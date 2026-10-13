@@ -107,12 +107,19 @@ export default function Notifications() {
                 <h2 className="font-display text-lg font-semibold">Email</h2>
                 <p className="text-[13px] text-muted">Approve or reject straight from the inbox.</p>
               </div>
-              <Switch checked={settings.email_enabled} disabled={saving} onChange={(on) => void save({ email_enabled: on })} label="Email notifications" />
+              {/* Shown off, and locked, while the platform has no mail server:
+                  an "on" switch that sends nothing is a broken promise. */}
+              <Switch
+                checked={settings.email_enabled && settings.email_available}
+                disabled={saving || !settings.email_available}
+                onChange={(on) => void save({ email_enabled: on })}
+                label={settings.email_available ? "Email notifications" : "Email notifications (not available yet)"}
+              />
             </div>
             {!settings.email_available && (
               <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px] leading-normal">
                 <Icon name="warn" className="text-ask-text" />
-                <span>Email is not set up on this platform yet, so nothing will be sent. Ask your platform operator to add an SMTP server.</span>
+                <span>Email sending isn't switched on yet, so nothing will be sent. Whoever set up AI Employees for your company can turn it on (it needs a mail server). Slack works without it.</span>
               </div>
             )}
             <p className="text-[13px] leading-relaxed text-dim">

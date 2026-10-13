@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ConnectionItem, type ToolEntry } from "../lib/api";
 import { Icon, type IconName } from "./icons";
+import { effectLabel, toolLabel } from "../lib/labels";
 import { Chip, humanise, statusTone } from "./ui";
 
 /**
@@ -21,6 +22,12 @@ const PACKS: Record<string, { label: string; icon: IconName }> = {
   web: { label: "Web", icon: "search" },
   memory: { label: "Memory", icon: "memory" },
   delegation: { label: "Teamwork", icon: "tree" },
+};
+
+export const SETTING_LABELS: Record<string, string> = {
+  auto: "runs on its own",
+  ask: "asks first",
+  blocked: "blocked",
 };
 
 export function ToolPicker({
@@ -99,10 +106,10 @@ export function ToolPicker({
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-mono text-[13px]">{tool.name}</span>
-                      <Chip tone={statusTone(tool.side_effect)} dot={false}>{tool.side_effect}</Chip>
+                      <span className="text-[13px] font-medium text-ink" title={tool.name}>{toolLabel(tool.name)}</span>
+                      <Chip tone={statusTone(tool.side_effect)} dot={false}>{effectLabel(tool.side_effect)}</Chip>
                       <Chip tone={statusTone(tool.effective_setting)} dot={false}>
-                        {tool.effective_setting === "ask" ? "asks first" : tool.effective_setting}
+                        {SETTING_LABELS[tool.effective_setting] ?? tool.effective_setting}
                       </Chip>
                     </span>
                     <span className="text-xs leading-snug text-dim">{tool.description}</span>

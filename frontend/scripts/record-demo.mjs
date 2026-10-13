@@ -201,18 +201,18 @@ await chapter("02", "Give an AI Employee exactly the tools it needs", "Tools wit
 await click(app.getByRole("link", { name: "AI Employees" }), 700);
 await go("/employees");
 const ravi = app.locator("article", { hasText: "Operations Analyst" });
-await click(ravi.getByRole("button", { name: "Tools" }), 700);
-const panel = app.locator("aside", { hasText: "Tools for Ravi" });
+await click(ravi.getByRole("button", { name: /Tools/ }), 700);
+const panel = app.locator("aside", { hasText: "Tools and AI for Ravi" });
 const googlePack = panel.locator("details", { hasText: "Google Workspace" });
 await zoom(googlePack.locator("summary"), 1.6, [1060, 330], 900);
 await click(googlePack.locator("summary"), 600);
 await wait(250);
 await zoom(googlePack, 1.6, [1100, 560], 700);
 const toolRow = (tool) => googlePack.locator("label").filter({ has: app.getByText(tool, { exact: true }) });
-for (const tool of ["gmail_search", "gmail_send"]) {
+for (const tool of ["Search Gmail", "Send a Gmail email"]) {
   await click(toolRow(tool).locator("input"), 450);
 }
-await spotlight(toolRow("gmail_send"), "Sending email asks first", "left", 8);
+await spotlight(toolRow("Send a Gmail email"), "Sending email asks first", "left", 8);
 await wait(1500);
 await unspot();
 await click(panel.getByRole("button", { name: /^Save/ }), 600);
@@ -261,12 +261,15 @@ await stage("mail", false);
 const approval = await page.evaluate(async (base) => (await (await fetch(`${base}/api/v1/orgs/victopia/approvals`)).json())[0]?.id, BASE);
 await frame().goto(`${BASE}/approve/${approval}?action=approve`);
 await go("/approve");
-const approve = app.getByRole("button", { name: /^Approve/ });
+// Sending email can't be undone, so the button is held, not tapped.
+const approve = app.getByRole("button", { name: /Hold to approve/ });
 await zoom(app.locator("dl").first(), 1.45, [960, 470], 900);
 await spotlight(app.locator("dl").first(), "Exactly what will be sent", "right", 10);
 await wait(1300);
 await unspot();
-await click(approve, 600);
+await point(approve, 600);
+await stage("click");
+await approve.click({ delay: 1500 });
 await wait(900);
 await stage("unzoom", 700);
 

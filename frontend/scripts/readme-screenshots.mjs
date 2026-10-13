@@ -59,23 +59,27 @@ try {
   await shot("02-connections", 1200);
 
   await page.goto(`${BASE}/employees`);
-  await page.locator("article", { hasText: "Operations Analyst" }).getByRole("button", { name: "Tools" }).click();
+  await page.locator("article", { hasText: "Operations Analyst" }).getByRole("button", { name: /Tools/ }).click();
   const pack = page.locator("aside").locator("details", { hasText: "Google Workspace" });
   await pack.locator("summary").click();
-  for (const tool of ["gmail_search", "gmail_send"]) {
+  for (const tool of ["Search Gmail", "Send a Gmail email"]) {
     await pack.locator("label").filter({ has: page.getByText(tool, { exact: true }) }).locator("input").check();
   }
-  await pack.locator("label").filter({ has: page.getByText("gmail_send", { exact: true }) }).scrollIntoViewIfNeeded();
+  // The panel is taller than the window; a taller window keeps the
+  // employee cards and the ticked Gmail tools in one picture.
+  await page.setViewportSize({ width: 1440, height: 1500 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await shot("03-tool-picker");
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // Plain-English setup: the three questions that make an AI Employee.
   await page.goto(`${BASE}/employees`);
   await page.getByRole("button", { name: "New AI Employee" }).click();
   await page.getByRole("textbox", { name: "Name", exact: true }).fill("Asha");
   await page.getByRole("textbox", { name: "Job title", exact: true }).fill("Support Lead");
-  await page.getByPlaceholder("Read bug reports, find the code, and suggest a fix.").fill("Sort the support inbox and draft first replies.");
-  await page.getByPlaceholder("Never delete anything. Never email a customer.").fill("Never promise refunds. Never email without approval.");
-  await page.getByPlaceholder("Before sending anything outside the company.").fill("Before anything goes to a customer.");
+  await page.getByPlaceholder("Read new support emails and draft a reply to each one.").fill("Sort the support inbox and draft first replies.");
+  await page.getByPlaceholder("Never promise a refund. Never email a customer without approval.").fill("Never promise refunds. Never email without approval.");
+  await page.getByPlaceholder("Before anything goes to a customer.").fill("Before anything goes to a customer.");
   await shot("12-new-employee");
 
   await page.goto(`${BASE}/providers`);
@@ -109,7 +113,7 @@ try {
   const [approval] = await api("/approvals");
   await page.goto(`${BASE}/approve/${approval.id}?action=approve`);
   await shot("07-approve-from-email", 1200);
-  await page.getByRole("button", { name: /^Approve/ }).click();
+  await page.getByRole("button", { name: /Hold to approve/ }).click({ delay: 1500 });
   await page.waitForTimeout(500);
 
   const [task] = await api("/tasks");

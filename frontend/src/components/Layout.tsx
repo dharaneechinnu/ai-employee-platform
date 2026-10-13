@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useActivity } from "../lib/activity";
 import { useAuth, useIsAdmin } from "../lib/auth";
 import { Icon, type IconName } from "./icons";
@@ -71,13 +72,71 @@ export default function Layout() {
   const isAdmin = useIsAdmin();
   const navigate = useNavigate();
   const { running, waiting } = useActivity(org?.id, isAdmin);
+  const location = useLocation();
+
+  // On phones the menu is a drawer. It closes on every navigation, on
+  // Escape and on a tap outside, and the page behind it cannot scroll.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [location.pathname, location.search]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
   return (
-    <div className="flex min-h-screen flex-wrap">
-      <aside className="flex w-full flex-col gap-1 border-b border-line bg-side px-3 py-[18px] transition-colors duration-500 lg:sticky lg:top-0 lg:h-screen lg:w-[248px] lg:shrink-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      {/* Phones and small tablets: a slim bar instead of the full menu,
+          so every page starts with its own content. */}
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-2.5 border-b border-line bg-side px-4 lg:hidden">
+        <Link to="/tasks" className="flex h-11 items-center gap-2.5 text-ink no-underline">
+          <BrandMark size={28} />
+          <span className="font-display text-[15px] font-semibold">AI Employees</span>
+        </Link>
+        <span className="flex-1" />
+        {isAdmin && waiting > 0 && (
+          <Link
+            to="/approvals"
+            className="live-ask flex h-11 items-center gap-1.5 rounded-full bg-ask px-3.5 text-[13px] font-semibold text-ask-on no-underline"
+          >
+            <Icon name="approvals" size={16} />
+            {waiting} waiting
+          </Link>
+        )}
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Open menu"
+          aria-expanded={menuOpen}
+          aria-controls="app-menu"
+          onClick={() => setMenuOpen(true)}
+        >
+          <Icon name="menu" />
+        </button>
+      </header>
+
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px] lg:hidden" aria-hidden="true" onClick={() => setMenuOpen(false)} />
+      )}
+
+      <aside
+        id="app-menu"
+        aria-label="Menu"
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(300px,86vw)] flex-col gap-1 overflow-y-auto border-r border-line bg-side px-3 py-[18px] transition-[transform,background-color] duration-300 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-[248px] lg:shrink-0 lg:translate-x-0 ${
+          menuOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full max-lg:invisible"
+        }`}
+      >
         <div className="flex items-center gap-2.5 px-2 pb-3.5 pt-1">
           <BrandMark />
-          <span className="font-display text-base font-semibold">AI Employees</span>
+          <span className="flex-1 font-display text-base font-semibold">AI Employees</span>
+          <button type="button" className="icon-btn lg:hidden" aria-label="Close menu" onClick={() => setMenuOpen(false)}>
+            <Icon name="x" />
+          </button>
         </div>
 
         {me && org && (
@@ -117,7 +176,7 @@ export default function Layout() {
             if (!items.length) return null;
             return (
               <div key={section.title} className="flex flex-col gap-0.5">
-                <div className="flex justify-between px-3 pb-1.5 pt-4 font-mono text-[11px] uppercase tracking-[0.12em] text-dim">
+                <div className="flex justify-between px-3 pb-1.5 pt-4 font-mono text-xs uppercase tracking-[0.12em] text-dim">
                   {section.title}
                   {section.note && <span>{section.note}</span>}
                 </div>
@@ -152,14 +211,14 @@ export default function Layout() {
             onClick={() => void logout()}
             aria-label="Sign out"
             title="Sign out"
-            className="nav-link w-10 justify-center px-0"
+            className="nav-link w-11 justify-center px-0"
           >
             <Icon name="out" />
           </button>
         </div>
       </aside>
 
-      <main className="flex min-w-0 flex-[999_1_560px] flex-col" style={{ background: "var(--hero)" }}>
+      <main className="flex min-w-0 flex-1 flex-col" style={{ background: "var(--hero)" }}>
         <Outlet />
       </main>
     </div>

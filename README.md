@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, and voice typing. 134 tests passing, 73 API operations, 27 agent tools. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, and voice typing. 137 tests passing, 74 API operations, 27 agent tools. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -193,7 +193,7 @@ already works and is tested.
 
 ```bash
 docker compose up --build        # all five services
-make test                        # 134 tests
+make test                        # 137 tests
 make lint                        # ruff + mypy strict
 ```
 
@@ -224,11 +224,12 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 | Check | Result |
 |---|---|
-| Tests | 134 passing: unit, tenant isolation, and integration against real Postgres |
+| Tests | 137 passing: unit, tenant isolation, and integration against real Postgres |
 | Types | mypy **strict**, zero errors |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
-| Migrations | 7, each verified forward *and* backward |
+| Migrations | 8, each verified forward *and* backward |
 | Frontend | TypeScript strict build; screens checked in dark, light and phone widths |
+| UX audit | Every screen checked as admin and member, on desktop and phone, with the `icp-ux-audit` skill (`.claude/skills/`) |
 
 ---
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Icon } from "../components/icons";
 import {
   Button,
   Chip,
@@ -14,6 +15,7 @@ import {
 } from "../components/ui";
 import { ApiError, api, type PolicyRow, type ToolEntry } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { effectLabel, packLabel, plainReason, toolLabel } from "../lib/labels";
 
 /**
  * Phase 5. The platform sets a default; a company may move any action
@@ -25,10 +27,12 @@ import { useAuth } from "../lib/auth";
 type Setting = "auto" | "ask" | "blocked";
 
 const SETTINGS: { key: Setting; label: string }[] = [
-  { key: "auto", label: "Auto" },
-  { key: "ask", label: "Ask" },
+  { key: "auto", label: "On its own" },
+  { key: "ask", label: "Ask first" },
   { key: "blocked", label: "Blocked" },
 ];
+
+const SETTING_LABEL: Record<Setting, string> = { auto: "on its own", ask: "ask first", blocked: "blocked" };
 
 const SELECTED: Record<Setting, string> = {
   auto: "bg-ok-soft text-ok-text shadow-[inset_0_0_0_1px_var(--ok)] font-semibold",
@@ -59,7 +63,7 @@ function Segmented({
             aria-checked={on}
             disabled={disabled}
             onClick={() => !on && onChange(setting.key)}
-            className={`h-[34px] rounded-lg px-3 text-[13px] transition-[background-color,color,box-shadow] duration-200 disabled:cursor-not-allowed ${
+            className={`seg-btn h-9 rounded-lg px-3 text-[13px] transition-[background-color,color,box-shadow] duration-200 disabled:cursor-not-allowed ${
               on ? SELECTED[setting.key] : "font-medium text-muted hover:text-ink disabled:hover:text-muted"
             }`}
           >
@@ -103,7 +107,7 @@ export default function Policies() {
       await api.put(`/orgs/${org.id}/policies`, { ...rule, setting });
       setFlash(label);
       window.setTimeout(() => setFlash((current) => (current === label ? null : current)), 1200);
-      toast(`${label} set to ${setting}.`);
+      toast(`${label}: ${SETTING_LABEL[setting]}.`);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save that.");
@@ -124,7 +128,10 @@ export default function Policies() {
     return tools.filter(
       (tool) =>
         (pack === "all" || tool.pack === pack) &&
-        (!term || tool.name.toLowerCase().includes(term) || tool.description.toLowerCase().includes(term)),
+        (!term ||
+          tool.name.toLowerCase().includes(term) ||
+          toolLabel(tool.name).toLowerCase().includes(term) ||
+          tool.description.toLowerCase().includes(term)),
     );
   }, [tools, pack, search]);
 
@@ -137,13 +144,18 @@ export default function Policies() {
     );
   }
 
-  const packRules = rows.filter((row) => row.scope === "pack");
+  // Only rules for apps that have tools: a rule for an app with nothing
+  // in it is a setting that does nothing.
+  const packRules = rows.filter((row) => row.scope === "pack" && packs.includes(row.scope_value));
+  const groups = packs
+    .map((p) => ({ pack: p, tools: visible.filter((t) => t.pack === p) }))
+    .filter((g) => g.tools.length > 0);
 
   return (
     <>
       <PageHeader crumb="Settings" title="Permissions">
         <div className="hidden flex-wrap gap-3.5 text-[13px] text-muted md:flex">
-          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ok" />Auto</span>
+          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ok" />On its own</span>
           <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ask" />Ask first</span>
           <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-bad" />Blocked</span>
         </div>
@@ -154,8 +166,8 @@ export default function Policies() {
 
       <PageBody>
         <p className="rise max-w-3xl text-sm leading-relaxed text-muted">
-          New tools start safe: reading runs on its own, writing asks first, anything destructive is blocked until
-          you choose otherwise. A rule for one tool beats the rule for its pack. Changes save as you click.
+          Choose what AI Employees may do without asking you. By default, anything that only reads happens on its
+          own, and anything that sends or changes something asks a person first. Changes save as you click.
         </p>
 
         <ErrorNote message={error} />
@@ -169,7 +181,7 @@ export default function Policies() {
               { key: "all", label: "All", count: tools.length },
               ...packs.map((p) => ({
                 key: p,
-                label: p.charAt(0).toUpperCase() + p.slice(1),
+                label: packLabel(p),
                 count: tools.filter((t) => t.pack === p).length,
               })),
             ]}
@@ -177,70 +189,63 @@ export default function Policies() {
           <SearchBox value={search} onChange={setSearch} placeholder="Search tools" label="Search tools" />
         </div>
 
-        <section className="card rise overflow-hidden">
-          <div className="overflow-x-auto">
-            <div className="min-w-[860px]">
-              <div className="grid grid-cols-[minmax(200px,1.2fr)_110px_120px_250px_minmax(180px,1fr)] items-center gap-3 border-b border-line px-5 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
-                <span>Tool</span>
-                <span>Pack</span>
-                <span>Effect</span>
-                <span>Setting</span>
-                <span>Why</span>
-              </div>
-              {visible.length === 0 ? (
-                <div className="p-6">
-                  <Empty message="No tools match" hint="Try another pack or search term." />
-                </div>
-              ) : (
-                visible.map((tool, i) => (
-                  <div
-                    key={tool.name}
-                    className="slide-in grid grid-cols-[minmax(200px,1.2fr)_110px_120px_250px_minmax(180px,1fr)] items-center gap-3 border-b border-line px-5 py-2.5 text-sm transition-colors last:border-0 hover:bg-raised"
-                    style={{
-                      animationDelay: `${Math.min(i, 12) * 0.03}s`,
-                      background: flash === tool.name ? "var(--accent-soft)" : undefined,
-                    }}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-mono">{tool.name}</span>
-                      <span className="block truncate text-xs text-dim" title={tool.description}>
-                        {tool.description}
-                      </span>
-                    </span>
-                    <span className="text-muted">{tool.pack}</span>
-                    <span>
+        {groups.length === 0 ? (
+          <Empty message="No tools match" hint="Try another app or search term." />
+        ) : (
+          groups.map((group) => (
+            <section key={group.pack} className="card rise overflow-hidden" aria-label={packLabel(group.pack)}>
+              <h2 className="border-b border-line px-5 py-3 font-display text-[15px] font-semibold">
+                {packLabel(group.pack)}
+              </h2>
+              {group.tools.map((tool) => (
+                <div
+                  key={tool.name}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-2.5 border-b border-line px-5 py-3 transition-colors last:border-0 hover:bg-raised"
+                  style={{ background: flash === toolLabel(tool.name) ? "var(--accent-soft)" : undefined }}
+                >
+                  <div className="flex min-w-[220px] flex-1 flex-col gap-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium" title={tool.name}>{toolLabel(tool.name)}</span>
                       <Chip tone={statusTone(tool.side_effect)} dot={false}>
-                        {tool.side_effect}
+                        {effectLabel(tool.side_effect)}
                       </Chip>
                     </span>
-                    <span>
-                      {tool.permanently_blocked ? (
-                        <Chip tone="bad">never allowed</Chip>
-                      ) : (
-                        <Segmented
-                          value={tool.effective_setting}
-                          label={`${tool.name} setting`}
-                          onChange={(setting) =>
-                            void save({ scope: "tool", scope_value: tool.name, side_effect: null }, setting, tool.name)
-                          }
-                        />
-                      )}
-                    </span>
-                    <span className="text-[13px] text-dim">{tool.reason}</span>
+                    <span className="text-[13px] leading-snug text-muted">{tool.description}</span>
+                    {/* Only worth a line when it is not the default: the tag already says what the default means. */}
+                    {!/^platform default/i.test(tool.reason) && (
+                      <span className="text-xs text-accent-text">Your company's rule · {plainReason(tool.reason)}</span>
+                    )}
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
+                  {tool.permanently_blocked ? (
+                    <Chip tone="bad">never allowed</Chip>
+                  ) : (
+                    <Segmented
+                      value={tool.effective_setting}
+                      label={`${toolLabel(tool.name)}: when may it run?`}
+                      onChange={(setting) =>
+                        void save({ scope: "tool", scope_value: tool.name, side_effect: null }, setting, toolLabel(tool.name))
+                      }
+                    />
+                  )}
+                </div>
+              ))}
+            </section>
+          ))
+        )}
 
         {packRules.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="font-display text-[17px] font-semibold">Pack rules</h2>
-            <p className="text-[13px] text-muted">Apply to every tool in a pack with that effect, unless a tool has its own rule above.</p>
+          <details className="group flex flex-col gap-3">
+            <summary className="flex cursor-pointer list-none items-center gap-2 font-display text-[15px] font-semibold text-muted hover:text-ink">
+              <Icon name="chevrons" size={16} />
+              Advanced: rules for a whole app
+            </summary>
+            <p className="mb-3 mt-2 text-[13px] text-muted">
+              One switch for every action of a kind in an app, like "everything Google can't undo". A choice for a single
+              action above always wins.
+            </p>
             <div className="card overflow-hidden">
               {packRules.map((row) => {
-                const label = `${row.scope_value}${row.side_effect ? ` · ${row.side_effect}` : ""}`;
+                const label = `${packLabel(row.scope_value)}${row.side_effect ? ` · ${effectLabel(row.side_effect).toLowerCase()}` : ""}`;
                 return (
                   <div
                     key={`${row.scope_value}-${row.side_effect}`}
@@ -248,8 +253,8 @@ export default function Policies() {
                     style={{ background: flash === label ? "var(--accent-soft)" : undefined }}
                   >
                     <span className="min-w-[180px] flex-1 text-sm">
-                      <span className="font-mono">{row.scope_value}</span>
-                      {row.side_effect && <span className="ml-2 text-xs text-dim">{row.side_effect}</span>}
+                      <span className="font-medium">{packLabel(row.scope_value)}</span>
+                      {row.side_effect && <span className="ml-2 text-xs text-dim">{effectLabel(row.side_effect)}</span>}
                     </span>
                     {!row.is_default && <Chip tone="brand">changed</Chip>}
                     <Segmented
@@ -263,7 +268,7 @@ export default function Policies() {
                 );
               })}
             </div>
-          </section>
+          </details>
         )}
       </PageBody>
     </>

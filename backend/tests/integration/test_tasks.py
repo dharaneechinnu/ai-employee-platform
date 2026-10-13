@@ -185,7 +185,67 @@ async def test_a_task_without_a_connected_provider_fails_with_a_clear_message(
     finished = await api.get(f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}", headers=headers)
     body = finished.json()
     assert body["status"] == "failed"
-    assert "No API key is connected" in body["run"]["error_message"]
+    assert "No AI key is connected" in body["run"]["error_message"]
+
+
+async def test_the_automatic_model_uses_whichever_provider_is_connected(
+    api: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A company that connected only Groq must not fail on a Gemini
+    default it never set up. Old "gemini-flash" configs count as auto."""
+    import app.workers.jobs.agent_run as job
+
+    used: list[str] = []
+
+    def build(key: str, api_key: str) -> StubProvider:
+        used.append(key)
+        return StubProvider(api_key)
+
+    monkeypatch.setattr(job, "build_provider", build)
+
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    await api.post(
+        f"/api/v1/orgs/{acme.org_id}/providers",
+        json={"provider_key": "groq", "api_key": "gsk_test-key-1234"},
+        headers=headers,
+    )
+
+    for model in ("auto", "gemini-flash"):
+        created = await api.post(
+            f"/api/v1/orgs/{acme.org_id}/ai-employees",
+            json={"name": f"Bot {model}", "config": {"guided": GUIDED, "model": model}},
+            headers=headers,
+        )
+        employee_id = created.json()["id"]
+        await api.post(
+            f"/api/v1/orgs/{acme.org_id}/ai-employees/{employee_id}/activate", headers=headers
+        )
+        task = await api.post(
+            f"/api/v1/orgs/{acme.org_id}/tasks",
+            json={"employee_id": employee_id, "input": "hello"},
+            headers=headers,
+        )
+        await job._execute(job.get_sessionmaker(), uuid.UUID(task.json()["id"]))
+        done = await api.get(
+            f"/api/v1/orgs/{acme.org_id}/tasks/{task.json()['id']}", headers=headers
+        )
+        assert done.json()["status"] == "completed", done.text
+
+    assert used == ["groq", "groq"]
+
+
+async def test_a_new_employee_defaults_to_the_automatic_model(
+    api: AsyncClient, session: AsyncSession
+) -> None:
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    created = await api.post(
+        f"/api/v1/orgs/{acme.org_id}/ai-employees",
+        json={"name": "Bot", "config": {"guided": GUIDED}},
+        headers=headers,
+    )
+    assert created.json()["config"]["model"] == "auto"
 
 
 async def test_cancelling_a_queued_task(api: AsyncClient, session: AsyncSession) -> None:
@@ -273,3 +333,32 @@ async def test_company_a_cannot_read_company_b_tasks(
         headers={"Authorization": f"Bearer {globex.admin_token}"},
     )
     assert response.status_code == 404
+
+
+async def test_setup_progress_is_visible_to_members(
+    api: AsyncClient, session: AsyncSession
+) -> None:
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+    url = f"/api/v1/orgs/{acme.org_id}/setup"
+
+    fresh = await api.get(url, headers={"Authorization": f"Bearer {acme.member_token}"})
+    assert fresh.status_code == 200
+    assert fresh.json() == {
+        "ai_connected": False,
+        "apps_connected": False,
+        "employees": 0,
+        "employees_active": 0,
+        "tasks": 0,
+    }
+
+    await api.post(
+        f"/api/v1/orgs/{acme.org_id}/providers",
+        json={"provider_key": "groq", "api_key": "gsk_test-key-1234"},
+        headers={"Authorization": f"Bearer {acme.admin_token}"},
+    )
+    later = await api.get(url, headers={"Authorization": f"Bearer {acme.member_token}"})
+    assert later.json()["ai_connected"] is True
+
+    other = await seed_company(session, api, name="Globex", slug="globex")
+    leak = await api.get(url, headers={"Authorization": f"Bearer {other.admin_token}"})
+    assert leak.status_code == 404

@@ -188,7 +188,7 @@ export default function VoiceInput({
         aria-label={label}
         aria-pressed={listening}
         title={`${label} (${engineName})`}
-        className={`grid h-[42px] w-[42px] place-items-center rounded-full border transition-colors ${
+        className={`grid h-11 w-11 place-items-center rounded-full border transition-colors ${
           listening
             ? "voice-rec border-transparent bg-bad text-bad-on"
             : "border-line2 text-muted hover:border-accent-line hover:text-ink"
