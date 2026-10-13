@@ -186,17 +186,21 @@ function ApprovalCard({
           </span>
         </div>
 
-        <ProposedAction values={approval.proposed as Record<string, unknown>} />
+        <div data-coach="approval-action">
+          <ProposedAction values={approval.proposed as Record<string, unknown>} />
+        </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           {destructive ? (
-            <HoldButton onConfirm={() => onDecide(true)}>{busy ? "Recording…" : "Hold to approve"}</HoldButton>
+            <span data-coach="approval-approve" className="inline-flex">
+              <HoldButton onConfirm={() => onDecide(true)}>{busy ? "Recording…" : "Hold to approve"}</HoldButton>
+            </span>
           ) : (
-            <Button variant="ok" icon="check" disabled={busy} onClick={() => onDecide(true)}>
+            <Button variant="ok" icon="check" disabled={busy} onClick={() => onDecide(true)} data-coach="approval-approve">
               Approve
             </Button>
           )}
-          <Button variant="danger-ghost" disabled={busy} onClick={() => onDecide(false)}>
+          <Button variant="danger-ghost" disabled={busy} onClick={() => onDecide(false)} data-coach="approval-reject">
             Reject
           </Button>
           <Link to="/tasks" className="btn btn-ghost">

@@ -164,6 +164,7 @@ export default function Connections() {
                 key={option.kind}
                 className="card lift rise flex flex-col gap-4 p-5"
                 style={{ animationDelay: `${i * 0.07}s` }}
+                data-coach="connection-card"
               >
                 <div className="flex items-start gap-3.5">
                   <BrandTile kind={option.kind} />

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useActivity } from "../lib/activity";
 import { useAuth, useIsAdmin } from "../lib/auth";
+import { CoachHelp, CoachProvider } from "./coach/Coach";
 import { Icon, type IconName } from "./icons";
 import { Avatar } from "./ui";
 
@@ -90,6 +91,7 @@ export default function Layout() {
   }, [menuOpen]);
 
   return (
+    <CoachProvider>
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Phones and small tablets: a slim bar instead of the full menu,
           so every page starts with its own content. */}
@@ -185,6 +187,7 @@ export default function Layout() {
                     key={item.to}
                     to={item.to}
                     className={({ isActive }) => `nav-link ${isActive ? "active" : ""}`}
+                    data-coach={item.to === "/approvals" ? "nav-approvals" : undefined}
                   >
                     <Icon name={item.icon} />
                     <span className="flex-1">{item.label}</span>
@@ -221,6 +224,8 @@ export default function Layout() {
       <main className="flex min-w-0 flex-1 flex-col" style={{ background: "var(--hero)" }}>
         <Outlet />
       </main>
+      <CoachHelp />
     </div>
+    </CoachProvider>
   );
 }

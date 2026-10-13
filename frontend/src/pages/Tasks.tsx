@@ -200,7 +200,7 @@ export default function Tasks() {
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="flex-1 font-display text-[17px] font-semibold">Assign work</h2>
             {active.length > 0 && (
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="AI Employee">
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="AI Employee" data-coach="employee-pick">
                 {active.map((employee) => {
                   const on = employee.id === employeeId;
                   return (
@@ -236,6 +236,7 @@ export default function Tasks() {
             </Empty>
           ) : (
             <>
+              <div data-coach="composer">
               <TextArea
                 label="What should it do?"
                 hideLabel
@@ -248,6 +249,7 @@ export default function Tasks() {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void assign();
                 }}
               />
+              </div>
               <ErrorNote message={error} />
               <div className="flex flex-wrap items-center gap-3.5">
                 {org && (
@@ -262,7 +264,7 @@ export default function Tasks() {
                     }}
                   />
                 )}
-                <span className="flex items-center gap-2.5 text-[13px] text-muted">
+                <span className="flex items-center gap-2.5 text-[13px] text-muted" data-coach="dry-run">
                   <Switch checked={dryRun} onChange={setDryRun} label="Dry run" />
                   Dry run: plan only, nothing is changed or sent
                 </span>
@@ -287,7 +289,7 @@ export default function Tasks() {
         {/* The agent tree needs the full width; the list steps aside until
             you go back to the timeline. */}
         <div className={`grid grid-cols-1 items-start gap-5 ${treeView ? "" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]"}`}>
-          <section className={`flex flex-col gap-3 ${treeView ? "hidden" : ""}`}>
+          <section className={`flex flex-col gap-3 ${treeView ? "hidden" : ""}`} data-coach="task-list">
             <div className="flex flex-wrap items-center gap-2.5">
               <Tabs
                 label="Filter tasks"
@@ -455,7 +457,7 @@ function RunPanel({
   const delegations = events.filter((e) => e.type === "tool_call" && e.tool === "delegate_to_specialist").length;
 
   return (
-    <section className="card rise overflow-hidden" aria-label="Run">
+    <section className="card rise overflow-hidden" aria-label="Run" data-coach="run-panel">
       <div className="flex flex-col gap-3.5 border-b border-line px-5 pb-4 pt-5">
         <div className="flex items-start gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -469,7 +471,7 @@ function RunPanel({
         </div>
 
         {task.run && (
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5" data-coach="run-stats">
             <Stat label="Steps" value={String(task.run.step_count)} />
             <Stat label="AI usage (tokens)" value={(task.run.prompt_tokens + task.run.output_tokens).toLocaleString("en-IN")} />
             {/* Estimated, not billed: with BYOK we never see their invoice. */}
@@ -477,6 +479,7 @@ function RunPanel({
           </div>
         )}
 
+        <div data-coach="run-tabs" className="self-start">
         <Tabs
           label="Run view"
           value={view}
@@ -487,6 +490,7 @@ function RunPanel({
             { key: "result", label: "Result" },
           ]}
         />
+        </div>
       </div>
 
       <div className="px-5 py-4">
@@ -519,7 +523,7 @@ function RunPanel({
 
       {running && (
         <div className="flex gap-2.5 border-t border-line px-5 py-3.5">
-          <Button variant="ghost" onClick={() => void cancel()}>
+          <Button variant="ghost" onClick={() => void cancel()} data-coach="run-cancel">
             Cancel run
           </Button>
         </div>

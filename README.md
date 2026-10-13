@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, and voice typing. 137 tests passing, 74 API operations, 27 agent tools. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, and a guided welcome tour. 137 tests passing, 74 API operations, 27 agent tools. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -132,6 +132,14 @@ Email or Slack messages when an approval is needed, when a task fails, or when i
 Press the mic, say what you need, press it again: the words appear in the task box, ready to check before you assign. It uses **Whisper Large v3 Turbo** (open source, very good with Indian accents) through the company's own **Groq** key, so it costs the platform nothing. A company without a Groq key gets the browser's built-in voice typing instead. Recordings are never stored, and approvals stay button-only on purpose: voice can ask, but never approve.
 
 ![Voice typing: the mic is listening](docs/screenshots/16-voice-input.png)
+
+### 16. A welcome tour, and tips exactly when you need them
+
+New people get a short animated welcome, then a spotlight tour of each screen the first time they open it. Tips for a feature appear the first time it shows up (opening an AI Employee's tools, a first run, a first approval). Tips only show what that person can use: members skip admin tips, and phones skip what's tucked in the menu. The **?** button replays any tour, and tips can be turned off.
+
+![The welcome intro](docs/screenshots/17-welcome.png)
+
+![A coachmark spotlighting the task box](docs/screenshots/18-coachmarks.png)
 
 ---
 

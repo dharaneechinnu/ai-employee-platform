@@ -180,7 +180,7 @@ export default function VoiceInput({
   const engineName = engine === "whisper" ? "Whisper" : "Browser voice";
 
   return (
-    <span className="flex items-center gap-2.5">
+    <span className="flex items-center gap-2.5" data-coach="voice">
       <button
         type="button"
         onClick={toggle}

@@ -198,7 +198,7 @@ export default function Providers() {
           </div>
         )}
 
-        <form onSubmit={connect} className="card rise flex flex-col gap-4 border-dashed border-line2 p-5">
+        <form onSubmit={connect} className="card rise flex flex-col gap-4 border-dashed border-line2 p-5" data-coach="provider-form">
           <h2 className="font-display text-[17px] font-semibold">Connect a provider</h2>
           <div className="grid items-end gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))]">
             <Select

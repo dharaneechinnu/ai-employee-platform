@@ -52,7 +52,7 @@ function Segmented({
   disabled?: boolean;
 }) {
   return (
-    <span role="radiogroup" aria-label={label} className="inline-flex rounded-[11px] border border-line bg-sunken p-[3px]">
+    <span role="radiogroup" aria-label={label} className="inline-flex rounded-[11px] border border-line bg-sunken p-[3px]" data-coach="policy-choice">
       {SETTINGS.map((setting) => {
         const on = setting.key === value;
         return (
@@ -234,7 +234,7 @@ export default function Policies() {
         )}
 
         {packRules.length > 0 && (
-          <details className="group flex flex-col gap-3">
+          <details className="group flex flex-col gap-3" data-coach="policy-advanced">
             <summary className="flex cursor-pointer list-none items-center gap-2 font-display text-[15px] font-semibold text-muted hover:text-ink">
               <Icon name="chevrons" size={16} />
               Advanced: rules for a whole app

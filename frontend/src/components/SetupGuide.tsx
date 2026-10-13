@@ -71,7 +71,7 @@ export default function SetupGuide({ status, isAdmin }: { status: SetupStatus; i
   const next = steps.find((s) => !s.done && !s.optional) ?? steps.find((s) => !s.done);
 
   return (
-    <section className="card rise flex flex-col gap-4 p-5" aria-label="Get started">
+    <section className="card rise flex flex-col gap-4 p-5" aria-label="Get started" data-coach="setup">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="flex-1 font-display text-[17px] font-semibold">Get started</h2>
         <span className="text-[13px] text-muted">

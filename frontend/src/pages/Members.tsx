@@ -145,7 +145,7 @@ export default function Members() {
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex flex-wrap gap-2 pl-[58px]">
+                    <div className="flex flex-wrap gap-2 pl-[58px]" data-coach="member-actions">
                       <Button
                         size="sm"
                         variant="ghost"
@@ -169,7 +169,7 @@ export default function Members() {
           </section>
 
           {isAdmin && (
-            <form onSubmit={invite} className="card rise flex w-full max-w-[460px] flex-[1_1_360px] flex-col gap-4 p-5" style={{ animationDelay: ".08s" }}>
+            <form onSubmit={invite} className="card rise flex w-full max-w-[460px] flex-[1_1_360px] flex-col gap-4 p-5" style={{ animationDelay: ".08s" }} data-coach="members-invite">
               <h2 className="font-display text-lg font-semibold">Invite someone</h2>
               <Input label="Email" type="email" value={email} onChange={setEmail} required autoComplete="off" />
               <fieldset className="flex flex-col gap-2">

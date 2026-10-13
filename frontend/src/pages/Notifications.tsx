@@ -98,7 +98,7 @@ export default function Notifications() {
 
       <PageBody>
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr))]">
-          <section className="card rise flex flex-col gap-4 p-5">
+          <section className="card rise flex flex-col gap-4 p-5" data-coach="notify-channels">
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent-text">
                 <Icon name="mail" size={20} />
@@ -183,7 +183,7 @@ export default function Notifications() {
 
         <ErrorNote message={error} />
 
-        <section className="card rise flex flex-col p-1.5" style={{ animationDelay: ".14s" }}>
+        <section className="card rise flex flex-col p-1.5" style={{ animationDelay: ".14s" }} data-coach="notify-when">
           <h2 className="px-4 pb-1 pt-3.5 font-display text-[17px] font-semibold">Tell us when</h2>
           {EVENTS.map((event) => (
             <div key={event.key} className="flex items-center gap-4 rounded-xl px-4 py-3.5 hover:bg-raised">

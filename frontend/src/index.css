@@ -15,6 +15,7 @@
  * staff never mistake the control room for a company workspace.
  */
 :root {
+  --coach-dim: rgba(3, 5, 14, 0.74);
   color-scheme: dark;
   --bg: #0a0c18;
   --side: #0d1020;
@@ -59,6 +60,7 @@
 }
 
 [data-theme="light"] {
+  --coach-dim: rgba(14, 20, 44, 0.55);
   color-scheme: light;
   --bg: #f6f7fb;
   --side: #ffffff;
@@ -657,5 +659,871 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* ============================================================ coachmarks
+   A dimmed screen with a moving hole, a glowing ring that follows it,
+   and a card that springs in beside it. Positions are written by one
+   animation loop in Coach.tsx; everything else here is CSS. */
+
+.coach-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  animation: coach-fade 0.35s ease-out both;
+}
+.coach-out {
+  animation: coach-fade-out 0.38s ease-in both;
+}
+.coach-mask {
+  position: absolute;
+  inset: 0;
+  cursor: default;
+}
+.coach-glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 62%);
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.coach-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 18px;
+  pointer-events: none;
+  will-change: transform, width, height;
+  transition: opacity 0.25s;
+}
+/* A rotating rainbow border, drawn with a masked conic gradient. */
+.coach-ring::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(from var(--angle, 0deg), var(--accent), var(--accent2), var(--spark), var(--run), var(--accent));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: ring 2.6s linear infinite;
+}
+.coach-ring::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent), 0 0 40px -6px var(--glow);
+  animation: coach-breathe 2.2s ease-in-out infinite;
+}
+.coach-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--accent2);
+  animation: coach-ping 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.coach-pos {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: min(360px, calc(100vw - 24px));
+  will-change: transform;
+}
+.coach-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 16px 14px;
+  border-radius: 18px;
+  background:
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    linear-gradient(135deg, var(--accent), var(--accent2) 55%, var(--spark)) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02), 0 0 60px -20px var(--glow);
+  animation: coach-card-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.coach-nudge {
+  animation: coach-nudge 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+.coach-arrow {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--panel);
+  transform: rotate(45deg);
+  border: 1.5px solid var(--accent);
+  transition: opacity 0.2s;
+}
+.coach-arrow[data-side="bottom"] {
+  border-right: 0;
+  border-bottom: 0;
+}
+.coach-arrow[data-side="top"] {
+  border-left: 0;
+  border-top: 0;
+  border-color: var(--accent2);
+}
+.coach-badge {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent2) 60%, var(--spark));
+  box-shadow: 0 8px 18px -8px var(--glow);
+  animation: coach-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both 0.05s;
+}
+.coach-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  animation: coach-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both 0.08s;
+}
+.coach-body {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+  animation: coach-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both 0.15s;
+}
+.coach-x {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  color: var(--dim);
+  transition: background-color 0.2s, color 0.2s;
+}
+.coach-x:hover {
+  background: var(--raised);
+  color: var(--ink);
+}
+.coach-dot {
+  height: 6px;
+  width: 6px;
+  border-radius: 99px;
+  background: var(--line2);
+  transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s;
+}
+.coach-dot.done {
+  background: color-mix(in srgb, var(--accent) 55%, var(--line2));
+}
+.coach-dot.on {
+  width: 22px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+.coach-off {
+  align-self: flex-start;
+  font-size: 12px;
+  color: var(--dim);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.coach-off:hover {
+  color: var(--muted);
+}
+
+.coach-burst {
+  position: fixed;
+  pointer-events: none;
+}
+.coach-burst i {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px;
+  border-radius: 2px;
+  background: hsl(var(--hue) 90% 65%);
+  animation: coach-burst 0.85s cubic-bezier(0.1, 0.8, 0.3, 1) both;
+}
+.coach-burst i:nth-child(3n) {
+  border-radius: 50%;
+}
+
+/* The always-there help button. */
+.coach-help {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.coach-help-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-family: var(--font-display, inherit);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent2) 60%, var(--spark));
+  box-shadow: 0 14px 30px -12px var(--glow);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.coach-help-btn::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  animation: coach-breathe 2.6s ease-in-out infinite;
+}
+.coach-help-btn:hover {
+  transform: scale(1.08) rotate(-8deg);
+}
+.coach-help-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line2);
+  background: var(--panel);
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.6);
+  transform-origin: bottom right;
+  animation: coach-menu 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.coach-help-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--ink);
+  text-align: left;
+}
+.coach-help-menu button:hover,
+.coach-help-menu button:focus-visible {
+  background: var(--raised);
+}
+
+@keyframes coach-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes coach-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes coach-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.025);
+  }
+}
+@keyframes coach-ping {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+@keyframes coach-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes coach-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(4px);
+  }
+}
+@keyframes coach-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-25deg);
+  }
+}
+@keyframes coach-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+@keyframes coach-burst {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.3) rotate(220deg);
+  }
+}
+@keyframes coach-menu {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+  }
+}
+
+/* ============================================================ welcome */
+
+.welcome-root {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(14px);
+  animation: coach-fade 0.5s ease-out both;
+}
+.welcome-out {
+  animation: welcome-out 0.45s cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+.welcome-blob {
+  position: absolute;
+  width: 620px;
+  height: 620px;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.welcome-blob-a {
+  left: -160px;
+  top: -200px;
+  background: var(--accent);
+  animation: welcome-drift-a 14s ease-in-out infinite alternate;
+}
+.welcome-blob-b {
+  right: -200px;
+  bottom: -220px;
+  background: var(--accent2);
+  animation: welcome-drift-b 17s ease-in-out infinite alternate;
+}
+.welcome-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(color-mix(in srgb, var(--ink) 14%, transparent) 1px, transparent 1px);
+  background-size: 26px 26px;
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 70%);
+  animation: welcome-grid 30s linear infinite;
+}
+.welcome-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 22px;
+  border-radius: 28px;
+  background:
+    linear-gradient(var(--panel), var(--panel)) padding-box,
+    conic-gradient(from var(--angle, 0deg), var(--accent), var(--accent2), var(--spark), var(--run), var(--accent)) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: 0 50px 120px -40px rgba(0, 0, 0, 0.7), 0 0 90px -30px var(--glow);
+  animation:
+    welcome-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both,
+    ring 8s linear infinite;
+}
+.welcome-skip {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.welcome-skip:hover {
+  background: var(--raised);
+  color: var(--ink);
+}
+.welcome-visual {
+  height: 280px;
+  border-radius: 20px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  position: relative;
+}
+.welcome-visual.from-right {
+  animation: welcome-from-right 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.welcome-visual.from-left {
+  animation: welcome-from-left 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.welcome-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.welcome-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.welcome-kicker {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+  animation: coach-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.welcome-title {
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+.welcome-body {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.welcome-word {
+  display: inline-block;
+  animation: welcome-word 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.welcome-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.welcome-dot {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  border-radius: 99px;
+  background: var(--line2);
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s;
+}
+.welcome-dot::before {
+  content: "";
+  position: absolute;
+  inset: -17px -6px;
+}
+.welcome-dot.on {
+  width: 30px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+
+/* Slide 1: the team orbiting the brand. */
+.welcome-stage:has(.welcome-chips) > :not(.welcome-chips) {
+  margin-top: -48px;
+}
+.welcome-orbit-ring {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: spin 40s linear infinite;
+}
+.welcome-orbit-ring-2 {
+  width: 120px;
+  height: 120px;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent2) 30%, transparent);
+  animation-direction: reverse;
+  animation-duration: 25s;
+}
+.welcome-core {
+  position: relative;
+  animation: welcome-float 4s ease-in-out infinite;
+  filter: drop-shadow(0 0 30px var(--glow));
+}
+.welcome-orbiter {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  animation: spin linear infinite;
+}
+.welcome-person {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  --half: 22px;
+  width: calc(var(--half) * 2);
+  transform: translate(calc(var(--half) * -1), calc(var(--half) * -1));
+  animation: welcome-counter linear infinite;
+  transform-origin: var(--half) var(--half);
+}
+.welcome-avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 10px 24px -10px var(--glow), 0 0 0 3px var(--sunken);
+}
+.welcome-chips {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+}
+.welcome-tag {
+  animation:
+    coach-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both,
+    welcome-tag-glow 3.6s ease-in-out infinite;
+  white-space: nowrap;
+  padding: 4px 9px;
+  border-radius: 99px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line2);
+}
+.welcome-tag b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Slide 2: an approval that fills and resets, on a loop. */
+.welcome-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(330px, 86%);
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--ask);
+  box-shadow: 0 0 50px -20px var(--ask);
+  animation: welcome-float 5s ease-in-out infinite;
+}
+.welcome-mail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--raised);
+}
+.welcome-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.welcome-lines i {
+  height: 7px;
+  border-radius: 99px;
+  background: var(--line2);
+  animation: welcome-type 4s ease-in-out infinite;
+  transform-origin: left;
+}
+.welcome-lines i:nth-child(2) {
+  width: 82%;
+  animation-delay: 0.2s;
+}
+.welcome-lines i:nth-child(3) {
+  width: 58%;
+  animation-delay: 0.4s;
+}
+.welcome-hold {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  height: 42px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-ok);
+  background: color-mix(in srgb, var(--ok) 45%, var(--panel));
+}
+.welcome-hold-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--ok);
+  transform-origin: left;
+  animation: welcome-hold 4s cubic-bezier(0.6, 0, 0.4, 1) infinite;
+}
+.welcome-shield {
+  position: absolute;
+  right: 12%;
+  top: 14%;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  color: var(--ok-text);
+  background: var(--ok-soft);
+  box-shadow: 0 0 40px -10px var(--ok);
+  animation: welcome-float 3.4s ease-in-out infinite reverse;
+}
+
+/* Slide 3: a run streaming in, step by step, then starting over. */
+.welcome-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(340px, 88%);
+}
+.welcome-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  animation: welcome-step 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* The newest step glows, as a live run does. */
+.welcome-step:last-child {
+  border-color: var(--ok);
+  box-shadow: 0 0 30px -12px var(--ok);
+}
+.welcome-step-dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+.welcome-step-dot.tone-ok {
+  color: var(--ok-text);
+  background: var(--ok-soft);
+}
+.welcome-step-dot.tone-brand {
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+.welcome-step-dot.tone-ask {
+  color: var(--ask-text);
+  background: var(--ask-soft);
+}
+
+@keyframes welcome-in {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.92) rotateX(12deg);
+    filter: blur(10px);
+  }
+}
+@keyframes welcome-out {
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+    filter: blur(8px);
+  }
+}
+@keyframes welcome-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(60px) scale(0.95);
+    filter: blur(6px);
+  }
+}
+@keyframes welcome-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-60px) scale(0.95);
+    filter: blur(6px);
+  }
+}
+@keyframes welcome-word {
+  from {
+    opacity: 0;
+    transform: translateY(14px) rotate(3deg);
+    filter: blur(6px);
+  }
+}
+@keyframes welcome-drift-a {
+  to {
+    transform: translate(140px, 120px) scale(1.15);
+  }
+}
+@keyframes welcome-drift-b {
+  to {
+    transform: translate(-160px, -90px) scale(0.9);
+  }
+}
+@keyframes welcome-grid {
+  to {
+    background-position: 260px 130px;
+  }
+}
+@keyframes welcome-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes welcome-counter {
+  to {
+    transform: translate(calc(var(--half) * -1), calc(var(--half) * -1)) rotate(-360deg);
+  }
+}
+@keyframes welcome-type {
+  0% {
+    transform: scaleX(0);
+  }
+  35%,
+  100% {
+    transform: scaleX(1);
+  }
+}
+@keyframes welcome-hold {
+  0%,
+  30% {
+    transform: scaleX(0);
+  }
+  70% {
+    transform: scaleX(1);
+  }
+  85% {
+    transform: scaleX(1);
+    filter: brightness(1.25);
+  }
+  100% {
+    transform: scaleX(1);
+    filter: none;
+  }
+}
+@keyframes welcome-step {
+  from {
+    opacity: 0;
+    transform: translateX(-28px) scale(0.96);
+    filter: blur(4px);
+  }
+}
+@keyframes welcome-tag-glow {
+  0%,
+  100% {
+    border-color: var(--line2);
+  }
+  15% {
+    border-color: var(--accent);
+    box-shadow: 0 0 18px -6px var(--glow);
+  }
+  35% {
+    border-color: var(--line2);
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .welcome-visual {
+    height: 240px;
+  }
+  .welcome-orbiter,
+  .welcome-orbit-ring {
+    width: 140px;
+    height: 140px;
+  }
+  .welcome-orbit-ring-2 {
+    width: 84px;
+    height: 84px;
+  }
+  .welcome-core {
+    transform: scale(0.75);
+  }
+  .welcome-avatar {
+    width: 36px;
+    height: 36px;
+  }
+  .welcome-person {
+    --half: 18px;
+  }
+  .welcome-stage:has(.welcome-chips) > :not(.welcome-chips) {
+    margin-top: -64px;
+  }
+  .welcome-chips {
+    bottom: 10px;
+    gap: 4px;
+  }
+  .welcome-chips .welcome-tag {
+    padding: 3px 7px;
+  }
+  .welcome-card {
+    padding: 16px;
+    border-radius: 22px;
+  }
+  .coach-help {
+    right: 14px;
+    bottom: 14px;
+  }
+}
+
+/* Reduced motion: the loops would freeze on an empty frame, so show
+   the finished picture instead. */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-step {
+    opacity: 1;
+    animation: none;
+  }
+  .welcome-orbiter,
+  .welcome-person,
+  .welcome-grid,
+  .welcome-blob {
+    animation: none;
   }
 }

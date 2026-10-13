@@ -142,6 +142,7 @@ export default function Memory() {
         <div className="flex flex-wrap items-start gap-5">
           <section className="flex min-w-0 flex-[999_1_480px] flex-col gap-3.5">
             <form
+              data-coach="memory-search"
               onSubmit={search}
               className="rise flex h-14 items-center gap-3 rounded-2xl border border-accent bg-sunken px-4"
               style={{ boxShadow: "0 0 0 4px var(--accent-soft), 0 20px 50px -30px var(--glow)" }}
@@ -237,6 +238,7 @@ export default function Memory() {
           <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-3.5">
             {isAdmin && (
               <form
+                data-coach="memory-teach"
                 className="card rise flex flex-col gap-3.5 p-5"
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -325,7 +327,11 @@ function MemoryCard({
   onForget?: () => void;
 }) {
   return (
-    <article className="card lift rise flex flex-col gap-2.5 px-[18px] py-4" style={{ animationDelay: `${Math.min(index, 8) * 0.05}s` }}>
+    <article
+      className="card lift rise flex flex-col gap-2.5 px-[18px] py-4"
+      style={{ animationDelay: `${Math.min(index, 8) * 0.05}s` }}
+      data-coach="memory-list"
+    >
       <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{content}</p>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <Chip tone={KIND_TONE[kind] ?? "mute"} dot={false}>
