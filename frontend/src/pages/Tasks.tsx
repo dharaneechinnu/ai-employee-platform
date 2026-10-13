@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import AgentTree from "../components/AgentTree";
+import VoiceInput from "../components/VoiceInput";
 import { Icon, type IconName } from "../components/icons";
 import {
   Avatar,
@@ -243,6 +244,18 @@ export default function Tasks() {
               />
               <ErrorNote message={error} />
               <div className="flex flex-wrap items-center gap-3.5">
+                {org && (
+                  <VoiceInput
+                    orgId={org.id}
+                    onError={setError}
+                    onText={(spoken) => {
+                      // Added to what is already typed, so speaking can
+                      // finish a sentence started on the keyboard.
+                      setInput((typed) => (typed.trim() ? `${typed.trimEnd()} ${spoken}` : spoken));
+                      composer.current?.focus();
+                    }}
+                  />
+                )}
                 <span className="flex items-center gap-2.5 text-[13px] text-muted">
                   <Switch checked={dryRun} onChange={setDryRun} label="Dry run" />
                   Dry run: plan only, nothing is changed or sent

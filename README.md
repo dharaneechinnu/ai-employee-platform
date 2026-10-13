@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack. 125 tests passing, 71 API operations, 27 agent tools. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, and voice typing. 134 tests passing, 73 API operations, 27 agent tools. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -127,6 +127,12 @@ Email or Slack messages when an approval is needed, when a task fails, or when i
 
 ![Notification settings: email and Slack](docs/screenshots/11-notifications.png)
 
+### 15. Speak the task instead of typing it
+
+Press the mic, say what you need, press it again: the words appear in the task box, ready to check before you assign. It uses **Whisper Large v3 Turbo** (open source, very good with Indian accents) through the company's own **Groq** key, so it costs the platform nothing. A company without a Groq key gets the browser's built-in voice typing instead. Recordings are never stored, and approvals stay button-only on purpose: voice can ask, but never approve.
+
+![Voice typing: the mic is listening](docs/screenshots/16-voice-input.png)
+
 ---
 
 ## Stack
@@ -187,7 +193,7 @@ already works and is tested.
 
 ```bash
 docker compose up --build        # all five services
-make test                        # 125 tests
+make test                        # 134 tests
 make lint                        # ruff + mypy strict
 ```
 
@@ -218,7 +224,7 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 | Check | Result |
 |---|---|
-| Tests | 125 passing: unit, tenant isolation, and integration against real Postgres |
+| Tests | 134 passing: unit, tenant isolation, and integration against real Postgres |
 | Types | mypy **strict**, zero errors |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
 | Migrations | 7, each verified forward *and* backward |

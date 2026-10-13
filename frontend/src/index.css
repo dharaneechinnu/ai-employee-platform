@@ -525,6 +525,22 @@
     box-shadow: 0 0 0 0 transparent;
   }
 }
+/* The mic button while recording: a soft red ring, so it is obvious
+   the microphone is live. */
+.voice-rec {
+  animation: pulse-rec 1.4s ease-out infinite;
+}
+@keyframes pulse-rec {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);

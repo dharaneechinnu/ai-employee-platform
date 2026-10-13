@@ -48,7 +48,8 @@ async function parseError(response: Response): Promise<ApiError> {
 
 async function send(path: string, init: RequestInit, retry = true): Promise<Response> {
   const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
+  // A caller sending something other than JSON (a recording) sets its own type.
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
   const response = await fetch(`${BASE}${path}`, {
@@ -82,6 +83,8 @@ export const api = {
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  upload: <T>(path: string, blob: Blob) =>
+    request<T>(path, { method: "POST", body: blob, headers: { "Content-Type": blob.type } }),
 };
 
 export async function refresh(): Promise<boolean> {
