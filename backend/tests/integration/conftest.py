@@ -28,9 +28,26 @@ os.environ.setdefault("ENVIRONMENT", "test")
 # organization between cases, so running them against the development
 # database destroys whatever you were working with. TEST_DATABASE_URL
 # overrides it; DATABASE_URL deliberately does not.
-DATABASE_URL = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://app:app@localhost:5433/ai_employee_test"
-)
+#
+# The default is derived from DATABASE_URL rather than hard-coded,
+# because the host and the api container reach Postgres by different
+# names: localhost:5433 from a shell, postgres:5432 from inside
+# Compose. Hard-coding either one makes the tests fail with a
+# connection error in the other place.
+
+
+def _test_database_url() -> str:
+    explicit = os.environ.get("TEST_DATABASE_URL")
+    if explicit:
+        return explicit
+    app_url = os.environ.get(
+        "DATABASE_URL", "postgresql+asyncpg://app:app@localhost:5433/ai_employee"
+    )
+    base, _, _ = app_url.rpartition("/")
+    return f"{base}/ai_employee_test"
+
+
+DATABASE_URL = _test_database_url()
 
 # The app itself reads DATABASE_URL, so point that at the test database
 # too. Without this the API under test would write to the dev database
