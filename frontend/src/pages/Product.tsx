@@ -39,7 +39,7 @@ const FEATURES: Feature[] = [
     scene: "approval",
     kicker: "Safety and approvals",
     title: "Anything risky waits for a person.",
-    body: "Each company sets what runs on its own, what asks first, and what is never allowed. A paused run waits safely, then picks up exactly where it stopped.",
+    body: "For every tool, each company chooses Always allow, Ask me first, or Blocked. A paused run waits safely, then picks up exactly where it stopped.",
     points: [
       { icon: "approvals", text: "Approve from the app, your inbox or Slack, with the full action shown" },
       { icon: "lock", text: "Reading is automatic, sending asks first, catastrophic actions are blocked for everyone" },

@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, and a guided welcome tour. 137 tests passing, 74 API operations, 27 agent tools. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, and a guided welcome tour. 139 tests passing, 74 API operations, 27 agent tools. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -63,11 +63,21 @@ A tool that isn't ticked doesn't exist as far as that employee is concerned: it 
 
 ![Tool picker: Gmail tools ticked, sending asks first](docs/screenshots/03-tool-picker.png)
 
-### 5. Permission rules: read freely, ask before acting
+### 5. Always allow, Ask me first, or Blocked: for every tool
 
-Every tool is labelled **read**, **write** or **destructive**. By default, reading runs on its own, writing asks first, and anything destructive asks first or is blocked. Each company can make a rule looser or stricter for a whole pack or for one tool.
+Every tool gets one of three settings, chosen right where you use it: on each connected app (Connections), next to each ticked tool in an AI Employee's **Tools & AI** panel, and on the Permissions page.
 
-![Permissions per tool](docs/screenshots/10-permissions.png)
+- **Always allow**: it runs straight away, with **no human approval**.
+- **Ask me first**: the run pauses until a person approves.
+- **Blocked**: it never runs.
+
+By default, reading is always allowed and sending asks first. Switching something that can't be undone (like sending an email) to Always allow asks you once more, in plain words. The rule is company-wide, and specialists that a manager hands work to follow it too. A tiny list of catastrophic actions (deleting a repository, force-pushing, emailing all contacts) can never be allowed.
+
+![Each connected app lists its tools with a switch](docs/screenshots/19-tool-permissions.png)
+
+![Always allow on a send asks once more](docs/screenshots/20-always-allow-confirm.png)
+
+![The Permissions page](docs/screenshots/10-permissions.png)
 
 ### 6. A person approves risky actions, and the run waits
 
@@ -83,7 +93,7 @@ Admins get an email with their own **Approve / Reject** link, and a Slack channe
 
 ### 8. A manager can delegate to specialists
 
-A manager AI Employee can ask colleagues to do part of the work, and the agent tree shows it live. It's **one level deep on purpose**: errors multiply with every hop, so specialists cannot pass work on again. At most three specialists per run, each with a smaller step budget, and all under the same permission rules.
+A manager AI Employee can ask colleagues to do part of the work, and the agent tree shows it live. It's **one level deep on purpose**: errors multiply with every hop, so specialists cannot pass work on again. At most three specialists per run, each with a smaller step budget. Specialists follow the same permission rules; a step that needs a person's approval is handed back to the manager, where the normal approval happens.
 
 ![Agent tree: Ravi delegates to Kiran and Meera](docs/screenshots/05-agent-tree.png)
 
@@ -201,7 +211,7 @@ already works and is tested.
 
 ```bash
 docker compose up --build        # all five services
-make test                        # 137 tests
+make test                        # 139 tests
 make lint                        # ruff + mypy strict
 ```
 
@@ -232,7 +242,7 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 | Check | Result |
 |---|---|
-| Tests | 137 passing: unit, tenant isolation, and integration against real Postgres |
+| Tests | 139 passing: unit, tenant isolation, and integration against real Postgres |
 | Types | mypy **strict**, zero errors |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
 | Migrations | 8, each verified forward *and* backward |

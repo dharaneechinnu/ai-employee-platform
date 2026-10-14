@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Icon, type IconName } from "../components/icons";
+import PermissionChoice, { PERMISSION_LABEL, type Setting } from "../components/PermissionChoice";
 import {
   Button,
   Chip,
@@ -15,7 +16,8 @@ import {
   relativeTime,
   useToast,
 } from "../components/ui";
-import { ApiError, api, type AvailableConnection, type ConnectionItem } from "../lib/api";
+import { ApiError, api, type AvailableConnection, type ConnectionItem, type ToolEntry } from "../lib/api";
+import { effectLabel, toolLabel } from "../lib/labels";
 import { useAuth, useIsAdmin } from "../lib/auth";
 
 /**
@@ -67,6 +69,7 @@ export default function Connections() {
   const [connected, setConnected] = useState<ConnectionItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [manual, setManual] = useState<AvailableConnection | null>(null);
+  const [tools, setTools] = useState<Record<string, ToolEntry>>({});
 
   async function load() {
     if (!org) return;
@@ -76,6 +79,8 @@ export default function Connections() {
     ]);
     setAvailable(options);
     setConnected(items);
+    const catalogue = await api.get<ToolEntry[]>(`/orgs/${org.id}/tools`).catch(() => [] as ToolEntry[]);
+    setTools(Object.fromEntries(catalogue.map((t) => [t.name, t])));
   }
 
   useEffect(() => {
@@ -200,6 +205,19 @@ export default function Connections() {
                   />
                 ))}
 
+                {org && option.tools.some((name) => tools[name]) && (
+                  <ToolPermissions
+                    orgId={org.id}
+                    names={option.tools}
+                    tools={tools}
+                    isAdmin={isAdmin}
+                    open={items.length > 0}
+                    onSaved={(name, setting) =>
+                      setTools((current) => ({ ...current, [name]: { ...current[name], effective_setting: setting } }))
+                    }
+                  />
+                )}
+
                 {isAdmin && (
                   <div className="mt-auto flex flex-wrap items-center gap-2">
                     {oauth ? (
@@ -237,6 +255,67 @@ export default function Connections() {
         {manual && <ManualForm option={manual} onClose={() => setManual(null)} onSaved={() => { setManual(null); void load(); }} />}
       </PageBody>
     </>
+  );
+}
+
+/**
+ * Each tool this app gives AI Employees, with its permission right
+ * here: the place people connect an app is where they decide what may
+ * be done with it.
+ */
+function ToolPermissions({
+  orgId,
+  names,
+  tools,
+  isAdmin,
+  open,
+  onSaved,
+}: {
+  orgId: string;
+  names: string[];
+  tools: Record<string, ToolEntry>;
+  isAdmin: boolean;
+  open: boolean;
+  onSaved: (name: string, setting: Setting) => void;
+}) {
+  const rows = names.map((n) => tools[n]).filter((t): t is ToolEntry => !!t);
+  const asking = rows.filter((t) => t.effective_setting === "ask").length;
+  const allowed = rows.filter((t) => t.effective_setting === "auto").length;
+  return (
+    <details className="group rounded-xl border border-line bg-raised" open={open} data-coach="connection-permissions">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium">
+        <Icon name="lock" size={15} className="text-accent-text" />
+        <span className="flex-1">What can AI Employees do here?</span>
+        <span className="text-xs font-normal text-dim">
+          {allowed} always · {asking} ask
+        </span>
+        <Icon name="chevrons" size={14} className="text-dim" />
+      </summary>
+      <ul className="flex flex-col border-t border-line">
+        {rows.map((tool) => (
+          <li key={tool.name} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-3.5 py-3 last:border-0">
+            <span className="flex min-w-[170px] flex-1 flex-col">
+              <span className="text-sm font-medium" title={tool.name}>{toolLabel(tool.name)}</span>
+              <span className={`text-xs ${tool.side_effect === "destructive" ? "text-bad-text" : "text-dim"}`}>
+                {effectLabel(tool.side_effect)}
+              </span>
+            </span>
+            {isAdmin ? (
+              <PermissionChoice
+                orgId={orgId}
+                tool={tool}
+                size="sm"
+                onSaved={(setting) => onSaved(tool.name, setting)}
+              />
+            ) : (
+              <Chip tone={tool.effective_setting === "auto" ? "ok" : tool.effective_setting === "ask" ? "ask" : "bad"} dot={false}>
+                {PERMISSION_LABEL[tool.effective_setting as Setting]}
+              </Chip>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 

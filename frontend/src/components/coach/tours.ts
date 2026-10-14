@@ -154,7 +154,7 @@ export const TOURS: Tour[] = [
         target: "tool-picker",
         icon: "lock",
         title: "Tick only what it needs",
-        body: "The tags say what each tool can do. Anything that can't be undone still waits for your approval.",
+        body: "Tick a tool, then choose right there: Always allow, Ask me first, or Blocked.",
       },
     ],
   },
@@ -213,8 +213,8 @@ export const TOURS: Tour[] = [
       {
         target: "policy-choice",
         icon: "lock",
-        title: "When may it act?",
-        body: "On its own, ask a person first, or blocked. Your choice saves the moment you click.",
+        title: "Always allow, ask me first, or blocked",
+        body: "Always allow runs with no approval. Ask me first waits for a person. Blocked never runs. It saves the moment you click.",
       },
       {
         target: "policy-advanced",
@@ -233,6 +233,13 @@ export const TOURS: Tour[] = [
         icon: "link",
         title: "Connect your apps in one click",
         body: "Sign in once. Your AI Employees can then work in email, calendars and files, and never see your password.",
+      },
+      {
+        target: "connection-permissions",
+        icon: "lock",
+        adminOnly: true,
+        title: "Decide what each tool may do",
+        body: "Always allow runs it with no approval, Ask me first waits for you, Blocked never runs. Set it per tool, right here.",
       },
     ],
   },

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../components/icons";
+import PermissionChoice, { PERMISSION_OPTIONS } from "../components/PermissionChoice";
 import {
   Button,
   Chip,
@@ -26,13 +27,10 @@ import { effectLabel, packLabel, plainReason, toolLabel } from "../lib/labels";
 
 type Setting = "auto" | "ask" | "blocked";
 
-const SETTINGS: { key: Setting; label: string }[] = [
-  { key: "auto", label: "On its own" },
-  { key: "ask", label: "Ask first" },
-  { key: "blocked", label: "Blocked" },
-];
+// The same words as the switch on Connections and in the tool picker.
+const SETTINGS = PERMISSION_OPTIONS;
 
-const SETTING_LABEL: Record<Setting, string> = { auto: "on its own", ask: "ask first", blocked: "blocked" };
+const SETTING_LABEL: Record<Setting, string> = { auto: "always allow", ask: "ask me first", blocked: "blocked" };
 
 const SELECTED: Record<Setting, string> = {
   auto: "bg-ok-soft text-ok-text shadow-[inset_0_0_0_1px_var(--ok)] font-semibold",
@@ -52,7 +50,7 @@ function Segmented({
   disabled?: boolean;
 }) {
   return (
-    <span role="radiogroup" aria-label={label} className="inline-flex rounded-[11px] border border-line bg-sunken p-[3px]" data-coach="policy-choice">
+    <span role="radiogroup" aria-label={label} className="inline-flex rounded-[11px] border border-line bg-sunken p-[3px]">
       {SETTINGS.map((setting) => {
         const on = setting.key === value;
         return (
@@ -155,8 +153,8 @@ export default function Policies() {
     <>
       <PageHeader crumb="Settings" title="Permissions">
         <div className="hidden flex-wrap gap-3.5 text-[13px] text-muted md:flex">
-          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ok" />On its own</span>
-          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ask" />Ask first</span>
+          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ok" />Always allow</span>
+          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ask" />Ask me first</span>
           <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-bad" />Blocked</span>
         </div>
         <Button variant="ghost" onClick={() => void reset()}>
@@ -166,8 +164,9 @@ export default function Policies() {
 
       <PageBody>
         <p className="rise max-w-3xl text-sm leading-relaxed text-muted">
-          Choose what AI Employees may do without asking you. By default, anything that only reads happens on its
-          own, and anything that sends or changes something asks a person first. Changes save as you click.
+          For every tool, choose <b>Always allow</b> (it runs with no approval), <b>Ask me first</b> (a person approves
+          each time) or <b>Blocked</b> (it never runs). By default, reading is always allowed and sending asks first.
+          Changes save as you click, and you can also set them on Connections and in each AI Employee's tools.
         </p>
 
         <ErrorNote message={error} />
@@ -213,18 +212,17 @@ export default function Policies() {
                     <span className="text-[13px] leading-snug text-muted">{tool.description}</span>
                     {/* Only worth a line when it is not the default: the tag already says what the default means. */}
                     {!/^platform default/i.test(tool.reason) && (
-                      <span className="text-xs text-accent-text">Your company's rule · {plainReason(tool.reason)}</span>
+                      <span className="text-xs text-accent-text">
+                        {/^set by your company/i.test(tool.reason) ? "Changed by your company" : plainReason(tool.reason)}
+                      </span>
                     )}
                   </div>
-                  {tool.permanently_blocked ? (
-                    <Chip tone="bad">never allowed</Chip>
-                  ) : (
-                    <Segmented
-                      value={tool.effective_setting}
-                      label={`${toolLabel(tool.name)}: when may it run?`}
-                      onChange={(setting) =>
-                        void save({ scope: "tool", scope_value: tool.name, side_effect: null }, setting, toolLabel(tool.name))
-                      }
+                  {org && (
+                    <PermissionChoice
+                      key={`${tool.name}-${tool.effective_setting}`}
+                      orgId={org.id}
+                      tool={tool}
+                      onSaved={() => void load()}
                     />
                   )}
                 </div>
