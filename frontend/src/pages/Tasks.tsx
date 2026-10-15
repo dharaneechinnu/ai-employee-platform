@@ -462,7 +462,10 @@ function RunPanel({
         <div className="flex items-start gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <h2 className="font-display text-[19px] font-semibold tracking-[-0.015em]">{task.title ?? "Untitled"}</h2>
-            <p className="whitespace-pre-wrap text-sm leading-normal text-muted">{task.input}</p>
+            {/* The title is the start of the request, so only the rest is shown. */}
+            {restOfRequest(task.title, task.input) && (
+              <p className="whitespace-pre-wrap text-sm leading-normal text-muted">{restOfRequest(task.title, task.input)}</p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <StatusChip status={task.status} />
@@ -485,7 +488,7 @@ function RunPanel({
           value={view}
           onChange={setView}
           items={[
-            { key: "timeline", label: "Timeline", count: events.length },
+            { key: "timeline", label: "Timeline", count: timelineRows(events, running).length },
             { key: "tree", label: "Agent tree", count: delegations },
             { key: "result", label: "Result" },
           ]}
@@ -637,6 +640,43 @@ const TONE_STEP: Record<string, string> = {
   mute: "bg-raised border-line2 text-dim",
 };
 
+/** The request without the part already shown as its title. */
+function restOfRequest(title: string | null | undefined, input: string): string {
+  const text = input.trim();
+  if (!title) return text;
+  const head = title.trim().replace(/[.?!…]+$/, "");
+  if (!text.toLowerCase().startsWith(head.toLowerCase())) return text;
+  return text.slice(head.length).replace(/^[\s.?!…:,-]+/, "").trim();
+}
+
+type Row = { event: RunEvent; result?: RunEvent };
+
+/**
+ * One row per thing that happened, not per event: a tool call and its
+ * result share a row, and "Thinking" only shows while it is happening
+ * (every step thinks, so a permanent row for it would just repeat).
+ */
+export function timelineRows(events: RunEvent[], running: boolean): Row[] {
+  const rows: Row[] = [];
+  events.forEach((event, i) => {
+    if (event.type === "thinking") {
+      if (running && i === events.length - 1) rows.push({ event });
+      return;
+    }
+    if (event.type === "tool_result") {
+      for (let k = rows.length - 1; k >= 0; k--) {
+        const row = rows[k];
+        if (row.event.type === "tool_call" && row.event.tool === event.tool && !row.result) {
+          row.result = event;
+          return;
+        }
+      }
+    }
+    rows.push({ event });
+  });
+  return rows;
+}
+
 function Timeline({ events, running }: { events: RunEvent[]; running: boolean }) {
   const end = useRef<HTMLLIElement>(null);
 
@@ -663,26 +703,27 @@ function Timeline({ events, running }: { events: RunEvent[]; running: boolean })
   return (
     <ol className="relative flex max-h-[30rem] flex-col gap-0.5 overflow-y-auto pr-1">
       <li aria-hidden="true" className="absolute bottom-6 left-[19px] top-6 w-0.5" style={{ background: "linear-gradient(var(--line2),var(--run))" }} />
-      {events.map((event, i) => {
-        const style = eventStyle(event);
-        const last = i === events.length - 1;
-        const live = last && running;
-        const detail = eventDetail(event);
+      {timelineRows(events, running).map(({ event, result }, i, rows) => {
+        const failed = result?.ok === false;
+        const style = result ? (failed ? { tone: "bad" as const, icon: "x" as IconName } : { tone: "mute" as const, icon: "check" as IconName }) : eventStyle(event);
+        const last = i === rows.length - 1;
+        const live = last && running && !result;
+        const detail = failed ? String(result?.error ?? "it reported a problem") : eventDetail(event);
         return (
           <li key={event.seq} className="slide-in relative flex gap-3.5 py-1.5" style={{ animationDelay: `${Math.min(i, 10) * 0.03}s` }}>
             {live ? (
               <span className="halo relative h-10 w-10 shrink-0 rounded-xl p-[1.5px]">
                 <span className="flex h-full w-full items-center justify-center rounded-[10.5px] bg-run-soft font-mono text-xs text-run-text">
-                  {event.seq}
+                  {i + 1}
                 </span>
               </span>
             ) : (
               <span className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border font-mono text-xs ${TONE_STEP[style.tone]}`}>
-                {style.icon ? <Icon name={style.icon} size={17} /> : event.seq}
+                {style.icon ? <Icon name={style.icon} size={17} /> : i + 1}
               </span>
             )}
             <div className="flex min-w-0 flex-col gap-0.5 pt-0.5" title={eventTechnical(event)}>
-              <span className={`text-sm font-medium ${live ? "text-run-text" : ""}`}>
+              <span className={`text-sm font-medium ${live ? "text-run-text" : ""} ${failed ? "text-bad-text" : ""}`}>
                 {eventTitle(event)}
                 {live && <span className="caret">_</span>}
               </span>

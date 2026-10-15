@@ -256,26 +256,11 @@ export default function Product() {
         </div>
       </section>
 
-      {/* ---------------------------------------------------- call to action */}
-      <section className="px-4 pb-20 sm:px-6">
-        <div className="halo mx-auto max-w-[1200px] rounded-[28px] p-[1.5px]">
-          <div className="relative flex flex-col items-center gap-5 overflow-hidden rounded-[27px] bg-panel px-6 py-16 text-center" style={{ background: "var(--hero), var(--panel)" }}>
-            <h2 className="max-w-[720px] font-display text-[32px] font-semibold leading-tight tracking-[-0.02em] sm:text-[44px]">
-              Put your first AI Employee <span className="spectrum-text">to work today.</span>
-            </h2>
-            <p className="max-w-[520px] text-muted">Accounts are by invitation. Ask your company admin for a link, or sign in if you have one.</p>
-            <Link to={primary.to} className="btn btn-primary">
-              {primary.label} <Icon name="arrow" size={16} />
-            </Link>
-          </div>
-        </div>
-      </section>
-
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-4 px-4 py-8 text-[13px] text-dim sm:px-6">
           <BrandMark size={24} />
           <span>AI Employees</span>
-          <span className="ml-auto">Your AI team, already at work.</span>
+          <span className="ml-auto">For operations, sales, HR and engineering teams.</span>
         </div>
       </footer>
     </div>

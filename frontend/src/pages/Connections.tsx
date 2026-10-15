@@ -296,9 +296,12 @@ function ToolPermissions({
           <li key={tool.name} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-3.5 py-3 last:border-0">
             <span className="flex min-w-[170px] flex-1 flex-col">
               <span className="text-sm font-medium" title={tool.name}>{toolLabel(tool.name)}</span>
-              <span className={`text-xs ${tool.side_effect === "destructive" ? "text-bad-text" : "text-dim"}`}>
-                {effectLabel(tool.side_effect)}
-              </span>
+              {/* Reading is the normal case, so only changes are labelled. */}
+              {tool.side_effect !== "read" && (
+                <span className={`text-xs ${tool.side_effect === "destructive" ? "text-bad-text" : "text-dim"}`}>
+                  {effectLabel(tool.side_effect)}
+                </span>
+              )}
             </span>
             {isAdmin ? (
               <PermissionChoice

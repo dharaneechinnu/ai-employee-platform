@@ -35,7 +35,6 @@ const SECTIONS: { title: string; note?: string; items: NavItem[] }[] = [
   },
   {
     title: "Settings",
-    note: "admin",
     items: [
       { to: "/connections", label: "Connections", icon: "link", adminOnly: true },
       { to: "/providers", label: "Providers", icon: "providers", adminOnly: true },

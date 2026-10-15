@@ -98,7 +98,8 @@ export function isAutoModel(model: string): boolean {
 export function modelLabel(model: string): string {
   if (isAutoModel(model)) return "Automatic AI";
   const [provider, name] = model.includes(":") ? model.split(/:(.*)/s) : ["gemini", model];
-  return `${PROVIDER_NAMES[provider] ?? humanise(provider)} · ${name}`;
+  // The model name usually already says the provider ("gemini-2.0-flash").
+  return name.toLowerCase().includes(provider.toLowerCase()) ? name : `${PROVIDER_NAMES[provider] ?? humanise(provider)} ${name}`;
 }
 
 /** "Default for Google · can't be undone", from the server's reason. */

@@ -152,11 +152,6 @@ export default function Policies() {
   return (
     <>
       <PageHeader crumb="Settings" title="Permissions">
-        <div className="hidden flex-wrap gap-3.5 text-[13px] text-muted md:flex">
-          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ok" />Always allow</span>
-          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-ask" />Ask me first</span>
-          <span className="flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-[3px] bg-bad" />Blocked</span>
-        </div>
         <Button variant="ghost" onClick={() => void reset()}>
           Reset to defaults
         </Button>
@@ -165,8 +160,8 @@ export default function Policies() {
       <PageBody>
         <p className="rise max-w-3xl text-sm leading-relaxed text-muted">
           For every tool, choose <b>Always allow</b> (it runs with no approval), <b>Ask me first</b> (a person approves
-          each time) or <b>Blocked</b> (it never runs). By default, reading is always allowed and sending asks first.
-          Changes save as you click, and you can also set them on Connections and in each AI Employee's tools.
+          each time) or <b>Blocked</b> (it never runs). By default, reading is allowed and sending asks first. Changes
+          save as you click.
         </p>
 
         <ErrorNote message={error} />
@@ -205,9 +200,11 @@ export default function Policies() {
                   <div className="flex min-w-[220px] flex-1 flex-col gap-1">
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium" title={tool.name}>{toolLabel(tool.name)}</span>
-                      <Chip tone={statusTone(tool.side_effect)} dot={false}>
-                        {effectLabel(tool.side_effect)}
-                      </Chip>
+                      {tool.side_effect !== "read" && (
+                        <Chip tone={statusTone(tool.side_effect)} dot={false}>
+                          {effectLabel(tool.side_effect)}
+                        </Chip>
+                      )}
                     </span>
                     <span className="text-[13px] leading-snug text-muted">{tool.description}</span>
                     {/* Only worth a line when it is not the default: the tag already says what the default means. */}

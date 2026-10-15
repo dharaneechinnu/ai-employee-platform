@@ -152,18 +152,19 @@ export function Card({
 
 /** The bar at the top of every screen: where you are, the screen's actions, the theme switch. */
 export function PageHeader({
-  crumb,
   title,
   children,
 }: {
+  /** Kept for callers; no longer shown, as the menu already says it. */
   crumb?: ReactNode;
   title: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-[18px] sm:px-6 lg:px-10">
+      {/* The menu already shows which section this page is in, so the
+          small section label above the title is not repeated here. */}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {crumb && <div className="flex items-center gap-2 truncate text-[13px] text-dim">{crumb}</div>}
         <h1 className="truncate font-display text-[26px] font-semibold tracking-[-0.02em]">{title}</h1>
       </div>
       {children}

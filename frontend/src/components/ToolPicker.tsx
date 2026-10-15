@@ -104,7 +104,9 @@ export function ToolPicker({
                     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span className="text-[13px] font-medium text-ink" title={tool.name}>{toolLabel(tool.name)}</span>
-                        <Chip tone={statusTone(tool.side_effect)} dot={false}>{effectLabel(tool.side_effect)}</Chip>
+                        {tool.side_effect !== "read" && (
+                          <Chip tone={statusTone(tool.side_effect)} dot={false}>{effectLabel(tool.side_effect)}</Chip>
+                        )}
                       </span>
                       <span className="text-xs leading-snug text-dim">{tool.description}</span>
                     </span>

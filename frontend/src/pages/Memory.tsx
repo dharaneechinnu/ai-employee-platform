@@ -334,9 +334,12 @@ function MemoryCard({
     >
       <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{content}</p>
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Chip tone={KIND_TONE[kind] ?? "mute"} dot={false}>
+{/* "fact" is the usual kind, so only the others get a tag. */}
+        {kind !== "fact" && (
+                  <Chip tone={KIND_TONE[kind] ?? "mute"} dot={false}>
           {kind}
         </Chip>
+        )}
         {meta}
         {onForget && (
           <Button size="sm" variant="ghost" className="ml-auto" onClick={onForget}>

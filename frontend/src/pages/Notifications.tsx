@@ -14,9 +14,9 @@ import { useAuth } from "../lib/auth";
 type EventKey = "on_approval_requested" | "on_task_completed" | "on_task_failed";
 
 const EVENTS: { key: EventKey; title: string; who: string }[] = [
-  { key: "on_approval_requested", title: "An action needs approval", who: "Every admin, with Approve and Reject buttons" },
-  { key: "on_task_failed", title: "A task fails", who: "The person who assigned it" },
-  { key: "on_task_completed", title: "A task finishes", who: "The person who assigned it" },
+  { key: "on_approval_requested", title: "An action needs approval", who: "To every admin, with Approve and Reject buttons" },
+  { key: "on_task_failed", title: "A task fails", who: "" },
+  { key: "on_task_completed", title: "A task finishes", who: "" },
 ];
 
 export default function Notifications() {
@@ -184,12 +184,15 @@ export default function Notifications() {
         <ErrorNote message={error} />
 
         <section className="card rise flex flex-col p-1.5" style={{ animationDelay: ".14s" }} data-coach="notify-when">
-          <h2 className="px-4 pb-1 pt-3.5 font-display text-[17px] font-semibold">Tell us when</h2>
+          <div className="flex flex-col gap-0.5 px-4 pb-1 pt-3.5">
+            <h2 className="font-display text-[17px] font-semibold">Tell us when</h2>
+            <p className="text-[13px] text-dim">Task updates go to the person who assigned the task.</p>
+          </div>
           {EVENTS.map((event) => (
             <div key={event.key} className="flex items-center gap-4 rounded-xl px-4 py-3.5 hover:bg-raised">
               <div className="flex-1">
                 <div className="text-sm font-medium">{event.title}</div>
-                <div className="text-[13px] text-dim">{event.who}</div>
+                {event.who && <div className="text-[13px] text-dim">{event.who}</div>}
               </div>
               <Switch
                 checked={settings[event.key]}

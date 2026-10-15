@@ -197,7 +197,7 @@ function ApprovalCard({
           <Link to="/tasks" className="btn btn-ghost">
             View tasks
           </Link>
-          {destructive && <span className="text-xs text-dim">Can't be undone, so hold the button for a second (or press Enter twice).</span>}
+          {destructive && <span className="text-xs text-dim">Hold for a second, or press Enter twice.</span>}
         </div>
       </div>
     </article>
