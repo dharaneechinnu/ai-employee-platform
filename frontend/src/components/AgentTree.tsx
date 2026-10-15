@@ -168,7 +168,7 @@ export default function AgentTree({
           }}
         >
           <div className="pop flex flex-col justify-center gap-1 self-center rounded-[14px] border border-line2 bg-panel px-3.5 py-3">
-            <span className="font-mono text-[11px] tracking-[0.1em] text-muted">TASK</span>
+            <span className="font-mono text-xs tracking-[0.1em] text-muted">TASK</span>
             <span className="line-clamp-3 text-sm font-semibold">{taskTitle}</span>
           </div>
           <Connector />

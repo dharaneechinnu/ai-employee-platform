@@ -14,9 +14,9 @@ import { useAuth } from "../lib/auth";
 type EventKey = "on_approval_requested" | "on_task_completed" | "on_task_failed";
 
 const EVENTS: { key: EventKey; title: string; who: string }[] = [
-  { key: "on_approval_requested", title: "An action needs approval", who: "Every admin, with Approve and Reject buttons" },
-  { key: "on_task_failed", title: "A task fails", who: "The person who assigned it" },
-  { key: "on_task_completed", title: "A task finishes", who: "The person who assigned it" },
+  { key: "on_approval_requested", title: "An action needs approval", who: "To every admin, with Approve and Reject buttons" },
+  { key: "on_task_failed", title: "A task fails", who: "" },
+  { key: "on_task_completed", title: "A task finishes", who: "" },
 ];
 
 export default function Notifications() {
@@ -98,7 +98,7 @@ export default function Notifications() {
 
       <PageBody>
         <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr))]">
-          <section className="card rise flex flex-col gap-4 p-5">
+          <section className="card rise flex flex-col gap-4 p-5" data-coach="notify-channels">
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent-text">
                 <Icon name="mail" size={20} />
@@ -107,12 +107,19 @@ export default function Notifications() {
                 <h2 className="font-display text-lg font-semibold">Email</h2>
                 <p className="text-[13px] text-muted">Approve or reject straight from the inbox.</p>
               </div>
-              <Switch checked={settings.email_enabled} disabled={saving} onChange={(on) => void save({ email_enabled: on })} label="Email notifications" />
+              {/* Shown off, and locked, while the platform has no mail server:
+                  an "on" switch that sends nothing is a broken promise. */}
+              <Switch
+                checked={settings.email_enabled && settings.email_available}
+                disabled={saving || !settings.email_available}
+                onChange={(on) => void save({ email_enabled: on })}
+                label={settings.email_available ? "Email notifications" : "Email notifications (not available yet)"}
+              />
             </div>
             {!settings.email_available && (
               <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px] leading-normal">
                 <Icon name="warn" className="text-ask-text" />
-                <span>Email is not set up on this platform yet, so nothing will be sent. Ask your platform operator to add an SMTP server.</span>
+                <span>Email sending isn't switched on yet, so nothing will be sent. Whoever set up AI Employees for your company can turn it on (it needs a mail server). Slack works without it.</span>
               </div>
             )}
             <p className="text-[13px] leading-relaxed text-dim">
@@ -176,13 +183,16 @@ export default function Notifications() {
 
         <ErrorNote message={error} />
 
-        <section className="card rise flex flex-col p-1.5" style={{ animationDelay: ".14s" }}>
-          <h2 className="px-4 pb-1 pt-3.5 font-display text-[17px] font-semibold">Tell us when</h2>
+        <section className="card rise flex flex-col p-1.5" style={{ animationDelay: ".14s" }} data-coach="notify-when">
+          <div className="flex flex-col gap-0.5 px-4 pb-1 pt-3.5">
+            <h2 className="font-display text-[17px] font-semibold">Tell us when</h2>
+            <p className="text-[13px] text-dim">Task updates go to the person who assigned the task.</p>
+          </div>
           {EVENTS.map((event) => (
             <div key={event.key} className="flex items-center gap-4 rounded-xl px-4 py-3.5 hover:bg-raised">
               <div className="flex-1">
                 <div className="text-sm font-medium">{event.title}</div>
-                <div className="text-[13px] text-dim">{event.who}</div>
+                {event.who && <div className="text-[13px] text-dim">{event.who}</div>}
               </div>
               <Switch
                 checked={settings[event.key]}

@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/icons";
+import ProposedAction from "../components/ProposedAction";
 import { BrandMark } from "../components/Layout";
-import { Button, Chip, ErrorNote, Spinner, StatusChip, ThemeToggle, humanise, statusTone } from "../components/ui";
+import { Button, Chip, ErrorNote, HoldButton, Spinner, StatusChip, ThemeToggle, relativeTime, statusTone } from "../components/ui";
 import { ApiError, api, type ApprovalLinkView } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { effectLabel, formatDateTime, toolAction } from "../lib/labels";
 
 /**
  * Decide on a paused action from an email or Slack link.
@@ -68,30 +70,21 @@ export default function ApproveLink() {
           {view && (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <Chip tone={statusTone(view.side_effect)} dot={false}>{view.side_effect}</Chip>
+                <Chip tone={statusTone(view.side_effect)} dot={false}>{effectLabel(view.side_effect)}</Chip>
                 <StatusChip status={view.status} />
                 <span className="ml-auto text-xs text-dim">{view.org_name}</span>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <h1 className="font-display text-2xl font-semibold leading-tight">
-                  {view.employee_name ?? "An AI Employee"} wants to {humanise(view.tool_name)}
+                  {view.employee_name ?? "An AI Employee"} wants to {toolAction(view.tool_name)}
                 </h1>
                 {view.task_title && <p className="text-sm text-muted">Task: {view.task_title}</p>}
               </div>
 
               <div className="flex flex-col gap-2">
                 <span className="text-xs font-medium uppercase tracking-wider text-dim">Exactly what it will do</span>
-                <dl className="flex max-h-[360px] flex-col gap-3 overflow-auto rounded-xl border border-line bg-raised p-4">
-                  {Object.entries(view.proposed).map(([key, value]) => (
-                    <div key={key} className="flex flex-col gap-1">
-                      <dt className="font-mono text-xs text-dim">{key}</dt>
-                      <dd className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                        {Array.isArray(value) ? value.join(", ") : typeof value === "string" ? value : JSON.stringify(value, null, 2)}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
+                <ProposedAction values={view.proposed as Record<string, unknown>} />
               </div>
 
               <ErrorNote message={error} />
@@ -107,17 +100,29 @@ export default function ApproveLink() {
                 ) : (
                   <>
                     <div className="flex flex-wrap gap-3">
+                      {/* The same rule as in the app: anything that can't be
+                          undone needs a one-second hold, not a single tap. */}
+                      {view.side_effect === "destructive" ? (
+                        <HoldButton
+                          className={`flex-1 ${intent === "approve" ? "ring-2 ring-ok ring-offset-2 ring-offset-panel" : ""}`}
+                          disabled={busy !== null}
+                          onConfirm={() => void decide(true)}
+                        >
+                          {busy === "approve" ? "Approving…" : "Hold to approve"}
+                        </HoldButton>
+                      ) : (
+                        <Button
+                          variant="ok"
+                          icon="check"
+                          className={`flex-1 ${intent === "approve" ? "ring-2 ring-ok ring-offset-2 ring-offset-panel" : ""}`}
+                          disabled={busy !== null}
+                          onClick={() => void decide(true)}
+                        >
+                          {busy === "approve" ? "Approving…" : "Approve"}
+                        </Button>
+                      )}
                       <Button
-                        variant="ok"
-                        icon="check"
-                        className={`flex-1 ${intent === "approve" ? "ring-2 ring-ok ring-offset-2 ring-offset-panel" : ""}`}
-                        disabled={busy !== null}
-                        onClick={() => void decide(true)}
-                      >
-                        {busy === "approve" ? "Approving…" : "Approve"}
-                      </Button>
-                      <Button
-                        variant="danger"
+                        variant="danger-ghost"
                         icon="x"
                         className={`flex-1 ${intent === "reject" ? "ring-2 ring-bad ring-offset-2 ring-offset-panel" : ""}`}
                         disabled={busy !== null}
@@ -128,7 +133,8 @@ export default function ApproveLink() {
                     </div>
                     <p className="text-xs text-dim">
                       {view.acting_as ? `Deciding as ${view.acting_as}. ` : me ? `Deciding as ${me.email}. ` : ""}
-                      Expires {new Date(view.expires_at).toLocaleString()}.
+                      Expires {relativeTime(view.expires_at)} ({formatDateTime(view.expires_at)}).
+                      {view.side_effect === "destructive" && " Hold Approve for a second, or press Enter twice."}
                     </p>
                   </>
                 )

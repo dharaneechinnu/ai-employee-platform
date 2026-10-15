@@ -33,6 +33,28 @@ from app.db.models.provider import (
 
 log = get_logger(__name__)
 
+# "Use whichever AI the company connected." `gemini-flash` is the old
+# default, which was never a real Gemini model id, so it is treated the
+# same way rather than sent to Google and rejected.
+AUTO_MODEL = "auto"
+_AUTO_ALIASES = {AUTO_MODEL, "gemini-flash", ""}
+
+# When several providers are connected, the first working one in this
+# order wins: the free tiers first.
+_AUTO_PREFERENCE = ["gemini", "groq", "deepseek", "openrouter", "openai"]
+
+
+def split_model(model: str) -> tuple[str, str]:
+    """Accept "gemini:gemini-2.0-flash" or a bare model name.
+
+    A bare name defaults to Gemini, which is the documented starting
+    provider, so existing configuration keeps working.
+    """
+    if ":" in model:
+        provider_key, _, name = model.partition(":")
+        return provider_key, name
+    return "gemini", model
+
 
 @dataclass(slots=True)
 class ConnectedProvider:
@@ -160,6 +182,33 @@ class ProviderService:
         if config is None:
             raise NotFoundError(f"'{provider_key}' is not connected.")
         return config
+
+    async def resolve_model(self, configured: str) -> tuple[str, str]:
+        """The provider and model a run should use.
+
+        An explicit "provider:model" is used as it is. "auto" picks the
+        company's connected provider (a working one first) and that
+        provider's default model, so a new company that connected only
+        Groq does not fail on a Gemini default it never set up.
+        """
+        if configured.strip() not in _AUTO_ALIASES:
+            return split_model(configured)
+
+        candidates = [c for c in await self.connected() if c.default_model]
+        if not candidates:
+            raise NotFoundError("No AI provider is connected.")
+
+        def rank(c: ConnectedProvider) -> tuple[int, int]:
+            failed = 1 if c.status is ConnectionStatus.FAILED else 0
+            order = (
+                _AUTO_PREFERENCE.index(c.provider_key)
+                if c.provider_key in _AUTO_PREFERENCE
+                else len(_AUTO_PREFERENCE)
+            )
+            return failed, order
+
+        best = min(candidates, key=rank)
+        return best.provider_key, best.default_model or ""
 
     async def resolve_api_key(self, provider_key: str) -> str:
         """Decrypt a key for an outbound call.

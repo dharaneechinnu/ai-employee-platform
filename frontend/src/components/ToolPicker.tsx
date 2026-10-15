@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ConnectionItem, type ToolEntry } from "../lib/api";
 import { Icon, type IconName } from "./icons";
+import { effectLabel, toolLabel } from "../lib/labels";
+import PermissionChoice from "./PermissionChoice";
 import { Chip, humanise, statusTone } from "./ui";
 
 /**
@@ -22,6 +24,7 @@ const PACKS: Record<string, { label: string; icon: IconName }> = {
   memory: { label: "Memory", icon: "memory" },
   delegation: { label: "Teamwork", icon: "tree" },
 };
+
 
 export function ToolPicker({
   orgId,
@@ -90,24 +93,40 @@ export function ToolPicker({
                 Select all
               </label>
               {inPack.map((tool) => (
-                <label key={tool.name} className="flex cursor-pointer items-start gap-2.5 rounded-lg px-1.5 py-1.5 hover:bg-panel">
-                  <input
-                    type="checkbox"
-                    className="mt-1 accent-[var(--accent)]"
-                    checked={chosen.has(tool.name)}
-                    onChange={(e) => toggle([tool.name], e.target.checked)}
-                  />
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-mono text-[13px]">{tool.name}</span>
-                      <Chip tone={statusTone(tool.side_effect)} dot={false}>{tool.side_effect}</Chip>
-                      <Chip tone={statusTone(tool.effective_setting)} dot={false}>
-                        {tool.effective_setting === "ask" ? "asks first" : tool.effective_setting}
-                      </Chip>
+                <div key={tool.name} className="flex flex-col gap-2 rounded-lg px-1.5 py-1.5 hover:bg-panel">
+                  <label className="flex cursor-pointer items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-[var(--accent)]"
+                      checked={chosen.has(tool.name)}
+                      onChange={(e) => toggle([tool.name], e.target.checked)}
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[13px] font-medium text-ink" title={tool.name}>{toolLabel(tool.name)}</span>
+                        {tool.side_effect !== "read" && (
+                          <Chip tone={statusTone(tool.side_effect)} dot={false}>{effectLabel(tool.side_effect)}</Chip>
+                        )}
+                      </span>
+                      <span className="text-xs leading-snug text-dim">{tool.description}</span>
                     </span>
-                    <span className="text-xs leading-snug text-dim">{tool.description}</span>
-                  </span>
-                </label>
+                  </label>
+                  {/* The permission for this tool, right where it is chosen.
+                      It is a company-wide rule, so it is only offered for
+                      tools that are ticked, to keep the list calm. */}
+                  {chosen.has(tool.name) && (
+                    <div className="pl-[26px]">
+                      <PermissionChoice
+                        orgId={orgId}
+                        tool={tool}
+                        size="sm"
+                        onSaved={(setting) =>
+                          setTools((current) => current?.map((t) => (t.name === tool.name ? { ...t, effective_setting: setting } : t)) ?? null)
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </details>

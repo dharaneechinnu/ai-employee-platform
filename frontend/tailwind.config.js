@@ -38,8 +38,8 @@ export default {
         bad: { DEFAULT: token("bad"), soft: token("bad-soft"), text: token("bad-text"), on: token("on-bad") },
       },
       fontFamily: {
-        display: ["Outfit", "ui-sans-serif", "system-ui", "sans-serif"],
-        sans: ["'DM Sans'", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Geist", "ui-sans-serif", "system-ui", "'Segoe UI'", "sans-serif"],
+        sans: ["Geist", "ui-sans-serif", "system-ui", "'Segoe UI'", "sans-serif"],
         mono: ["'Geist Mono'", "ui-monospace", "Menlo", "monospace"],
       },
       boxShadow: {

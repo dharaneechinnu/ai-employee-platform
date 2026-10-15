@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack. 125 tests passing, 71 API operations, 27 agent tools. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, and a guided welcome tour. 139 tests passing, 74 API operations, 27 agent tools. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -63,11 +63,21 @@ A tool that isn't ticked doesn't exist as far as that employee is concerned: it 
 
 ![Tool picker: Gmail tools ticked, sending asks first](docs/screenshots/03-tool-picker.png)
 
-### 5. Permission rules: read freely, ask before acting
+### 5. Always allow, Ask me first, or Blocked: for every tool
 
-Every tool is labelled **read**, **write** or **destructive**. By default, reading runs on its own, writing asks first, and anything destructive asks first or is blocked. Each company can make a rule looser or stricter for a whole pack or for one tool.
+Every tool gets one of three settings, chosen right where you use it: on each connected app (Connections), next to each ticked tool in an AI Employee's **Tools & AI** panel, and on the Permissions page.
 
-![Permissions per tool](docs/screenshots/10-permissions.png)
+- **Always allow**: it runs straight away, with **no human approval**.
+- **Ask me first**: the run pauses until a person approves.
+- **Blocked**: it never runs.
+
+By default, reading is always allowed and sending asks first. Switching something that can't be undone (like sending an email) to Always allow asks you once more, in plain words. The rule is company-wide, and specialists that a manager hands work to follow it too. A tiny list of catastrophic actions (deleting a repository, force-pushing, emailing all contacts) can never be allowed.
+
+![Each connected app lists its tools with a switch](docs/screenshots/19-tool-permissions.png)
+
+![Always allow on a send asks once more](docs/screenshots/20-always-allow-confirm.png)
+
+![The Permissions page](docs/screenshots/10-permissions.png)
 
 ### 6. A person approves risky actions, and the run waits
 
@@ -83,7 +93,7 @@ Admins get an email with their own **Approve / Reject** link, and a Slack channe
 
 ### 8. A manager can delegate to specialists
 
-A manager AI Employee can ask colleagues to do part of the work, and the agent tree shows it live. It's **one level deep on purpose**: errors multiply with every hop, so specialists cannot pass work on again. At most three specialists per run, each with a smaller step budget, and all under the same permission rules.
+A manager AI Employee can ask colleagues to do part of the work, and the agent tree shows it live. It's **one level deep on purpose**: errors multiply with every hop, so specialists cannot pass work on again. At most three specialists per run, each with a smaller step budget. Specialists follow the same permission rules; a step that needs a person's approval is handed back to the manager, where the normal approval happens.
 
 ![Agent tree: Ravi delegates to Kiran and Meera](docs/screenshots/05-agent-tree.png)
 
@@ -126,6 +136,20 @@ An AI Employee is set up by answering three plain questions: what it should do, 
 Email or Slack messages when an approval is needed, when a task fails, or when it finishes. Each event can be turned on or off per company.
 
 ![Notification settings: email and Slack](docs/screenshots/11-notifications.png)
+
+### 15. Speak the task instead of typing it
+
+Press the mic, say what you need, press it again: the words appear in the task box, ready to check before you assign. It uses **Whisper Large v3 Turbo** (open source, very good with Indian accents) through the company's own **Groq** key, so it costs the platform nothing. A company without a Groq key gets the browser's built-in voice typing instead. Recordings are never stored, and approvals stay button-only on purpose: voice can ask, but never approve.
+
+![Voice typing: the mic is listening](docs/screenshots/16-voice-input.png)
+
+### 16. A welcome tour, and tips exactly when you need them
+
+New people get a short animated welcome, then a spotlight tour of each screen the first time they open it. Tips for a feature appear the first time it shows up (opening an AI Employee's tools, a first run, a first approval). Tips only show what that person can use: members skip admin tips, and phones skip what's tucked in the menu. The **?** button replays any tour, and tips can be turned off.
+
+![The welcome intro](docs/screenshots/17-welcome.png)
+
+![A coachmark spotlighting the task box](docs/screenshots/18-coachmarks.png)
 
 ---
 
@@ -187,7 +211,7 @@ already works and is tested.
 
 ```bash
 docker compose up --build        # all five services
-make test                        # 125 tests
+make test                        # 139 tests
 make lint                        # ruff + mypy strict
 ```
 
@@ -218,11 +242,12 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 | Check | Result |
 |---|---|
-| Tests | 125 passing: unit, tenant isolation, and integration against real Postgres |
+| Tests | 139 passing: unit, tenant isolation, and integration against real Postgres |
 | Types | mypy **strict**, zero errors |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
-| Migrations | 7, each verified forward *and* backward |
+| Migrations | 8, each verified forward *and* backward |
 | Frontend | TypeScript strict build; screens checked in dark, light and phone widths |
+| UX audit | Every screen checked as admin and member, on desktop and phone, with the `icp-ux-audit` skill (`.claude/skills/`) |
 
 ---
 
@@ -237,3 +262,4 @@ The same files are in this repository under `docs/`:
 | 🎬 **[Narrated ad](docs/product-ad.mp4)** (1:08) | Six features with title cards, zooms and spotlights, a voiceover in sync with subtitles, and music |
 | 🖥️ **[Live demo](docs/product-demo.mp4)** (0:58) | The real app recorded in use, start to finish |
 | ✨ **[Animated overview](docs/product-film.mp4)** (1:05) | An illustrated tour of the features |
+| 🧭 **[Welcome and tips](docs/coachmarks-demo.mp4)** (0:48) | The first-sign-in welcome, then the spotlight tour gliding across Tasks and AI Employees |

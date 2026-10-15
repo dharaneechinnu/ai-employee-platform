@@ -39,7 +39,9 @@ class EmployeeConfig(BaseModel):
     # built from the guided answers rather than being appended to it.
     raw_instructions: str | None = Field(default=None, max_length=20000)
 
-    model: str = "gemini-flash"
+    # "auto" uses whichever AI provider the company connected; or pin
+    # one as "provider:model", e.g. "groq:llama-3.3-70b-versatile".
+    model: str = Field(default="auto", max_length=200)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_steps: int = Field(default=DEFAULT_MAX_STEPS, ge=1, le=100)
     enabled_tools: list[str] = Field(default_factory=list)

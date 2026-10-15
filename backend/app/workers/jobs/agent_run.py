@@ -107,9 +107,10 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         assert run_db is not None
         writer = EventWriter(session, run_db.id, task.org_id)
 
-        provider_key, model = _split_model(config.model)
+        providers = ProviderService(session, task.org_id)
         try:
-            api_key = await ProviderService(session, task.org_id).resolve_api_key(provider_key)
+            provider_key, model = await providers.resolve_model(config.model)
+            api_key = await providers.resolve_api_key(provider_key)
         except NotFoundError:
             # No key connected. A clear message beats a mysterious
             # failure three steps into a run.
@@ -121,8 +122,8 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 RunStatus.FAILED,
                 stop_cause="provider_not_connected",
                 error=(
-                    f"No API key is connected for '{provider_key}'. "
-                    "Connect one in Settings before running tasks."
+                    "No AI key is connected for this AI Employee's model. "
+                    "An admin can add one in Providers."
                 ),
             )
 
@@ -286,15 +287,3 @@ async def _finish(
     if task is not None:
         await notify_safely(NotificationService(session, run.org_id).task_finished(task, run))
     return {"status": str(status), "stop_cause": stop_cause, "run_id": str(run.id)}
-
-
-def _split_model(model: str) -> tuple[str, str]:
-    """Accept "gemini:gemini-2.0-flash" or a bare model name.
-
-    A bare name defaults to Gemini, which is the documented starting
-    provider, so existing configuration keeps working.
-    """
-    if ":" in model:
-        provider_key, _, name = model.partition(":")
-        return provider_key, name
-    return "gemini", model

@@ -14,7 +14,8 @@ export type Theme = "dark" | "light";
 const KEY = "theme";
 
 function systemTheme(): Theme {
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  // Light unless the device asks for dark: the calmer default for work.
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function storedTheme(): Theme | null {
@@ -42,7 +43,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Follow the OS until the user has made a choice of their own.
   useEffect(() => {
-    const query = window.matchMedia("(prefers-color-scheme: light)");
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
       if (!storedTheme()) setTheme(systemTheme());
     };

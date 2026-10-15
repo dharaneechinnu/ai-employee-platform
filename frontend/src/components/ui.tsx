@@ -66,11 +66,15 @@ export function HoldButton({
   onConfirm,
   variant = "ok",
   ms = 1200,
+  className = "",
+  disabled,
 }: {
   children: ReactNode;
   onConfirm: () => void;
   variant?: Variant;
   ms?: number;
+  className?: string;
+  disabled?: boolean;
 }) {
   const [holding, setHolding] = useState(false);
   const [armed, setArmed] = useState(false);
@@ -108,7 +112,8 @@ export function HoldButton({
   return (
     <button
       type="button"
-      className={`btn hold ${VARIANT_CLASS[variant]}`}
+      className={`btn hold ${VARIANT_CLASS[variant]} ${className}`}
+      disabled={disabled}
       data-holding={holding}
       onPointerDown={start}
       onPointerUp={stop}
@@ -147,18 +152,19 @@ export function Card({
 
 /** The bar at the top of every screen: where you are, the screen's actions, the theme switch. */
 export function PageHeader({
-  crumb,
   title,
   children,
 }: {
+  /** Kept for callers; no longer shown, as the menu already says it. */
   crumb?: ReactNode;
   title: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-[18px] sm:px-6 lg:px-10">
+      {/* The menu already shows which section this page is in, so the
+          small section label above the title is not repeated here. */}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        {crumb && <div className="flex items-center gap-2 truncate text-[13px] text-dim">{crumb}</div>}
         <h1 className="truncate font-display text-[26px] font-semibold tracking-[-0.02em]">{title}</h1>
       </div>
       {children}
@@ -347,7 +353,7 @@ export function Tabs<K extends string>({
           onClick={() => onChange(item.key)}
         >
           {item.label}
-          {item.count !== undefined && <b className="font-mono text-[11px] font-medium text-dim">{item.count}</b>}
+          {item.count !== undefined && <b className="font-mono text-xs font-medium text-dim">{item.count}</b>}
         </button>
       ))}
     </div>
@@ -534,8 +540,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((toast) => (
           <div
             key={toast.id}
-            className="pointer-events-auto flex min-w-[260px] max-w-sm items-center gap-3 rounded-[14px] border border-line2 bg-panel px-4 py-3 text-sm shadow-lift"
-            style={{ animation: "toast-in .45s cubic-bezier(.16,1,.3,1) both" }}
+            className="pointer-events-auto flex min-w-[260px] max-w-sm items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-lift"
+            style={{ animation: "toast-in .2s cubic-bezier(.2,0,0,1) both" }}
           >
             <span
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] ${

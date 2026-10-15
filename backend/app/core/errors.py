@@ -84,6 +84,14 @@ class LimitReachedError(ConflictError):
     default_message = "You have reached your plan limit."
 
 
+class UpstreamError(AppError):
+    """A service we call on the company's behalf failed."""
+
+    status_code = 502
+    error_code = "upstream_error"
+    default_message = "An outside service did not respond properly. Try again."
+
+
 class RateLimitError(AppError):
     status_code = 429
     error_code = "rate_limited"
