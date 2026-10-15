@@ -30,7 +30,9 @@ const server = spawn(process.execPath, [new URL("./demo/server.mjs", import.meta
 await new Promise((ready) => server.stdout.once("data", ready));
 
 const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: "light" });
+// The floating help button would sit on top of every picture.
+await page.addInitScript(() => document.addEventListener("DOMContentLoaded", () => { const st = document.createElement("style"); st.textContent = ".coach-help{display:none!important}"; document.head.appendChild(st); }));
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 

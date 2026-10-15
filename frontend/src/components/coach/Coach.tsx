@@ -233,7 +233,6 @@ function prefersReducedMotion(): boolean {
 function Spotlight({ steps, onDone, onTurnOff }: { steps: CoachStep[]; onDone: () => void; onTurnOff: () => void }) {
   const [index, setIndex] = useState(0);
   const [leaving, setLeaving] = useState(false);
-  const [burst, setBurst] = useState<{ x: number; y: number } | null>(null);
   const [nudge, setNudge] = useState(0);
   const step = steps[index];
   const last = index === steps.length - 1;
@@ -245,7 +244,6 @@ function Spotlight({ steps, onDone, onTurnOff }: { steps: CoachStep[]; onDone: (
   const arrow = useRef<HTMLDivElement>(null);
   const primary = useRef<HTMLButtonElement>(null);
   const shown = useRef<Rect | null>(null);
-  const velocity = useRef<Rect>({ x: 0, y: 0, w: 0, h: 0 });
   const targetRef = useRef<Rect>({ x: 0, y: 0, w: 0, h: 0 });
 
   // Bring the step's element into view when the step changes.
@@ -278,12 +276,10 @@ function Spotlight({ steps, onDone, onTurnOff }: { steps: CoachStep[]; onDone: (
       const t = targetRef.current;
       if (!shown.current || reduce) shown.current = { ...t };
       else {
-        // A critically-damped-ish spring: quick, with a whisper of overshoot.
+        // Ease towards the target with no overshoot: it glides and settles.
         const s = shown.current;
-        const v = velocity.current;
         for (const k of ["x", "y", "w", "h"] as const) {
-          v[k] = (v[k] + (t[k] - s[k]) * 0.13) * 0.74;
-          s[k] += v[k];
+          s[k] += (t[k] - s[k]) * 0.2;
         }
       }
       const s = shown.current;
@@ -358,7 +354,7 @@ function Spotlight({ steps, onDone, onTurnOff }: { steps: CoachStep[]; onDone: (
   const close = useCallback(
     (done: () => void) => {
       setLeaving(true);
-      window.setTimeout(done, prefersReducedMotion() ? 0 : 380);
+      window.setTimeout(done, prefersReducedMotion() ? 0 : 200);
     },
     [],
   );
@@ -368,9 +364,7 @@ function Spotlight({ steps, onDone, onTurnOff }: { steps: CoachStep[]; onDone: (
       setIndex((i) => i + 1);
       return;
     }
-    const s = shown.current;
-    if (s && !prefersReducedMotion()) setBurst({ x: s.x + s.w / 2, y: s.y + s.h / 2 });
-    window.setTimeout(() => close(onDone), 420);
+    close(onDone);
   }, [last, close, onDone]);
 
   const back = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
@@ -444,27 +438,6 @@ function Spotlight({ steps, onDone, onTurnOff }: { steps: CoachStep[]; onDone: (
         </div>
       </div>
 
-      {burst && (
-        <div className="coach-burst" style={{ left: burst.x, top: burst.y }} aria-hidden="true">
-          {Array.from({ length: 22 }, (_, i) => {
-            const angle = (i / 22) * Math.PI * 2;
-            const dist = 70 + (i % 4) * 28;
-            return (
-              <i
-                key={i}
-                style={
-                  {
-                    "--dx": `${Math.cos(angle) * dist}px`,
-                    "--dy": `${Math.sin(angle) * dist}px`,
-                    "--hue": `${(i * 37) % 360}`,
-                    animationDelay: `${(i % 3) * 30}ms`,
-                  } as React.CSSProperties
-                }
-              />
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

@@ -204,12 +204,7 @@ export default function Members() {
                 <div
                   role="status"
                   className="flex flex-col gap-2 rounded-[14px] border border-accent-line p-3.5"
-                  style={{
-                    background:
-                      "linear-gradient(90deg,var(--sunken) 0%,var(--sunken) 40%,var(--accent-soft) 50%,var(--sunken) 60%,var(--sunken) 100%)",
-                    backgroundSize: "250% 100%",
-                    animation: "rise .45s cubic-bezier(.16,1,.3,1) both, shimmer 4s linear .5s infinite",
-                  }}
+                  style={{ background: "var(--accent-soft)", animation: "rise .3s cubic-bezier(.2,0,0,1) both" }}
                 >
                   <span className="text-xs text-accent-text">
                     Shown once. Send it to {link.email} yourself; there is no email service.

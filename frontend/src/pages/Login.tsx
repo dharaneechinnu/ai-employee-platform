@@ -46,19 +46,14 @@ export default function Login() {
     <div className="flex min-h-screen flex-wrap">
       <AuthStage
         headline="Your AI team, already at work."
-        ticker="Assign a task. Watch it run. Approve what matters."
-        orbit={[
-          { label: "Manager", tone: "var(--run)", live: true },
-          { label: "Specialist", tone: "var(--ok)" },
-          { label: "Needs you", tone: "var(--ask)" },
-        ]}
+        ticker="AI Employees that do real work in your email, calendar, files and data, while you stay in control."
       />
 
       <section className="flex flex-[1_1_440px] items-center justify-center px-6 py-12">
-        <div className="halo rise w-full max-w-[420px] rounded-3xl p-[1.5px]" style={{ boxShadow: "0 40px 120px -50px var(--glow)", animationDelay: ".15s" }}>
-          <form onSubmit={submit} className="flex flex-col gap-5 rounded-[23px] bg-panel p-8 transition-colors duration-500 sm:p-9">
+        <div className="rise w-full max-w-[400px]">
+          <form onSubmit={submit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
-              <h2 className="font-display text-[28px] font-semibold tracking-[-0.02em]">{inviteToken ? "Join your company" : "Sign in"}</h2>
+              <h2 className="font-display text-[26px] font-semibold tracking-[-0.02em]">{inviteToken ? "Join your company" : "Sign in"}</h2>
               <p className="text-sm text-muted">
                 {inviteToken ? "Set a password to accept the invitation." : "Welcome back to your workspace."}{" "}
                 <Link to="/" className="text-accent-text hover:underline">
@@ -98,7 +93,7 @@ export default function Login() {
 
             <ErrorNote message={error} />
 
-            <button type="submit" disabled={busy} className="btn btn-primary h-[50px] rounded-[14px] text-[15px]">
+            <button type="submit" disabled={busy} className="btn btn-primary h-11 text-[15px]">
               {busy ? "Working…" : inviteToken ? "Join" : "Sign in"}
               {!busy && <Icon name="arrow" size={18} strokeWidth={2} />}
             </button>
@@ -116,80 +111,52 @@ export default function Login() {
 }
 
 /**
- * The animated left half of both sign-in pages: drifting light, a
- * moving grid, and a few labels orbiting the brand mark.
+ * The left half of both sign-in pages: the brand, one clear line about
+ * the product and three plain benefits. Calm on purpose; the work is on
+ * the right.
  */
 export function AuthStage({
   headline,
   ticker,
-  orbit,
+  points = [
+    "Assign work in plain words, or just say it",
+    "Anything risky waits for your approval",
+    "Every step is on record, with what it cost",
+  ],
   badge,
 }: {
   headline: string;
   ticker: string;
-  orbit: { label: string; tone: string; live?: boolean }[];
+  points?: string[];
   badge?: string;
 }) {
-  const positions = [
-    { left: 130, top: -22 },
-    { left: -50, top: 230 },
-    { left: 250, top: 240 },
-  ];
-
   return (
-    <section className="relative flex min-h-[560px] flex-[1_1_560px] flex-col justify-between overflow-hidden border-line px-6 py-10 sm:px-14 lg:border-r">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0"
-        style={{
-          backgroundImage: "linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px)",
-          backgroundSize: "48px 48px",
-          maskImage: "radial-gradient(ellipse at center,#000 30%,transparent 75%)",
-          WebkitMaskImage: "radial-gradient(ellipse at center,#000 30%,transparent 75%)",
-        }}
-      />
-      <div aria-hidden="true" className="absolute left-[-120px] top-[10%] h-[520px] w-[520px] rounded-full opacity-40 blur-[70px]" style={{ background: "var(--accent)", animation: "drift 16s ease-in-out infinite" }} />
-      <div aria-hidden="true" className="absolute -bottom-16 -right-24 h-[420px] w-[420px] rounded-full opacity-20 blur-[70px]" style={{ background: "var(--spark)", animation: "drift 16s ease-in-out -6s infinite" }} />
-
-      <div className="rise relative flex items-center gap-3">
-        <BrandMark size={40} />
-        <span className="flex-1 font-display text-lg font-semibold">AI Employees</span>
-        {badge && (
-          <span className="rounded-full bg-accent-soft px-3 py-1 font-mono text-xs tracking-[0.12em] text-accent-text">{badge}</span>
-        )}
+    <section className="relative flex flex-[1_1_520px] flex-col justify-between gap-12 border-line bg-raised px-6 py-10 sm:px-14 lg:min-h-screen lg:border-r">
+      <div className="flex items-center gap-3">
+        <BrandMark size={32} />
+        <span className="flex-1 font-display text-[17px] font-semibold">AI Employees</span>
+        {badge && <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent-text">{badge}</span>}
         <ThemeToggle />
       </div>
 
-      <div aria-hidden="true" className="relative mx-auto my-6 flex h-[340px] w-[340px] max-w-full items-center justify-center">
-        <div className="absolute h-[340px] w-[340px] rounded-full border border-dashed border-line2" />
-        <div className="absolute h-[210px] w-[210px] rounded-full border border-line2" />
-        <div className="absolute h-[340px] w-[340px]" style={{ animation: "spin 30s linear infinite" }}>
-          {orbit.slice(0, 3).map((item, i) => (
-            <div
-              key={item.label}
-              className="absolute flex items-center gap-2 whitespace-nowrap rounded-xl border border-line2 bg-panel px-3 py-2 text-[13px] shadow-lift"
-              style={{ ...positions[i], animation: "spin 30s linear infinite reverse" }}
-            >
-              <i className={`block h-2 w-2 rounded-full ${item.live ? "live-run" : ""}`} style={{ background: item.tone }} />
-              {item.label}
-            </div>
-          ))}
-        </div>
-        <div className="halo float h-[120px] w-[120px] rounded-[34px] p-0.5" style={{ animation: "ring 5s linear infinite, float 5s ease-in-out infinite" }}>
-          <div className="flex h-full w-full items-center justify-center rounded-[32px]" style={{ background: "linear-gradient(135deg,var(--accent),var(--accent2) 60%,var(--spark))" }}>
-            <div className="h-[30px] w-[30px] rounded-[9px]" style={{ background: "var(--on-accent)" }} />
-          </div>
-        </div>
-      </div>
-
-      <div className="relative flex max-w-[520px] flex-col gap-3.5">
-        <h1 className="rise spectrum-text text-balance font-display text-[40px] font-bold leading-[1.05] tracking-[-0.035em] sm:text-[52px]" style={{ animationDelay: ".1s" }}>
+      <div className="rise flex max-w-[520px] flex-col gap-6">
+        <h1 className="text-balance font-display text-[36px] font-semibold leading-[1.1] tracking-[-0.025em] sm:text-[46px]">
           {headline}
         </h1>
-        <p className="rise font-mono text-sm text-accent-text" style={{ animationDelay: ".2s" }}>
-          {ticker}
-        </p>
+        <p className="text-[17px] leading-relaxed text-muted">{ticker}</p>
+        <ul className="flex flex-col gap-3.5">
+          {points.map((point) => (
+            <li key={point} className="flex items-center gap-3 text-[15px]">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-text">
+                <Icon name="check" size={13} strokeWidth={2.6} />
+              </span>
+              {point}
+            </li>
+          ))}
+        </ul>
       </div>
+
+      <p className="text-[13px] text-dim">For operations, sales, HR and engineering teams.</p>
     </section>
   );
 }

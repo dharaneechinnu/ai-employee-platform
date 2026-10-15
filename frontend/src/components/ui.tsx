@@ -539,8 +539,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((toast) => (
           <div
             key={toast.id}
-            className="pointer-events-auto flex min-w-[260px] max-w-sm items-center gap-3 rounded-[14px] border border-line2 bg-panel px-4 py-3 text-sm shadow-lift"
-            style={{ animation: "toast-in .45s cubic-bezier(.16,1,.3,1) both" }}
+            className="pointer-events-auto flex min-w-[260px] max-w-sm items-center gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-lift"
+            style={{ animation: "toast-in .2s cubic-bezier(.2,0,0,1) both" }}
           >
             <span
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] ${

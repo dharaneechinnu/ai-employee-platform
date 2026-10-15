@@ -128,19 +128,10 @@ function ApprovalCard({
       className="card rise relative overflow-hidden"
       style={{
         animationDelay: `${index * 0.08}s`,
-        ...(destructive
-          ? { borderColor: "var(--ask)", boxShadow: "0 0 0 1px var(--ask-soft), 0 30px 60px -36px var(--ask-glow)" }
-          : {}),
+        ...(destructive ? { borderColor: "var(--ask)" } : {}),
       }}
     >
-      {destructive && (
-        <span aria-hidden="true" className="absolute inset-x-0 top-0 h-0.5 overflow-hidden">
-          <span
-            className="absolute inset-0"
-            style={{ background: "linear-gradient(90deg,transparent,var(--ask),transparent)", animation: "scan 2.4s ease-in-out infinite" }}
-          />
-        </span>
-      )}
+      {destructive && <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-ask" />}
 
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ask-soft text-ask-text">

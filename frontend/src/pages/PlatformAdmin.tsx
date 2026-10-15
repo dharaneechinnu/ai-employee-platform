@@ -144,15 +144,15 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
         badge="STAFF ONLY"
         headline="Platform control room."
         ticker="Create, limit and suspend companies. Counts and health only."
-        orbit={[
-          { label: "Companies", tone: "var(--accent)", live: true },
-          { label: "Limits", tone: "var(--ok)" },
-          { label: "Suspensions", tone: "var(--bad)" },
+        points={[
+          "Create companies and send the first invite",
+          "Set how many AI Employees each may run",
+          "Suspend an account; customer data stays private",
         ]}
       />
       <section className="flex flex-[1_1_440px] items-center justify-center px-6 py-12">
-        <div className="halo rise w-full max-w-[420px] rounded-3xl p-[1.5px]" style={{ boxShadow: "0 40px 120px -50px var(--glow)", animationDelay: ".15s" }}>
-          <form onSubmit={submit} className="flex flex-col gap-[18px] rounded-[23px] bg-panel p-8 transition-colors duration-500">
+        <div className="rise w-full max-w-[400px]">
+          <form onSubmit={submit} className="flex flex-col gap-[18px]">
             <h2 className="font-display text-2xl font-semibold">Platform sign in</h2>
             <Input label="Email" type="email" value={email} onChange={setEmail} required autoComplete="username" />
             <Input label="Password" type="password" value={password} onChange={setPassword} required autoComplete="current-password" />

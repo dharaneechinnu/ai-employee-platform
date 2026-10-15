@@ -29,16 +29,9 @@ const SLIDES = [
   },
 ] as const;
 
-function Words({ text, delay = 0 }: { text: string; delay?: number }) {
-  return (
-    <>
-      {text.split(" ").map((word, i) => (
-        <span key={i} className="welcome-word" style={{ animationDelay: `${delay + i * 34}ms` }}>
-          {word}&nbsp;
-        </span>
-      ))}
-    </>
-  );
+// Plain text: the words appear with the slide, without per-word motion.
+function Words({ text }: { text: string; delay?: number }) {
+  return <>{text}</>;
 }
 
 function TeamVisual() {

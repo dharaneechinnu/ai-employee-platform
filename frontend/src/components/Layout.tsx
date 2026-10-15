@@ -50,20 +50,9 @@ export function BrandMark({ size = 34 }: { size?: number }) {
     <span
       aria-hidden="true"
       className="relative inline-flex shrink-0 items-center justify-center rounded-[10px]"
-      style={{
-        width: size,
-        height: size,
-        background: "linear-gradient(135deg,var(--accent),var(--accent2) 60%,var(--spark))",
-        boxShadow: "0 8px 20px -10px var(--glow)",
-      }}
+      style={{ width: size, height: size, background: "var(--accent)" }}
     >
-      <span className="orbit absolute -inset-1.5">
-        <span
-          className="absolute left-1/2 top-0 h-[5px] w-[5px] -translate-x-1/2 rounded-full"
-          style={{ background: "var(--spark)", boxShadow: "0 0 8px var(--spark)" }}
-        />
-      </span>
-      <span className="h-2.5 w-2.5 rounded-[3px]" style={{ background: "var(--on-accent)" }} />
+      <span className="rounded-[3px]" style={{ width: size * 0.3, height: size * 0.3, background: "var(--on-accent)" }} />
     </span>
   );
 }
