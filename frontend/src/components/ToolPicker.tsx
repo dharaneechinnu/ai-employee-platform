@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type ConnectionItem, type ToolEntry } from "../lib/api";
 import { Icon, type IconName } from "./icons";
-import { effectLabel, toolLabel } from "../lib/labels";
+import { effectLabel, learnToolLabels, packLabel, toolLabel } from "../lib/labels";
 import PermissionChoice from "./PermissionChoice";
-import { Chip, humanise, statusTone } from "./ui";
+import { Chip, statusTone } from "./ui";
 
 /**
  * Choose which tools an AI Employee may use.
@@ -43,6 +43,7 @@ export function ToolPicker({
       api.get<ToolEntry[]>(`/orgs/${orgId}/tools`),
       api.get<ConnectionItem[]>(`/orgs/${orgId}/connections`).catch(() => [] as ConnectionItem[]),
     ]).then(([catalogue, connections]) => {
+      learnToolLabels(catalogue);
       setTools(catalogue.filter((t) => !t.permanently_blocked));
       setConnected(new Set(connections.filter((c) => c.enabled && c.status !== "needs_reconnect").map((c) => c.kind)));
     });
@@ -66,7 +67,10 @@ export function ToolPicker({
     <div className="flex flex-col gap-2.5">
       {packs.map((pack) => {
         const inPack = tools.filter((t) => t.pack === pack);
-        const meta = PACKS[pack] ?? { label: humanise(pack), icon: "sparkle" as IconName };
+        const meta = PACKS[pack] ?? {
+          label: packLabel(pack),
+          icon: (pack.startsWith("mcp__") ? "link" : "sparkle") as IconName,
+        };
         const needs = inPack.find((t) => t.requires_connection)?.requires_connection;
         const missing = needs && !connected.has(needs);
         const all = inPack.every((t) => chosen.has(t.name));

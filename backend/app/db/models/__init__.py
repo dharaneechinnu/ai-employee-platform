@@ -20,6 +20,7 @@ from app.db.models.identity import (
     Role,
     User,
 )
+from app.db.models.mcp import McpServer
 from app.db.models.memory import (
     VECTOR_TABLES,
     EmbeddingConfig,
@@ -78,6 +79,7 @@ __all__ = [
     "EventType",
     "Invitation",
     "LLMCall",
+    "McpServer",
     "Membership",
     "Memory",
     "MemoryKind",

@@ -36,6 +36,12 @@ PRICING: dict[tuple[str, str], Price] = {
     ("openai", "gpt-4o"): Price(Decimal("2.50"), Decimal("10.00")),
     # DeepSeek
     ("deepseek", "deepseek-chat"): Price(Decimal("0.27"), Decimal("1.10")),
+    # Anthropic (Claude)
+    ("anthropic", "claude-opus-5-5"): Price(Decimal("4.00"), Decimal("20.00")),
+    ("anthropic", "claude-sonnet-5-5"): Price(Decimal("2.00"), Decimal("10.00")),
+    ("anthropic", "claude-haiku-5-5"): Price(Decimal("0.10"), Decimal("0.50")),
+    # Mistral
+    ("mistral", "mistral-small-latest"): Price(Decimal("0.10"), Decimal("0.30")),
 }
 
 

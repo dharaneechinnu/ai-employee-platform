@@ -37,14 +37,21 @@ async def close_pool() -> None:
     _pool = None
 
 
-async def enqueue_task(task_id: uuid.UUID) -> str | None:
+async def enqueue_task(task_id: uuid.UUID, *, resume_after: uuid.UUID | None = None) -> str | None:
     """Queue an agent run.
 
     The job id is the task id, so a duplicate submission of the same
     task cannot start two runs of it.
+
+    A resume after an approval needs its own id (`resume_after`, the
+    approval). arq keeps a finished job's id for an hour, so reusing the
+    task id would have the resume silently dropped as a duplicate and
+    the approved task would wait for ever. Keyed by the approval, a
+    double click on Approve still queues it only once.
     """
     pool = await get_pool()
-    job = await pool.enqueue_job("run_task", str(task_id), _job_id=f"run_task:{task_id}")
+    job_id = f"run_task:{task_id}" + (f":resume:{resume_after}" if resume_after else "")
+    job = await pool.enqueue_job("run_task", str(task_id), _job_id=job_id)
     if job is None:
         log.info("task_already_queued", task_id=str(task_id))
         return None

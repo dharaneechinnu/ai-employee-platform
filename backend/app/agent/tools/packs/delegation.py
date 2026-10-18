@@ -168,6 +168,7 @@ async def _run_specialist(
     try:
         provider_key, model = await providers.resolve_model(config.model)
         api_key = await providers.resolve_api_key(provider_key)
+        base_url = await providers.resolve_base_url(provider_key)
     except Exception:  # noqa: BLE001 - reported to the manager, not raised
         return ToolResult.failure(
             "not_connected",
@@ -190,10 +191,11 @@ async def _run_specialist(
         },
     )
 
+    resolver = await PolicyService(session, ctx.org_id).resolver()  # type: ignore[arg-type]
     loop = AgentLoop(
-        provider=build_provider(provider_key, api_key),
+        provider=build_provider(provider_key, api_key, base_url=base_url),
         model=model,
-        tools=registry.for_employee(config.enabled_tools),
+        tools=registry.for_employee(config.enabled_tools, extra=resolver.extra_tools),
         tool_context=nested_context,
         # A smaller budget than the manager: a specialist is doing one
         # part of the job, and a nested runaway is harder to notice.
@@ -201,7 +203,7 @@ async def _run_specialist(
         temperature=config.temperature,
         # The company's permission rules apply to specialists too, so a
         # tool set to "Blocked" stays blocked however the work arrives.
-        check_policy=specialist_policy(await PolicyService(session, ctx.org_id).resolver()),  # type: ignore[arg-type]
+        check_policy=specialist_policy(resolver),
     )
 
     outcome = await loop.run(

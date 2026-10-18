@@ -16,7 +16,7 @@ import {
 } from "../components/ui";
 import { ApiError, api, type PolicyRow, type ToolEntry } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { effectLabel, packLabel, plainReason, toolLabel } from "../lib/labels";
+import { effectLabel, learnToolLabels, packLabel, plainReason, toolLabel } from "../lib/labels";
 
 /**
  * Phase 5. The platform sets a default; a company may move any action
@@ -86,7 +86,9 @@ export default function Policies() {
   async function load() {
     if (!org) return;
     setRows(await api.get<PolicyRow[]>(`/orgs/${org.id}/policies`));
-    setTools(await api.get<ToolEntry[]>(`/orgs/${org.id}/tools`));
+    const catalogue = await api.get<ToolEntry[]>(`/orgs/${org.id}/tools`);
+    learnToolLabels(catalogue);
+    setTools(catalogue);
   }
 
   useEffect(() => {

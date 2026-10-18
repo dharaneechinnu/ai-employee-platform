@@ -32,7 +32,7 @@ def stub_sender(monkeypatch: pytest.MonkeyPatch) -> None:
     """A model that asks to send an email, then finishes once allowed."""
     import app.workers.jobs.agent_run as job
 
-    monkeypatch.setattr(job, "build_provider", lambda key, api_key: SendsThenAnswers(api_key))
+    monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: SendsThenAnswers(api_key))
 
 
 @pytest.fixture
@@ -312,7 +312,7 @@ async def test_approve_from_an_email_link_resumes_the_run(
 
     queued: list[uuid.UUID] = []
 
-    async def fake_enqueue(task_id: uuid.UUID) -> str:
+    async def fake_enqueue(task_id: uuid.UUID, **_: object) -> str:
         queued.append(task_id)
         return "job"
 
@@ -373,7 +373,7 @@ async def test_a_slack_link_needs_a_signed_in_admin(
 ) -> None:
     import app.api.v1.routes.approval_links as links
 
-    async def fake_enqueue(task_id: uuid.UUID) -> str:
+    async def fake_enqueue(task_id: uuid.UUID, **_: object) -> str:
         return "job"
 
     monkeypatch.setattr(links, "enqueue_task", fake_enqueue)

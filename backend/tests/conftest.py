@@ -7,6 +7,8 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 os.environ.setdefault("ENVIRONMENT", "test")
+# Tests check the production rule, whatever a developer's .env says.
+os.environ["ALLOW_PRIVATE_URLS"] = "false"
 
 
 @pytest.fixture

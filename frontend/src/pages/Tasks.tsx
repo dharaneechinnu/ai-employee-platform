@@ -406,7 +406,15 @@ function RunPanel({
       // finished before this page opened still shows its full trace.
       const trace = await api.get<{ events: RunEvent[] }>(`/orgs/${org.id}/runs/${loaded.run.id}/trace`);
       if (cancelled) return;
-      setEvents(trace.events);
+      // The saved trace nests each event's fields under `payload`; the
+      // live stream sends them flat. Same shape for both, so a finished
+      // run's timeline names its tools just like a live one.
+      setEvents(
+        trace.events.map((e) => {
+          const { payload, ...rest } = e as RunEvent & { payload?: Record<string, unknown> };
+          return { ...(payload ?? {}), ...rest } as RunEvent;
+        }),
+      );
 
       if (["running", "awaiting_approval", "queued"].includes(loaded.run.status)) {
         const lastSeq = trace.events.at(-1)?.seq ?? 0;

@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, and a guided welcome tour. 139 tests passing, 74 API operations, 27 agent tools. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, a guided welcome tour, any AI provider (Claude, ChatGPT, Gemini or your own open-source model server) and MCP tool servers. 163 tests passing, 80 API operations, 27 built-in agent tools plus any tools an MCP server offers. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -39,7 +39,7 @@ The AI Employee plans a step, calls a tool, reads the result, and decides what t
 
 ![A run streaming its steps live](docs/screenshots/04-live-run.png)
 
-### 2. It uses real tools: 27 of them, in 7 packs
+### 2. It uses real tools: 27 built in, in 7 packs, plus any MCP server
 
 | Pack | What the AI Employee can do |
 |---|---|
@@ -50,6 +50,7 @@ The AI Employee plans a step, calls a tool, reads the result, and decides what t
 | **Web** | Read a public web page from the sites a company allows |
 | **Memory** | Remember facts and recall them later |
 | **Teamwork** | Hand part of the job to another AI Employee |
+| **MCP tool servers** | Whatever tools a connected MCP server offers: a CRM, a help desk, an internal API. See feature 17 |
 
 ### 3. One-click connections, and secrets never reach the AI
 
@@ -125,7 +126,7 @@ Each event (thinking, model call, tool call, result, approval) goes into an appe
 
 ### 13. Plain-English setup, and your own AI key
 
-An AI Employee is set up by answering three plain questions: what it should do, what it must never do, and when to ask a person. Those answers become its instructions, and every change is versioned. Each company brings its own model key (**Gemini, Groq, DeepSeek or OpenRouter**), so the bill stays with them and no customer can run up another's costs.
+An AI Employee is set up by answering three plain questions: what it should do, what it must never do, and when to ask a person. Those answers become its instructions, and every change is versioned. Each company brings its own model key, so the bill stays with them and no customer can run up another's costs. See feature 18 for the providers.
 
 ![Creating an AI Employee with three plain questions](docs/screenshots/12-new-employee.png)
 
@@ -153,6 +154,20 @@ New people get a short animated welcome, then a spotlight tour of each screen th
 
 ---
 
+### 17. Connect any MCP tool server, and its tools appear
+
+MCP (Model Context Protocol) is the open standard many apps now ship: a web address that lists the actions an AI can take there. Under **Connections → Tool servers (MCP)**, paste the server's address (and its access token, if it has one). The platform connects straight away, asks the server for its tools, and lists them. Each one gets the same **Always allow / Ask me first / Blocked** choice as a built-in tool. The starting choice comes from the server's own labels: read-only tools run on their own, unlabelled ones ask first, and ones marked destructive start blocked. The token is encrypted and handed to the tool only at call time; the AI never sees it. Every address is checked first, so nobody can point the platform at an internal network address.
+
+![A connected MCP server: three tools, each with its permission](docs/screenshots/21-mcp-tool-server.png)
+
+Try it locally with the demo CRM server in `backend/scripts/demo_mcp_server.py` (instructions at the top of the file).
+
+### 18. Any AI provider: Claude, ChatGPT, Gemini, or your own open-source model
+
+**AI Providers** offers Claude (Anthropic), OpenAI (ChatGPT), Gemini, Groq, DeepSeek, Mistral and OpenRouter, each with the company's own key. **Your own server** connects any open-source model (Llama, Qwen, DeepSeek, Mistral, Gemma) running on vLLM, Ollama, LM Studio or LiteLLM: paste the address of its OpenAI-compatible API and the model name. Each provider has a model picker: **Load models** asks the provider which models the key can use. Claude uses its own adapter, so its thinking blocks are passed back unchanged between tool calls, as the API requires.
+
+![Your own model server, connected, with the model picker open](docs/screenshots/22-own-model-server.png)
+
 ## Stack
 
 | Layer | Technology |
@@ -161,7 +176,8 @@ New people get a short animated welcome, then a spotlight tour of each screen th
 | Backend | Python · FastAPI · SQLAlchemy 2.0 (async) |
 | Database | PostgreSQL + pgvector |
 | Queue | Redis + arq workers |
-| AI | Gemini · Groq · DeepSeek · OpenRouter (pluggable, BYOK) |
+| AI | Claude · OpenAI · Gemini · Groq · DeepSeek · Mistral · OpenRouter · any OpenAI-compatible server (BYOK) |
+| Tools | Built-in packs + MCP (Model Context Protocol) servers over Streamable HTTP |
 | Deployment | Docker Compose |
 
 ## Key design decisions
@@ -211,7 +227,7 @@ already works and is tested.
 
 ```bash
 docker compose up --build        # all five services
-make test                        # 139 tests
+make test                        # 163 tests
 make lint                        # ruff + mypy strict
 ```
 
@@ -242,10 +258,10 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 | Check | Result |
 |---|---|
-| Tests | 139 passing: unit, tenant isolation, and integration against real Postgres |
+| Tests | 163 passing: unit, tenant isolation, and integration against real Postgres |
 | Types | mypy **strict**, zero errors |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
-| Migrations | 8, each verified forward *and* backward |
+| Migrations | 9, each verified forward *and* backward |
 | Frontend | TypeScript strict build; screens checked in dark, light and phone widths |
 | UX audit | Every screen checked as admin and member, on desktop and phone, with the `icp-ux-audit` skill (`.claude/skills/`) |
 

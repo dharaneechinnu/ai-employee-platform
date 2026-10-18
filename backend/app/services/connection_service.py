@@ -528,7 +528,7 @@ def _check_hosts(config: dict[str, Any]) -> None:
     """
     if get_settings().environment != "prod":
         return
-    from app.agent.tools.packs.web import _is_private_address
+    from app.core.urls import is_private_address as _is_private_address
 
     for key in ("host", "imap_host", "smtp_host"):
         host = config.get(key)

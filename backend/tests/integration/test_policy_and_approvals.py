@@ -75,7 +75,7 @@ class SendsThenAnswers(LLMProvider):
 def stub_sender(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.workers.jobs.agent_run as job
 
-    monkeypatch.setattr(job, "build_provider", lambda key, api_key: SendsThenAnswers(api_key))
+    monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: SendsThenAnswers(api_key))
 
 
 async def _setup(api: AsyncClient, session: AsyncSession, tools: list[str]) -> tuple[Any, str]:

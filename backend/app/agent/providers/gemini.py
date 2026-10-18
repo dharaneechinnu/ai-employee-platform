@@ -76,6 +76,12 @@ class GeminiProvider(LLMProvider):
                 )
                 continue
 
+            if m.role is Role.ASSISTANT and m.raw:
+                # As Gemini sent them: newer models attach a thought
+                # signature to tool calls and reject a turn without it.
+                contents.append({"role": "model", "parts": m.raw})
+                continue
+
             parts: list[dict[str, Any]] = []
             if m.content:
                 parts.append({"text": m.content})
@@ -189,6 +195,7 @@ class GeminiProvider(LLMProvider):
                 role=Role.ASSISTANT,
                 content="".join(text_parts) or None,
                 tool_calls=tool_calls,
+                raw=candidate.get("content", {}).get("parts") or None,
             ),
             stop_reason=stop,
             usage=Usage(
@@ -198,6 +205,21 @@ class GeminiProvider(LLMProvider):
             model=model,
             latency_ms=latency_ms,
         )
+
+    async def list_models(self) -> list[str]:
+        async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+            try:
+                response = await client.get(
+                    f"{BASE_URL}/models", params={"key": self.api_key, "pageSize": 200}
+                )
+            except httpx.HTTPError as exc:
+                raise ProviderUnavailableError(f"Could not reach Gemini: {exc}") from exc
+        self._raise_for_status(response)
+        return [
+            m["name"].removeprefix("models/")
+            for m in response.json().get("models", [])
+            if "generateContent" in (m.get("supportedGenerationMethods") or [])
+        ]
 
     async def check(self, model: str) -> None:
         await self.complete(

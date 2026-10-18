@@ -52,7 +52,7 @@ class StubProvider(LLMProvider):
 def stub_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.workers.jobs.agent_run as job
 
-    monkeypatch.setattr(job, "build_provider", lambda key, api_key: StubProvider(api_key))
+    monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: StubProvider(api_key))
 
 
 async def _setup(api: AsyncClient, session: AsyncSession) -> tuple[Any, str, str]:
@@ -197,7 +197,7 @@ async def test_the_automatic_model_uses_whichever_provider_is_connected(
 
     used: list[str] = []
 
-    def build(key: str, api_key: str) -> StubProvider:
+    def build(key: str, api_key: str, **_: object) -> StubProvider:
         used.append(key)
         return StubProvider(api_key)
 

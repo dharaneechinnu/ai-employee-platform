@@ -347,6 +347,7 @@ def serialise(messages: list[Message]) -> dict[str, Any]:
                 "content": m.content,
                 "tool_call_id": m.tool_call_id,
                 "name": m.name,
+                "raw": m.raw,
                 "tool_calls": [
                     {"id": c.id, "name": c.name, "arguments": c.arguments} for c in m.tool_calls
                 ],
@@ -363,6 +364,7 @@ def deserialise(state: dict[str, Any]) -> list[Message]:
             content=m.get("content"),
             tool_call_id=m.get("tool_call_id"),
             name=m.get("name"),
+            raw=m.get("raw"),
             tool_calls=[
                 ToolCall(id=c["id"], name=c["name"], arguments=c["arguments"])
                 for c in m.get("tool_calls", [])

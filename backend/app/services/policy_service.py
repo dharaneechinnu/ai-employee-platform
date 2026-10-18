@@ -76,9 +76,15 @@ class PolicyResolver:
         *,
         org_rules: dict[tuple[PolicyScope, str, str | None], PolicySetting],
         defaults: dict[tuple[PolicyScope, str, str | None], PolicySetting],
+        extra_tools: dict[str, type[Tool]] | None = None,
     ) -> None:
         self._org = org_rules
         self._defaults = defaults
+        # The company's MCP tools: gated by the same rules as built-ins.
+        self.extra_tools = extra_tools or {}
+
+    def tool(self, tool_name: str) -> type[Tool] | None:
+        return registry.get(tool_name) or self.extra_tools.get(tool_name)
 
     def evaluate(self, tool_name: str) -> Decision:
         if tool_name in BLOCKED_ACTIONS:
@@ -86,7 +92,7 @@ class PolicyResolver:
                 PolicySetting.BLOCKED, f"blocked platform-wide: {BLOCKED_ACTIONS[tool_name]}"
             )
 
-        tool: type[Tool] | None = registry.get(tool_name)
+        tool = self.tool(tool_name)
         if tool is None:
             # Unknown tools cannot be gated, so they are refused. The
             # loop reports this to the model, which picks a real one.
@@ -122,7 +128,13 @@ class PolicyService:
                 await self.session.scalars(select(Policy).where(Policy.org_id == self.org_id))
             ).all()
         }
-        return PolicyResolver(org_rules=org_rules, defaults=defaults)
+        from app.services.mcp_service import McpService
+
+        return PolicyResolver(
+            org_rules=org_rules,
+            defaults=defaults,
+            extra_tools=await McpService(self.session, self.org_id).tools(),
+        )
 
     async def effective(self) -> list[PolicyRow]:
         """Every rule in force, marked default or changed, so the UI can

@@ -1,8 +1,9 @@
 """One adapter for every provider that speaks the OpenAI chat format.
 
-Covers Groq, NVIDIA NIM, DeepSeek, OpenRouter, Together, Ollama and
-OpenAI itself. They differ only in base URL, so a single adapter is
-less code and fewer places for a bug to hide than one per vendor.
+Covers Groq, NVIDIA NIM, DeepSeek, OpenRouter, Together, Mistral and
+OpenAI itself, plus any server a company runs (vLLM, Ollama, LM
+Studio, LiteLLM). They differ only in base URL, so a single adapter
+is less code and fewer places for a bug to hide than one per vendor.
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ BASE_URLS: dict[str, str] = {
     "openrouter": "https://openrouter.ai/api/v1",
     "together": "https://api.together.xyz/v1",
     "nvidia": "https://integrate.api.nvidia.com/v1",
-    "ollama": "http://localhost:11434/v1",
+    "mistral": "https://api.mistral.ai/v1",
 }
 
 _STOP_REASONS = {
@@ -117,7 +118,7 @@ class OpenAICompatibleProvider(LLMProvider):
             try:
                 response = await client.post(
                     f"{self.base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {self.api_key}"},
+                    headers=self._headers(),
                     json=payload,
                 )
             except httpx.TimeoutException as exc:
@@ -132,6 +133,21 @@ class OpenAICompatibleProvider(LLMProvider):
         latency_ms = int((time.perf_counter() - started) * 1000)
         self._raise_for_status(response)
         return self._parse(response.json(), model=model, latency_ms=latency_ms)
+
+    def _headers(self) -> dict[str, str]:
+        # A self-hosted server often has no key at all.
+        return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+
+    async def list_models(self) -> list[str]:
+        async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+            try:
+                response = await client.get(f"{self.base_url}/models", headers=self._headers())
+            except httpx.HTTPError as exc:
+                raise ProviderUnavailableError(
+                    f"Could not reach {self.provider_key}: {exc}"
+                ) from exc
+        self._raise_for_status(response)
+        return sorted(m["id"] for m in response.json().get("data", []) if m.get("id"))
 
     def _raise_for_status(self, response: httpx.Response) -> None:
         if response.is_success:

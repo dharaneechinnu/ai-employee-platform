@@ -148,6 +148,6 @@ async def decide(
         # queue and resumes from the step that asked.
         run = await session.get(Run, approval.run_id)
         if run is not None:
-            await enqueue_task(run.task_id)
+            await enqueue_task(run.task_id, resume_after=approval.id)
 
     return await _view(session, approval_id, org_id, link_user)
