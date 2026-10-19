@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RunEvent } from "../lib/api";
 import { Icon, type IconName } from "./icons";
+import {
+  SERVICE_NAME,
+  ServiceMark,
+  VendorChip,
+  serviceForTool,
+  vendorFor,
+  type ServiceKey,
+} from "./ServiceMark";
 
 /**
  * The journey of one run, end to end.
@@ -27,6 +35,10 @@ interface Stage {
   /** One line under it, in plain words. */
   detail: string | null;
   icon: IconName;
+  /** The service's own logo, where it has one we can draw. */
+  service?: ServiceKey;
+  /** A model vendor with no logo of its own: a lettermark instead. */
+  vendor?: { label: string; color: string };
   /** Where it sits: inside our platform, or out at somebody else's. */
   away: boolean;
   state: "done" | "working" | "failed" | "ask";
@@ -112,11 +124,15 @@ export function buildStages(
             ? `${event.prompt_tokens + event.output_tokens} tokens`
             : null;
         const ms = typeof event.latency_ms === "number" ? `${event.latency_ms} ms` : null;
+        const model = str(event.model) ?? "The AI model";
+        const vendor = vendorFor(model);
         stages.push({
           kind: "model",
-          title: str(event.model) ?? "The AI model",
+          title: model,
           detail: "decides what to do next",
           icon: "chat",
+          service: vendor?.label === "Gemini" ? "gemini" : undefined,
+          vendor: vendor && vendor.label !== "Gemini" ? vendor : undefined,
           away: true,
           state: "done",
           meta: [tokens, ms].filter(Boolean).join(" · ") || null,
@@ -130,11 +146,16 @@ export function buildStages(
       case "tool_call": {
         const tool = str(event.tool) ?? "a tool";
         const dest = destinationFor(tool);
+        const service = serviceForTool(tool);
         stages.push({
           kind: "tool",
-          title: dest.name,
+          // Named for the service itself when we know it: "Gmail" is
+          // more use than "Email" when you are working out where your
+          // data actually went.
+          title: service ? SERVICE_NAME[service] : dest.name,
           detail: VERBS[tool] ?? tool.replace(/_/g, " "),
           icon: dest.icon,
+          service: service ?? undefined,
           away: dest.away,
           state: "working",
           meta: null,
@@ -289,9 +310,19 @@ export default function RunFlow({
                 <div className="flex w-9 shrink-0 flex-col items-center">
                   <span
                     className="relative flex h-9 w-9 items-center justify-center rounded-full border-2"
-                    style={{ borderColor: tone.stroke, background: tone.soft, color: tone.text }}
+                    style={{
+                      borderColor: tone.stroke,
+                      background: stage.service || stage.vendor ? "var(--panel)" : tone.soft,
+                      color: tone.text,
+                    }}
                   >
-                    <Icon name={stage.icon} size={16} />
+                    {stage.service ? (
+                      <ServiceMark service={stage.service} size={18} />
+                    ) : stage.vendor ? (
+                      <VendorChip label={stage.vendor.label} color={stage.vendor.color} size={18} />
+                    ) : (
+                      <Icon name={stage.icon} size={16} />
+                    )}
                     {stage.state === "working" && (
                       <span
                         className="absolute inset-0 rounded-full border-2"
