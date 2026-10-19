@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.integration.conftest import seed_company
 
 
-
 async def test_there_is_no_public_registration_endpoint(api: AsyncClient) -> None:
     """Accounts exist only via an invite. A sign-up route would be an
     entire class of abuse we have chosen not to have."""

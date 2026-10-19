@@ -174,7 +174,7 @@ async def test_the_list_counts_each_persons_employees(
 
     for i in range(3):
         created = await api.post(
-            f"/api/v1/me/ai-employees",
+            "/api/v1/me/ai-employees",
             json={"name": f"Bot {i}", "config": {"guided": {"what_it_does": "work"}}},
             headers=headers,
         )

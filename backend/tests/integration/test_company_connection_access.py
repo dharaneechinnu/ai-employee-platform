@@ -50,8 +50,10 @@ DB_CONNECTION = {
 }
 
 
-async def _available(api: AsyncClient, owner_id: object, headers: dict[str, str], kind: str) -> dict:
-    listing = await api.get(f"/api/v1/me/connections/available", headers=headers)
+async def _available(
+    api: AsyncClient, owner_id: object, headers: dict[str, str], kind: str
+) -> dict:
+    listing = await api.get("/api/v1/me/connections/available", headers=headers)
     return next(a for a in listing.json() if a["kind"] == kind)
 
 
@@ -100,7 +102,7 @@ async def test_a_closed_connection_cannot_be_created_anyway(
     acme_admin = {"Authorization": f"Bearer {acme.admin_token}"}
 
     allowed = await api.post(
-        f"/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin
+        "/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin
     )
     assert allowed.status_code == 201
 
@@ -111,7 +113,7 @@ async def test_a_closed_connection_cannot_be_created_anyway(
     )
 
     refused = await api.post(
-        f"/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin
+        "/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin
     )
     # Forbidden, not unprocessable: the request is fine, the company is not.
     assert refused.status_code == 403

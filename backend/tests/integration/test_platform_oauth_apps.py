@@ -69,7 +69,7 @@ async def test_registering_an_app_unlocks_the_button_for_a_company(
 
     async def google_configured() -> bool:
         listing = await api.get(
-            f"/api/v1/me/connections/available", headers=company
+            "/api/v1/me/connections/available", headers=company
         )
         return next(a for a in listing.json() if a["kind"] == "google")["configured"]
 
@@ -87,7 +87,7 @@ async def test_registering_an_app_unlocks_the_button_for_a_company(
 
     # And the button now leads somewhere real.
     start = await api.post(
-        f"/api/v1/me/connections/oauth/google/start", headers=company
+        "/api/v1/me/connections/oauth/google/start", headers=company
     )
     assert start.status_code == 200
     assert CLIENT_ID in start.json()["authorize_url"]
@@ -110,7 +110,7 @@ async def test_pausing_an_app_closes_the_button_again(
     assert paused.status_code == 200
     assert paused.json()["configured"] is False
 
-    listing = await api.get(f"/api/v1/me/connections/available", headers=company)
+    listing = await api.get("/api/v1/me/connections/available", headers=company)
     assert next(a for a in listing.json() if a["kind"] == "google")["configured"] is False
 
 

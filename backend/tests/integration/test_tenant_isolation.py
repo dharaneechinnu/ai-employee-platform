@@ -18,10 +18,10 @@ async def test_company_a_cannot_read_company_b_members(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
-    globex = await seed_company(session, api, name="Globex", slug="globex")
+    _globex = await seed_company(session, api, name="Globex", slug="globex")
 
     response = await api.get(
-        f"/api/v1/me/members",
+        "/api/v1/me/members",
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
 
@@ -34,10 +34,10 @@ async def test_company_a_cannot_read_company_b_details(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
-    globex = await seed_company(session, api, name="Globex", slug="globex")
+    _globex = await seed_company(session, api, name="Globex", slug="globex")
 
     response = await api.get(
-        f"/api/v1/me",
+        "/api/v1/me",
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
     assert response.status_code == 404
@@ -51,10 +51,10 @@ async def test_cross_tenant_and_nonexistent_are_indistinguishable(
     import uuid
 
     acme = await seed_company(session, api, name="Acme", slug="acme")
-    globex = await seed_company(session, api, name="Globex", slug="globex")
+    _globex = await seed_company(session, api, name="Globex", slug="globex")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
-    real_but_not_mine = await api.get(f"/api/v1/me/members", headers=headers)
+    real_but_not_mine = await api.get("/api/v1/me/members", headers=headers)
     never_existed = await api.get(f"/api/v1/orgs/{uuid.uuid4()}/members", headers=headers)
 
     assert real_but_not_mine.status_code == never_existed.status_code == 404

@@ -53,22 +53,22 @@ async def seeded(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     await api.post(
-        f"/api/v1/me/providers",
+        "/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": SECRET_API_KEY},
         headers=headers,
     )
     await api.post(
-        f"/api/v1/me/memory",
+        "/api/v1/me/memory",
         json={"content": SECRET_MEMORY_TEXT},
         headers=headers,
     )
     employee = await api.post(
-        f"/api/v1/me/ai-employees",
+        "/api/v1/me/ai-employees",
         json={"name": "Bot", "config": {"guided": {"what_it_does": "work"}}},
         headers=headers,
     )
     await api.post(
-        f"/api/v1/me/tasks",
+        "/api/v1/me/tasks",
         json={"employee_id": employee.json()["id"], "input": SECRET_TASK_TEXT},
         headers=headers,
     )
@@ -124,13 +124,12 @@ async def test_the_customer_routes_are_closed_to_platform_staff(
     all: staff would simply call the customer route instead.
     """
     headers = {"Authorization": f"Bearer {seeded['token']}"}
-    owner_id = seeded["owner_id"]
 
     for path in (
-        f"/api/v1/me/tasks",
-        f"/api/v1/me/memory",
-        f"/api/v1/me/providers",
-        f"/api/v1/me/ai-employees",
+        "/api/v1/me/tasks",
+        "/api/v1/me/memory",
+        "/api/v1/me/providers",
+        "/api/v1/me/ai-employees",
     ):
         response = await api.get(path, headers=headers)
         assert response.status_code in (401, 403, 404), f"{path} accepted a platform token"

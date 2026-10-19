@@ -46,7 +46,7 @@ async def staff(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
 
 
 async def _google(api: AsyncClient, owner_id: object, headers: dict[str, str]) -> dict:
-    listing = await api.get(f"/api/v1/me/connections/available", headers=headers)
+    listing = await api.get("/api/v1/me/connections/available", headers=headers)
     return next(a for a in listing.json() if a["kind"] == "google")
 
 
@@ -54,7 +54,7 @@ async def _client_id_in_use(api: AsyncClient, owner_id: object, headers: dict[st
     from urllib.parse import parse_qs, urlparse
 
     start = await api.post(
-        f"/api/v1/me/connections/oauth/google/start", headers=headers
+        "/api/v1/me/connections/oauth/google/start", headers=headers
     )
     query = parse_qs(urlparse(start.json()["authorize_url"]).query)
     return str(query["client_id"][0])
@@ -70,7 +70,7 @@ async def test_a_company_can_switch_one_click_on_by_itself(
     assert (await _google(api, acme.owner_id, headers))["configured"] is False
 
     saved = await api.put(
-        f"/api/v1/me/connections/oauth-apps/google",
+        "/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers=headers,
     )
@@ -98,7 +98,7 @@ async def test_a_companys_own_app_wins_over_the_platforms(
         headers=staff,
     )
     await api.put(
-        f"/api/v1/me/connections/oauth-apps/google",
+        "/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers=acme_h,
     )
@@ -120,14 +120,14 @@ async def test_removing_our_own_app_falls_back_to_the_platforms(
         headers=staff,
     )
     await api.put(
-        f"/api/v1/me/connections/oauth-apps/google",
+        "/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers=headers,
     )
     assert await _client_id_in_use(api, acme.owner_id, headers) == OWN_ID
 
     removed = await api.delete(
-        f"/api/v1/me/connections/oauth-apps/google", headers=headers
+        "/api/v1/me/connections/oauth-apps/google", headers=headers
     )
     assert removed.status_code == 204
     assert await _client_id_in_use(api, acme.owner_id, headers) == PLATFORM_ID
@@ -140,13 +140,13 @@ async def test_one_companys_app_is_invisible_to_another(
     other = await seed_company(session, api, name="Globex", slug="globex")
 
     await api.put(
-        f"/api/v1/me/connections/oauth-apps/google",
+        "/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
 
     listing = await api.get(
-        f"/api/v1/me/connections/oauth-apps",
+        "/api/v1/me/connections/oauth-apps",
         headers={"Authorization": f"Bearer {other.admin_token}"},
     )
     assert listing.json() == []
@@ -160,11 +160,11 @@ async def test_the_secret_is_never_returned(api: AsyncClient, session: AsyncSess
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     saved = await api.put(
-        f"/api/v1/me/connections/oauth-apps/google",
+        "/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers=headers,
     )
-    listing = await api.get(f"/api/v1/me/connections/oauth-apps", headers=headers)
+    listing = await api.get("/api/v1/me/connections/oauth-apps", headers=headers)
 
     for body in (saved.json(), listing.json()):
         assert OWN_SECRET not in json.dumps(body)

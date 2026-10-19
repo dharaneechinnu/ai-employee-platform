@@ -52,9 +52,9 @@ async def _company(api: AsyncClient, session: AsyncSession) -> tuple[Any, dict[s
 async def test_claude_and_your_own_server_are_on_the_menu(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme, headers = await _company(api, session)
+    _acme, headers = await _company(api, session)
     menu = (
-        await api.get(f"/api/v1/me/providers/available", headers=headers)
+        await api.get("/api/v1/me/providers/available", headers=headers)
     ).json()
     keys = {p["key"]: p for p in menu}
     assert keys["anthropic"]["default_model"] == "claude-opus-5-5"
@@ -64,8 +64,8 @@ async def test_claude_and_your_own_server_are_on_the_menu(
 async def test_your_own_server_needs_an_address_and_a_model(
     api: AsyncClient, session: AsyncSession, public_dns: None
 ) -> None:
-    acme, headers = await _company(api, session)
-    url = f"/api/v1/me/providers"
+    _acme, headers = await _company(api, session)
+    url = "/api/v1/me/providers"
 
     missing = await api.post(
         url, json={"provider_key": "custom", "model": "llama"}, headers=headers
@@ -100,10 +100,10 @@ async def test_your_own_server_needs_an_address_and_a_model(
 
 async def test_a_private_address_is_refused(api: AsyncClient, session: AsyncSession) -> None:
     """Otherwise our servers could be made to call cloud metadata or internal services."""
-    acme, headers = await _company(api, session)
+    _acme, headers = await _company(api, session)
     for address in ("https://169.254.169.254/v1", "https://localhost:8000/v1"):
         response = await api.post(
-            f"/api/v1/me/providers",
+            "/api/v1/me/providers",
             json={"provider_key": "custom", "base_url": address, "model": "x"},
             headers=headers,
         )
@@ -136,12 +136,12 @@ async def test_a_company_picks_its_model_and_runs_use_it(
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: Answers(api_key))
     acme, headers = await _company(api, session)
     await api.post(
-        f"/api/v1/me/providers",
+        "/api/v1/me/providers",
         json={"provider_key": "anthropic", "api_key": "sk-ant-test-1234"},
         headers=headers,
     )
     picked = await api.put(
-        f"/api/v1/me/providers/anthropic/model",
+        "/api/v1/me/providers/anthropic/model",
         json={"model": "claude-haiku-5-5"},
         headers=headers,
     )
@@ -150,7 +150,7 @@ async def test_a_company_picks_its_model_and_runs_use_it(
 
     employee = await _employee(api, acme.owner_id, headers, [])
     task = await api.post(
-        f"/api/v1/me/tasks",
+        "/api/v1/me/tasks",
         json={"employee_id": employee, "input": "Hi"},
         headers=headers,
     )
@@ -158,7 +158,7 @@ async def test_a_company_picks_its_model_and_runs_use_it(
     assert used == [("anthropic", "claude-haiku-5-5")]
 
     back = await api.put(
-        f"/api/v1/me/providers/anthropic/model",
+        "/api/v1/me/providers/anthropic/model",
         json={"model": None},
         headers=headers,
     )
@@ -171,10 +171,10 @@ async def test_a_company_picks_its_model_and_runs_use_it(
 async def test_connecting_a_server_lists_its_tools_with_safe_permissions(
     api: AsyncClient, session: AsyncSession, public_dns: None, fake_server: FakeMcpServer
 ) -> None:
-    acme, headers = await _company(api, session)
+    _acme, headers = await _company(api, session)
 
     added = await api.post(
-        f"/api/v1/me/mcp-servers",
+        "/api/v1/me/mcp-servers",
         json={"name": "CRM", "url": MCP_URL, "token": "crm-secret-9876"},
         headers=headers,
     )
@@ -188,7 +188,7 @@ async def test_connecting_a_server_lists_its_tools_with_safe_permissions(
         "mcp__crm__delete_contact",
     ]
 
-    catalogue = (await api.get(f"/api/v1/me/tools", headers=headers)).json()
+    catalogue = (await api.get("/api/v1/me/tools", headers=headers)).json()
     mcp = {t["name"]: t for t in catalogue if t["name"].startswith("mcp__")}
     assert mcp["mcp__crm__find_customer"]["effective_setting"] == "auto"
     assert mcp["mcp__crm__find_customer"]["label"] == "Find a customer"
@@ -200,29 +200,29 @@ async def test_connecting_a_server_lists_its_tools_with_safe_permissions(
 async def test_a_server_that_does_not_answer_is_not_saved(
     api: AsyncClient, session: AsyncSession, public_dns: None, fake_server: FakeMcpServer
 ) -> None:
-    acme, headers = await _company(api, session)
+    _acme, headers = await _company(api, session)
     wrong_token = await api.post(
-        f"/api/v1/me/mcp-servers",
+        "/api/v1/me/mcp-servers",
         json={"name": "CRM", "url": MCP_URL, "token": "wrong-token"},
         headers=headers,
     )
     assert wrong_token.status_code == 422
     assert "refused the access token" in wrong_token.json()["detail"]
-    assert (await api.get(f"/api/v1/me/mcp-servers", headers=headers)).json() == []
+    assert (await api.get("/api/v1/me/mcp-servers", headers=headers)).json() == []
 
 
 async def test_another_company_never_sees_the_tools(
     api: AsyncClient, session: AsyncSession, public_dns: None, fake_server: FakeMcpServer
 ) -> None:
-    acme, headers = await _company(api, session)
+    _acme, headers = await _company(api, session)
     await api.post(
-        f"/api/v1/me/mcp-servers",
+        "/api/v1/me/mcp-servers",
         json={"name": "CRM", "url": MCP_URL, "token": "crm-secret-9876"},
         headers=headers,
     )
     other = await seed_company(session, api, name="Globex", slug="globex")
     other_headers = {"Authorization": f"Bearer {other.admin_token}"}
-    catalogue = (await api.get(f"/api/v1/me/tools", headers=other_headers)).json()
+    catalogue = (await api.get("/api/v1/me/tools", headers=other_headers)).json()
     assert not any(t["name"].startswith("mcp__") for t in catalogue)
 
 
@@ -268,19 +268,19 @@ async def test_an_employee_uses_an_mcp_tool_in_a_real_run(
     )
     acme, headers = await _company(api, session)
     await api.post(
-        f"/api/v1/me/providers",
+        "/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": "test-key-abcd1234"},
         headers=headers,
     )
     await api.post(
-        f"/api/v1/me/mcp-servers",
+        "/api/v1/me/mcp-servers",
         json={"name": "CRM", "url": MCP_URL, "token": "crm-secret-9876"},
         headers=headers,
     )
     employee = await _employee(api, acme.owner_id, headers, ["mcp__crm__find_customer"])
 
     task = await api.post(
-        f"/api/v1/me/tasks",
+        "/api/v1/me/tasks",
         json={"employee_id": employee, "input": "Who is Asha?"},
         headers=headers,
     )
@@ -328,18 +328,18 @@ async def test_a_write_tool_from_a_server_waits_for_approval(
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: MovesADeal(api_key))
     acme, headers = await _company(api, session)
     await api.post(
-        f"/api/v1/me/providers",
+        "/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": "test-key-abcd1234"},
         headers=headers,
     )
     await api.post(
-        f"/api/v1/me/mcp-servers",
+        "/api/v1/me/mcp-servers",
         json={"name": "CRM", "url": MCP_URL, "token": "crm-secret-9876"},
         headers=headers,
     )
     employee = await _employee(api, acme.owner_id, headers, ["mcp__crm__update_deal_stage"])
     task = await api.post(
-        f"/api/v1/me/tasks",
+        "/api/v1/me/tasks",
         json={"employee_id": employee, "input": "Mark D-9 as won"},
         headers=headers,
     )
@@ -347,7 +347,7 @@ async def test_a_write_tool_from_a_server_waits_for_approval(
 
     assert outcome["status"] == "awaiting_approval"
     assert fake_server.calls == []  # nothing happened before a person said yes
-    approvals = (await api.get(f"/api/v1/me/approvals", headers=headers)).json()
+    approvals = (await api.get("/api/v1/me/approvals", headers=headers)).json()
     assert approvals[0]["tool_name"] == "mcp__crm__update_deal_stage"
     assert approvals[0]["side_effect"] == "write"
     assert approvals[0]["proposed"] == {"deal_id": "D-9", "stage": "won"}
@@ -360,7 +360,7 @@ async def _employee(
     api: AsyncClient, owner_id: uuid.UUID, headers: dict[str, str], tools: list[str]
 ) -> str:
     created = await api.post(
-        f"/api/v1/me/ai-employees",
+        "/api/v1/me/ai-employees",
         json={
             "name": "Ravi",
             "config": {"guided": GUIDED, "model": "auto", "enabled_tools": tools},

@@ -46,7 +46,7 @@ async def _company(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
     if groq:
         connected = await api.post(
-            f"/api/v1/me/providers",
+            "/api/v1/me/providers",
             json={"provider_key": "groq", "api_key": GROQ_KEY},
             headers=headers,
         )
@@ -57,8 +57,8 @@ async def _company(
 async def test_without_a_groq_key_the_browser_does_the_listening(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme, headers = await _company(api, session, groq=False)
-    response = await api.get(f"/api/v1/me/speech", headers=headers)
+    _acme, headers = await _company(api, session, groq=False)
+    response = await api.get("/api/v1/me/speech", headers=headers)
     assert response.status_code == 200
     assert response.json()["engine"] == "browser"
     assert response.json()["model"] is None
@@ -67,9 +67,9 @@ async def test_without_a_groq_key_the_browser_does_the_listening(
 async def test_with_a_groq_key_whisper_transcribes(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
-    acme, headers = await _company(api, session, groq=True)
+    _acme, headers = await _company(api, session, groq=True)
 
-    engine = await api.get(f"/api/v1/me/speech", headers=headers)
+    engine = await api.get("/api/v1/me/speech", headers=headers)
     assert engine.json() == {
         "engine": "whisper",
         "model": "whisper-large-v3-turbo",
@@ -77,7 +77,7 @@ async def test_with_a_groq_key_whisper_transcribes(
     }
 
     response = await api.post(
-        f"/api/v1/me/speech/transcribe?language=en",
+        "/api/v1/me/speech/transcribe?language=en",
         content=WEBM,
         headers={**headers, "Content-Type": "audio/webm;codecs=opus"},
     )
@@ -97,7 +97,7 @@ async def test_voice_typing_works(
 ) -> None:
     acme, _ = await _company(api, session, groq=True)
     response = await api.post(
-        f"/api/v1/me/speech/transcribe",
+        "/api/v1/me/speech/transcribe",
         content=WEBM,
         headers={"Authorization": f"Bearer {acme.token}", "Content-Type": "audio/webm"},
     )
@@ -107,9 +107,9 @@ async def test_voice_typing_works(
 async def test_transcribing_without_a_groq_key_says_what_to_do(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme, headers = await _company(api, session, groq=False)
+    _acme, headers = await _company(api, session, groq=False)
     response = await api.post(
-        f"/api/v1/me/speech/transcribe",
+        "/api/v1/me/speech/transcribe",
         content=WEBM,
         headers={**headers, "Content-Type": "audio/webm"},
     )
@@ -120,8 +120,8 @@ async def test_transcribing_without_a_groq_key_says_what_to_do(
 async def test_bad_uploads_are_refused_before_groq_is_called(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
-    acme, headers = await _company(api, session, groq=True)
-    url = f"/api/v1/me/speech/transcribe"
+    _acme, headers = await _company(api, session, groq=True)
+    url = "/api/v1/me/speech/transcribe"
 
     wrong_type = await api.post(
         url, content=WEBM, headers={**headers, "Content-Type": "text/plain"}
@@ -149,10 +149,10 @@ async def test_groq_failures_become_clear_errors(
     groq_status: int,
     ours: int,
 ) -> None:
-    acme, headers = await _company(api, session, groq=True)
+    _acme, headers = await _company(api, session, groq=True)
     fake_groq["status"] = groq_status
     response = await api.post(
-        f"/api/v1/me/speech/transcribe",
+        "/api/v1/me/speech/transcribe",
         content=WEBM,
         headers={**headers, "Content-Type": "audio/webm"},
     )
@@ -164,10 +164,10 @@ async def test_groq_failures_become_clear_errors(
 async def test_another_person_cannot_use_your_groq_key(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
-    acme, _ = await _company(api, session, groq=True)
+    _acme, _ = await _company(api, session, groq=True)
     other = await seed_company(session, api, name="Globex", slug="globex")
     response = await api.post(
-        f"/api/v1/me/speech/transcribe",
+        "/api/v1/me/speech/transcribe",
         content=WEBM,
         headers={"Authorization": f"Bearer {other.admin_token}", "Content-Type": "audio/webm"},
     )

@@ -79,7 +79,7 @@ def fake_google(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 async def _connect_google(api: AsyncClient, owner_id: uuid.UUID, token: str) -> httpx.Response:
     headers = {"Authorization": f"Bearer {token}"}
-    start = await api.post(f"/api/v1/me/connections/oauth/google/start", headers=headers)
+    start = await api.post("/api/v1/me/connections/oauth/google/start", headers=headers)
     assert start.status_code == 200, start.text
     query = parse_qs(urlparse(start.json()["authorize_url"]).query)
     return await api.get(
@@ -96,7 +96,7 @@ async def test_the_catalogue_lists_one_click_apps_and_their_tools(
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
     response = await api.get(
-        f"/api/v1/me/connections/available",
+        "/api/v1/me/connections/available",
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
     assert response.status_code == 200
@@ -113,7 +113,7 @@ async def test_starting_a_connection_without_an_oauth_app_says_why(
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
     response = await api.post(
-        f"/api/v1/me/connections/oauth/google/start",
+        "/api/v1/me/connections/oauth/google/start",
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
     assert response.status_code == 422
@@ -133,7 +133,7 @@ async def test_one_click_google_connection_end_to_end(
     assert "connected=google" in callback.headers["location"]
 
     listed = await api.get(
-        f"/api/v1/me/connections",
+        "/api/v1/me/connections",
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
     [conn] = listed.json()
@@ -187,7 +187,7 @@ async def test_a_manual_mailbox_connection_is_stored_write_only(
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
     response = await api.post(
-        f"/api/v1/me/connections",
+        "/api/v1/me/connections",
         json={
             "kind": "email",
             "label": "Support inbox",
@@ -208,7 +208,7 @@ async def test_one_click_kinds_cannot_be_added_by_hand(
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
     response = await api.post(
-        f"/api/v1/me/connections",
+        "/api/v1/me/connections",
         json={"kind": "google", "label": "x", "secret": "y", "config": {}},
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
@@ -245,7 +245,7 @@ async def test_notification_settings_default_and_update(
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
-    url = f"/api/v1/me/notifications"
+    url = "/api/v1/me/notifications"
 
     initial = (await api.get(url, headers=headers)).json()
     assert initial["email_enabled"] is True
@@ -298,13 +298,13 @@ async def test_approve_from_an_email_link_resumes_the_run(
     acme, employee_id = await _setup(api, session, ["send_email"])
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
     await api.put(
-        f"/api/v1/me/notifications",
+        "/api/v1/me/notifications",
         json={"slack_enabled": True, "slack_webhook_url": "https://hooks.slack.com/services/x"},
         headers=headers,
     )
 
     task = await api.post(
-        f"/api/v1/me/tasks",
+        "/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Send the invoice email."},
         headers=headers,
     )
