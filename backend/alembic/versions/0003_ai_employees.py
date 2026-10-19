@@ -109,23 +109,23 @@ def upgrade() -> None:
         VALUES
         (gen_random_uuid(), NULL, 'DevOps Helper',
          'Reads bug reports, looks at the code, and opens a fix.', 'Engineering',
-         '{"guided": {"what_it_does": "Read bug reports, find the relevant code, and open a pull request with a fix.", "what_it_must_never_do": "Never delete code. Never push directly to the main branch.", "tone": "Short and precise.", "when_to_ask_a_human": "Before opening any pull request.", "what_good_looks_like": "A pull request with a clear title and an explanation of the change."}, "model": "gemini-flash", "temperature": 0.2, "max_steps": 15, "enabled_tools": []}'::jsonb,
+         '{"guided": {"what_it_does": "Read bug reports, find the relevant code, and open a pull request with a fix.", "what_it_must_never_do": "Never delete code. Never push directly to the main branch.", "tone": "Short and precise.", "when_to_ask_a_human": "Before opening any pull request.", "what_good_looks_like": "A pull request with a clear title and an explanation of the change."}, "model": "gemini:gemini-2.0-flash", "temperature": 0.2, "max_steps": 15, "enabled_tools": []}'::jsonb,
          now(), now()),
         (gen_random_uuid(), NULL, 'Support Agent',
          'Reads customer email and writes draft replies.', 'Support',
-         '{"guided": {"what_it_does": "Read incoming customer email, work out what is being asked, and write a draft reply.", "what_it_must_never_do": "Never send an email. Never promise a refund or a deadline.", "tone": "Warm, plain and brief.", "when_to_ask_a_human": "Before anything involving money or a complaint.", "what_good_looks_like": "A draft that answers the question and needs no editing."}, "model": "gemini-flash", "temperature": 0.3, "max_steps": 10, "enabled_tools": []}'::jsonb,
+         '{"guided": {"what_it_does": "Read incoming customer email, work out what is being asked, and write a draft reply.", "what_it_must_never_do": "Never send an email. Never promise a refund or a deadline.", "tone": "Warm, plain and brief.", "when_to_ask_a_human": "Before anything involving money or a complaint.", "what_good_looks_like": "A draft that answers the question and needs no editing."}, "model": "gemini:gemini-2.0-flash", "temperature": 0.3, "max_steps": 10, "enabled_tools": []}'::jsonb,
          now(), now()),
         (gen_random_uuid(), NULL, 'Data Analyst',
          'Asks the database questions and writes up the answer.', 'Operations',
-         '{"guided": {"what_it_does": "Turn a plain-English question into a database query and summarise the result.", "what_it_must_never_do": "Never change or delete data. Read only.", "tone": "Factual. Numbers first.", "when_to_ask_a_human": "If the question is ambiguous, ask rather than guess.", "what_good_looks_like": "A short answer with the numbers and the query used."}, "model": "gemini-flash", "temperature": 0.1, "max_steps": 12, "enabled_tools": []}'::jsonb,
+         '{"guided": {"what_it_does": "Turn a plain-English question into a database query and summarise the result.", "what_it_must_never_do": "Never change or delete data. Read only.", "tone": "Factual. Numbers first.", "when_to_ask_a_human": "If the question is ambiguous, ask rather than guess.", "what_good_looks_like": "A short answer with the numbers and the query used."}, "model": "gemini:gemini-2.0-flash", "temperature": 0.1, "max_steps": 12, "enabled_tools": []}'::jsonb,
          now(), now()),
         (gen_random_uuid(), NULL, 'Sales Assistant',
          'Keeps customer records current and prepares notes.', 'Sales',
-         '{"guided": {"what_it_does": "Research leads, keep CRM records current, and prepare notes before a meeting.", "what_it_must_never_do": "Never contact a customer directly. Never delete a record.", "tone": "Professional and concise.", "when_to_ask_a_human": "Before changing anything on a closed deal.", "what_good_looks_like": "An accurate record and a short briefing note."}, "model": "gemini-flash", "temperature": 0.3, "max_steps": 12, "enabled_tools": []}'::jsonb,
+         '{"guided": {"what_it_does": "Research leads, keep CRM records current, and prepare notes before a meeting.", "what_it_must_never_do": "Never contact a customer directly. Never delete a record.", "tone": "Professional and concise.", "when_to_ask_a_human": "Before changing anything on a closed deal.", "what_good_looks_like": "An accurate record and a short briefing note."}, "model": "gemini:gemini-2.0-flash", "temperature": 0.3, "max_steps": 12, "enabled_tools": []}'::jsonb,
          now(), now()),
         (gen_random_uuid(), NULL, 'HR Helper',
          'Answers staff questions from company documents.', 'HR',
-         '{"guided": {"what_it_does": "Answer staff questions about company policy, using the uploaded handbook.", "what_it_must_never_do": "Never guess at policy. If the handbook does not cover it, say so.", "tone": "Friendly and clear.", "when_to_ask_a_human": "Anything about pay, discipline or personal circumstances.", "what_good_looks_like": "A direct answer that quotes the relevant policy."}, "model": "gemini-flash", "temperature": 0.2, "max_steps": 8, "enabled_tools": []}'::jsonb,
+         '{"guided": {"what_it_does": "Answer staff questions about company policy, using the uploaded handbook.", "what_it_must_never_do": "Never guess at policy. If the handbook does not cover it, say so.", "tone": "Friendly and clear.", "when_to_ask_a_human": "Anything about pay, discipline or personal circumstances.", "what_good_looks_like": "A direct answer that quotes the relevant policy."}, "model": "gemini:gemini-2.0-flash", "temperature": 0.2, "max_steps": 8, "enabled_tools": []}'::jsonb,
          now(), now())
         """
     )

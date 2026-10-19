@@ -39,7 +39,10 @@ class EmployeeConfig(BaseModel):
     # built from the guided answers rather than being appended to it.
     raw_instructions: str | None = Field(default=None, max_length=20000)
 
-    model: str = "gemini-flash"
+    # "provider:model", and both halves must be exactly what the
+    # vendor calls them. A friendly-looking shorthand is sent to the
+    # API verbatim and comes back as "model not found".
+    model: str = "gemini:gemini-2.0-flash"
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_steps: int = Field(default=DEFAULT_MAX_STEPS, ge=1, le=100)
     enabled_tools: list[str] = Field(default_factory=list)

@@ -19,6 +19,7 @@ from app.agent.providers.base import (
     Message,
     ProviderAuthError,
     ProviderRateLimitError,
+    ProviderModelNotFoundError,
     ProviderRequestError,
     ProviderUnavailableError,
     Role,
@@ -149,6 +150,18 @@ class OpenAICompatibleProvider(LLMProvider):
             )
         if code >= 500:
             raise ProviderUnavailableError(f"{self.provider_key} error: {detail}", status_code=code)
+        if code == 404 or "model_not_found" in detail:
+            # Worth separating from every other 4xx. "model_not_found"
+            # usually means the key is fine and the account simply
+            # cannot reach that model — a free tier asking for a paid
+            # one. Reported as a bad request it reads like a bad key,
+            # and people go and regenerate a key that was never wrong.
+            raise ProviderModelNotFoundError(
+                f"{self.provider_key} does not serve that model to this account. "
+                "The key itself may be fine — some models need a paid plan. "
+                f"Provider said: {detail}",
+                status_code=code,
+            )
         raise ProviderRequestError(
             f"{self.provider_key} rejected the request: {detail}", status_code=code
         )

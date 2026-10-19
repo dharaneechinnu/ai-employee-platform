@@ -28,7 +28,11 @@ PRICING: dict[tuple[str, str], Price] = {
     ("gemini", "gemini-2.0-flash"): Price(Decimal("0.10"), Decimal("0.40")),
     ("gemini", "gemini-2.5-flash"): Price(Decimal("0.30"), Decimal("2.50")),
     ("gemini", "gemini-2.5-pro"): Price(Decimal("1.25"), Decimal("10.00")),
-    # Groq
+    # Groq. The gpt-oss pair is what a free key can reach; the Llama
+    # models moved behind a sales contact and answer "model_not_found"
+    # to everyone else.
+    ("groq", "openai/gpt-oss-20b"): Price(Decimal("0.075"), Decimal("0.30")),
+    ("groq", "openai/gpt-oss-120b"): Price(Decimal("0.15"), Decimal("0.60")),
     ("groq", "llama-3.3-70b-versatile"): Price(Decimal("0.59"), Decimal("0.79")),
     ("groq", "llama-3.1-8b-instant"): Price(Decimal("0.05"), Decimal("0.08")),
     # OpenAI

@@ -125,6 +125,17 @@ class ProviderRequestError(LLMError):
     retryable = False
 
 
+class ProviderModelNotFoundError(LLMError):
+    """The model name is wrong, or this account cannot reach it.
+
+    Not retryable, and distinct from an auth error: the key may be
+    perfectly good. Conflating the two sends people off to regenerate
+    a key that was never the problem.
+    """
+
+    retryable = False
+
+
 class LLMProvider(ABC):
     """One vendor. Constructed with the company's own API key."""
 

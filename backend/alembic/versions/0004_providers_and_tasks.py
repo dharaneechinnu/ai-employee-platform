@@ -199,7 +199,7 @@ def upgrade() -> None:
         (gen_random_uuid(), 'gemini', 'Google Gemini', 'llm', true, true,
          'gemini-2.0-flash', 'https://aistudio.google.com/apikey', now(), now()),
         (gen_random_uuid(), 'groq', 'Groq', 'llm', true, false,
-         'llama-3.3-70b-versatile', 'https://console.groq.com/keys', now(), now()),
+         'openai/gpt-oss-20b', 'https://console.groq.com/keys', now(), now()),
         (gen_random_uuid(), 'openai', 'OpenAI (ChatGPT)', 'llm', true, false,
          'gpt-4o-mini', 'https://platform.openai.com/api-keys', now(), now()),
         (gen_random_uuid(), 'deepseek', 'DeepSeek', 'llm', true, false,

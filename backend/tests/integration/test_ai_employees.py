@@ -21,7 +21,7 @@ def _payload(name: str = "Bug Fixer Bot") -> dict[str, object]:
         "name": name,
         "job_title": "GitHub Helper",
         "department": "Engineering",
-        "config": {"guided": GUIDED, "model": "gemini-flash", "max_steps": 15},
+        "config": {"guided": GUIDED, "model": "gemini:gemini-2.0-flash", "max_steps": 15},
     }
 
 
