@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import AgentTree from "../components/AgentTree";
+import Prose from "../components/Prose";
+import RunFlow from "../components/RunFlow";
 import SetupGuide, { type SetupStatus } from "../components/SetupGuide";
 import VoiceInput from "../components/VoiceInput";
 import { Icon, type IconName } from "../components/icons";
@@ -507,17 +509,49 @@ function RunPanel({
       <div className="px-5 py-4">
         {view === "timeline" && <Timeline events={events} running={running} />}
         {view === "tree" && (
-          <AgentTree
-            events={events}
-            managerName={manager}
-            taskTitle={task.title ?? "Untitled"}
-            runStatus={task.run?.status ?? task.status}
-          />
+          <div className="flex flex-col gap-6">
+            <RunFlow
+              events={events}
+              employee={manager}
+              runStatus={task.run?.status ?? task.status}
+            />
+            {delegations > 0 && (
+              <div className="border-t border-line pt-5">
+                <AgentTree
+                  events={events}
+                  managerName={manager}
+                  taskTitle={task.title ?? "Untitled"}
+                  runStatus={task.run?.status ?? task.status}
+                />
+              </div>
+            )}
+          </div>
         )}
         {view === "result" &&
           (task.run?.output ? (
-            <div className="rounded-xl border border-line bg-sunken p-4">
-              <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{task.run.output}</p>
+            <div className="rise rounded-2xl border border-line bg-panel p-5">
+              <div className="mb-3.5 flex items-center gap-2.5 border-b border-line pb-3">
+                <Avatar name={manager} size={26} />
+                <span className="text-[13px] font-medium">{manager} says</span>
+                {task.run.ended_at && (
+                  <span className="ml-auto font-mono text-[11px] text-dim">
+                    {relativeTime(task.run.ended_at)}
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(task.run?.output ?? "")
+                      .then(() => toast("Answer copied."), () => toast("Copy failed.", "bad"));
+                  }}
+                >
+                  <Icon name="copy" size={14} />
+                  Copy
+                </Button>
+              </div>
+              <Prose text={task.run.output} />
             </div>
           ) : (
             <Empty

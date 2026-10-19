@@ -4,6 +4,7 @@ import { DOCKS, DOCK_LABEL, type Dock, dockForPoint } from "../lib/dock";
 import { useAuth, useIsAdmin } from "../lib/auth";
 import { BrandMark, type BrandState } from "./BrandMark";
 import { Icon, type IconName } from "./icons";
+import InboxBell from "./InboxBell";
 import { Avatar } from "./ui";
 
 /**
@@ -198,6 +199,10 @@ export default function Rail({
         </div>
 
         <div className="rail-end" data-rail-menu>
+          {/* Before the account button, because it is the thing people
+              come back to the screen to check. */}
+          <InboxBell orgId={org?.id} isAdmin={isAdmin} dock={dock} />
+
           <button
             type="button"
             className="rail-link"

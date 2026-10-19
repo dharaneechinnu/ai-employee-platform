@@ -408,6 +408,57 @@ html[data-dock='right'] body {
     position: relative;
   }
 
+  .flow-step {
+    animation: flow-step-in 0.34s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  /* The run's written answer. Plain prose, set wide enough to read
+     and narrow enough not to tire: the result is the thing the whole
+     run exists to produce, so it gets typography rather than a
+     monospace dump. */
+  .result-prose {
+    @apply text-[15px] leading-relaxed;
+  }
+  .result-prose > * + * {
+    @apply mt-3.5;
+  }
+  .result-prose h1,
+  .result-prose h2,
+  .result-prose h3 {
+    @apply font-display text-[17px] font-semibold text-ink;
+  }
+  .result-prose ul,
+  .result-prose ol {
+    @apply flex flex-col gap-1.5 pl-5;
+  }
+  .result-prose ul > li {
+    @apply list-disc;
+  }
+  .result-prose ol > li {
+    @apply list-decimal;
+  }
+  .result-prose li::marker {
+    color: var(--accent-text);
+  }
+  .result-prose code {
+    @apply rounded bg-raised px-1.5 py-0.5 font-mono text-[13px];
+  }
+  .result-prose pre {
+    @apply overflow-x-auto rounded-xl border border-line bg-sunken p-3.5;
+  }
+  .result-prose pre code {
+    @apply bg-transparent p-0;
+  }
+  .result-prose blockquote {
+    @apply border-l-2 border-accent-line pl-3.5 text-muted;
+  }
+  .result-prose a {
+    @apply text-accent-text underline underline-offset-2;
+  }
+  .result-prose strong {
+    @apply font-semibold text-ink;
+  }
+
   /* ---------------------------------------------------------- the rail
 
      A floating icon bar the user drags to the left, right or bottom
@@ -735,6 +786,47 @@ html[data-dock='right'] body {
   }
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@keyframes flow-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.75);
+    opacity: 0;
+  }
+}
+
+/* The pulse that runs down the connector to the next stage: this is
+   the bit that makes "the work went over there" legible at a glance. */
+@keyframes flow-travel {
+  0% {
+    top: 0;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100% - 10px);
+    opacity: 0;
+  }
+}
+
+@keyframes flow-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
