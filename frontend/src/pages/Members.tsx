@@ -17,6 +17,9 @@ export default function Members() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The member whose removal is waiting for a second "yes", if any.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [changing, setChanging] = useState<string | null>(null);
 
   async function load() {
     if (!org) return;
@@ -45,6 +48,35 @@ export default function Members() {
       setError(err instanceof ApiError ? err.message : "Could not create the invite.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function setMemberRole(member: Member, next: "admin" | "member") {
+    if (!org) return;
+    setChanging(member.id);
+    try {
+      await api.patch(`/orgs/${org.id}/members/${member.id}`, { role: next });
+      toast(`${member.full_name || member.email} is now ${next === "admin" ? "an admin" : "a member"}.`);
+      await load();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not change the role.", "bad");
+    } finally {
+      setChanging(null);
+    }
+  }
+
+  async function remove(member: Member) {
+    if (!org) return;
+    setChanging(member.id);
+    try {
+      await api.del(`/orgs/${org.id}/members/${member.id}`);
+      toast(`${member.full_name || member.email} no longer has access.`, "info");
+      setConfirming(null);
+      await load();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not remove them.", "bad");
+    } finally {
+      setChanging(null);
     }
   }
 
@@ -83,20 +115,51 @@ export default function Members() {
             {members.map((member, i) => (
               <div
                 key={member.id}
-                className="card lift rise flex items-center gap-3.5 p-4"
+                className="card lift rise flex flex-col gap-3 p-4"
                 style={{ animationDelay: `${Math.min(i, 8) * 0.05}s` }}
               >
-                <Avatar name={member.full_name || member.email} size={44} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">
-                    {member.full_name || member.email.split("@")[0]}
-                    {member.id === me?.id && <span className="ml-1.5 text-[13px] font-normal text-dim">(you)</span>}
+                <div className="flex items-center gap-3.5">
+                  <Avatar name={member.full_name || member.email} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">
+                      {member.full_name || member.email.split("@")[0]}
+                      {member.id === me?.id && <span className="ml-1.5 text-[13px] font-normal text-dim">(you)</span>}
+                    </div>
+                    <div className="truncate text-[13px] text-muted">{member.email}</div>
                   </div>
-                  <div className="truncate text-[13px] text-muted">{member.email}</div>
+                  <Chip tone={member.role === "admin" ? "brand" : "mute"} dot={false}>
+                    {member.role === "admin" ? "Admin" : "Member"}
+                  </Chip>
                 </div>
-                <Chip tone={member.role === "admin" ? "brand" : "mute"} dot={false}>
-                  {member.role}
-                </Chip>
+                {isAdmin && member.id !== me?.id && (
+                  confirming === member.id ? (
+                    <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm" role="alert">
+                      <span className="flex-1">
+                        Remove {member.full_name || member.email}? They lose access straight away.
+                      </span>
+                      <Button size="sm" variant="danger" disabled={changing === member.id} onClick={() => void remove(member)}>
+                        {changing === member.id ? "Removing…" : "Yes, remove"}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 pl-[58px]" data-coach="member-actions">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={changing === member.id}
+                        onClick={() => void setMemberRole(member, member.role === "admin" ? "member" : "admin")}
+                      >
+                        {member.role === "admin" ? "Make member" : "Make admin"}
+                      </Button>
+                      <Button size="sm" variant="danger-ghost" onClick={() => setConfirming(member.id)}>
+                        Remove
+                      </Button>
+                    </div>
+                  )
+                )}
               </div>
             ))}
             <p className="mt-1.5 text-[13px] leading-normal text-dim">
@@ -106,7 +169,7 @@ export default function Members() {
           </section>
 
           {isAdmin && (
-            <form onSubmit={invite} className="card rise flex w-full max-w-[460px] flex-[1_1_360px] flex-col gap-4 p-5" style={{ animationDelay: ".08s" }}>
+            <form onSubmit={invite} className="card rise flex w-full max-w-[460px] flex-[1_1_360px] flex-col gap-4 p-5" style={{ animationDelay: ".08s" }} data-coach="members-invite">
               <h2 className="font-display text-lg font-semibold">Invite someone</h2>
               <Input label="Email" type="email" value={email} onChange={setEmail} required autoComplete="off" />
               <fieldset className="flex flex-col gap-2">
@@ -141,12 +204,7 @@ export default function Members() {
                 <div
                   role="status"
                   className="flex flex-col gap-2 rounded-[14px] border border-accent-line p-3.5"
-                  style={{
-                    background:
-                      "linear-gradient(90deg,var(--sunken) 0%,var(--sunken) 40%,var(--accent-soft) 50%,var(--sunken) 60%,var(--sunken) 100%)",
-                    backgroundSize: "250% 100%",
-                    animation: "rise .45s cubic-bezier(.16,1,.3,1) both, shimmer 4s linear .5s infinite",
-                  }}
+                  style={{ background: "var(--accent-soft)", animation: "rise .3s cubic-bezier(.2,0,0,1) both" }}
                 >
                   <span className="text-xs text-accent-text">
                     Shown once. Send it to {link.email} yourself; there is no email service.

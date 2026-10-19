@@ -388,6 +388,12 @@ function api(method, path, body, req, res) {
   if (rest === "/memory/search") return json(memory.map((item, i) => ({ ...item, score: [0.91, 0.62, 0.48][i] ?? 0.3 })));
   if (rest === "/embedding-config") return json({ provider_key: "gemini", model: "text-embedding-004", dim: 768, memories_needing_reembedding: 0 });
   if (rest === "/members") return json([{ id: me.id, email: me.email, full_name: me.full_name, role: "admin" }, { id: "u-dev", email: "dev@victopia.com", full_name: "Dev Kumar", role: "member" }]);
+  if (rest === "/policies" && method === "PUT") {
+    // One tool's rule, as the switch on Connections and in the tool picker saves it.
+    const tool = TOOLS.find((t) => t.name === body.scope_value);
+    if (tool && body.scope === "tool") Object.assign(tool, { effective_setting: body.setting, reason: "set by your company for this tool" });
+    return json({ ...body, is_default: false });
+  }
   if (rest === "/policies") return json([]);
   if (rest === "/providers/available") return json([{ key: "gemini", display_name: "Google Gemini", default_model: "gemini-2.0-flash", docs_url: null, trains_on_data: false }]);
   if (rest === "/providers") return json([{ provider_key: "gemini", display_name: "Google Gemini", key_last4: "3f9a", status: "working", last_tested_at: ago(30), last_error: null, trains_on_data: false, default_model: "gemini-2.0-flash" }]);

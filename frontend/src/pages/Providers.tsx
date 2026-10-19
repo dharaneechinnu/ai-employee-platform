@@ -15,6 +15,7 @@ import {
   useToast,
 } from "../components/ui";
 import { ApiError, api, type ConnectedProvider, type ProviderOption } from "../lib/api";
+import { formatDateTime } from "../lib/labels";
 import { useAuth } from "../lib/auth";
 
 /**
@@ -23,6 +24,13 @@ import { useAuth } from "../lib/auth";
  * A saved key is never shown again, to anyone, so this form only ever
  * writes. The last four characters are all the UI gets back.
  */
+const FREE_TIER = ["gemini", "groq"];
+const ORDER = ["gemini", "groq", "openai", "anthropic", "deepseek", "mistral", "openrouter", "custom"];
+// Any open-source model, on the company's own server: vLLM, Ollama,
+// LM Studio and LiteLLM all speak the OpenAI format.
+const CUSTOM = "custom";
+const rank = (key: string) => (ORDER.includes(key) ? ORDER.indexOf(key) : ORDER.length);
+
 export default function Providers() {
   const { org } = useAuth();
   const toast = useToast();
@@ -30,13 +38,19 @@ export default function Providers() {
   const [connected, setConnected] = useState<ConnectedProvider[]>([]);
   const [selected, setSelected] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [label, setLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   async function load() {
     if (!org) return;
-    const options = await api.get<ProviderOption[]>(`/orgs/${org.id}/providers/available`);
+    // Free tiers first, so a new company's first choice costs nothing.
+    const options = (await api.get<ProviderOption[]>(`/orgs/${org.id}/providers/available`)).sort(
+      (a, b) => rank(a.key) - rank(b.key),
+    );
     setAvailable(options);
     setConnected(await api.get<ConnectedProvider[]>(`/orgs/${org.id}/providers`));
     setSelected((current) => current || options[0]?.key || "");
@@ -53,8 +67,16 @@ export default function Providers() {
     setError(null);
     setSaving(true);
     try {
-      await api.post(`/orgs/${org.id}/providers`, { provider_key: selected, api_key: apiKey });
+      await api.post(`/orgs/${org.id}/providers`, {
+        provider_key: selected,
+        api_key: apiKey,
+        model: model || null,
+        ...(selected === CUSTOM ? { base_url: baseUrl, label: label || null } : {}),
+      });
       setApiKey("");
+      setModel("");
+      setBaseUrl("");
+      setLabel("");
       toast("Key saved. Test it to make sure it works.");
       await load();
     } catch (err) {
@@ -94,6 +116,8 @@ export default function Providers() {
   }
 
   const chosen = available.find((p) => p.key === selected);
+  const custom = selected === CUSTOM;
+  const ready = custom ? Boolean(baseUrl && model) : Boolean(apiKey);
 
   return (
     <>
@@ -126,7 +150,9 @@ export default function Providers() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-display text-lg font-semibold">{provider.display_name}</div>
-                      <div className="font-mono text-[13px] text-muted">key ••••••••{provider.key_last4}</div>
+                      <div className="font-mono text-[13px] text-muted">
+                        {provider.key_last4 === "none" ? "no key" : `key ••••••••${provider.key_last4}`}
+                      </div>
                     </div>
                     {isTesting ? (
                       <Chip tone="run" dot={false}>
@@ -163,14 +189,18 @@ export default function Providers() {
 
                   {provider.last_error && <ErrorNote message={provider.last_error} />}
 
-                  <div className="grid grid-cols-2 gap-2.5 text-[13px]">
-                    <div>
-                      <div className="text-dim">Default model</div>
-                      <div className="truncate font-mono">{provider.default_model ?? "—"}</div>
+                  {provider.base_url && (
+                    <div className="text-[13px]">
+                      <div className="text-dim">Server</div>
+                      <div className="truncate font-mono" title={provider.base_url}>{provider.base_url}</div>
                     </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2.5 text-[13px]">
+                    <ModelChoice orgId={org!.id} provider={provider} onSaved={() => void load()} />
                     <div>
                       <div className="text-dim">Last tested</div>
-                      <div className="font-mono" title={provider.last_tested_at ? new Date(provider.last_tested_at).toLocaleString() : undefined}>
+                      <div className="font-mono" title={provider.last_tested_at ? formatDateTime(provider.last_tested_at) : undefined}>
                         {provider.last_tested_at ? relativeTime(provider.last_tested_at) : "never"}
                       </div>
                     </div>
@@ -190,20 +220,53 @@ export default function Providers() {
           </div>
         )}
 
-        <form onSubmit={connect} className="card rise flex flex-col gap-4 border-dashed border-line2 p-5">
+        <form onSubmit={connect} className="card rise flex flex-col gap-4 border-dashed border-line2 p-5" data-coach="provider-form">
           <h2 className="font-display text-[17px] font-semibold">Connect a provider</h2>
           <div className="grid items-end gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))]">
             <Select
               label="Provider"
               value={selected}
               onChange={setSelected}
-              options={available.map((option) => ({ value: option.key, label: option.display_name }))}
+              options={available.map((option) => ({
+                value: option.key,
+                label: FREE_TIER.includes(option.key) ? `${option.display_name} (free tier)` : option.display_name,
+              }))}
             />
-            <Input label="API key" type="password" value={apiKey} onChange={setApiKey} required mono autoComplete="off" placeholder="Paste key" />
-            <Button type="submit" variant={connected.length ? "ghost" : "brand"} disabled={!apiKey || saving}>
+            {custom && (
+              <>
+                <Input label="Name" value={label} onChange={setLabel} placeholder="Our Llama server" />
+                <Input label="Server address" value={baseUrl} onChange={setBaseUrl} required mono placeholder="https://llm.example.com/v1" />
+              </>
+            )}
+            <Input
+              label={custom ? "Model" : "Model (optional)"}
+              value={model}
+              onChange={setModel}
+              required={custom}
+              mono
+              placeholder={custom ? "llama-3.3-70b" : chosen?.default_model ?? ""}
+            />
+            <Input
+              label={custom ? "API key (if it needs one)" : "API key"}
+              type="password"
+              value={apiKey}
+              onChange={setApiKey}
+              required={!custom}
+              mono
+              autoComplete="off"
+              placeholder="Paste key"
+            />
+            <Button type="submit" variant={connected.length ? "ghost" : "brand"} disabled={!ready || saving}>
               {saving ? "Saving…" : "Connect"}
             </Button>
           </div>
+          {custom && (
+            <p className="text-[13px] leading-snug text-muted">
+              Run any open-source model (Llama, Qwen, DeepSeek, Mistral, Gemma) on your own server with vLLM, Ollama, LM Studio
+              or LiteLLM, and paste the address of its OpenAI-compatible API, usually ending in <span className="font-mono">/v1</span>.
+              It must be reachable over https.
+            </p>
+          )}
           {chosen?.trains_on_data && (
             <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px]">
               <Icon name="warn" className="text-ask-text" />
@@ -212,7 +275,7 @@ export default function Providers() {
           )}
           <ErrorNote message={error} />
           <p className="flex flex-wrap gap-x-3 text-[13px] text-dim">
-            The key is encrypted and cannot be read back, by you or by us. Only its last four characters are shown.
+            Keys are encrypted and cannot be read back, by you or by us. Only the last four characters are shown.
             {chosen?.docs_url && (
               <a href={chosen.docs_url} target="_blank" rel="noreferrer" className="hover:underline">
                 Where do I find this key?
@@ -222,5 +285,93 @@ export default function Providers() {
         </form>
       </PageBody>
     </>
+  );
+}
+
+/**
+ * Which model this provider runs. "Load models" asks the provider what
+ * the key can use, so nobody has to know model ids by heart; typing a
+ * name still works for a provider that cannot list.
+ */
+function ModelChoice({ orgId, provider, onSaved }: { orgId: string; provider: ConnectedProvider; onSaved: () => void }) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(provider.default_model ?? "");
+  const [options, setOptions] = useState<string[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function loadOptions() {
+    setLoading(true);
+    try {
+      setOptions(await api.get<string[]>(`/orgs/${orgId}/providers/${provider.provider_key}/models`));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not load the model list.", "bad");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function save(model: string | null) {
+    setSaving(true);
+    try {
+      await api.put(`/orgs/${orgId}/providers/${provider.provider_key}/model`, { model });
+      toast("Model saved. Test the connection to check it works.");
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not save that model.", "bad");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="min-w-0">
+        <div className="text-dim">Model{provider.model_chosen ? "" : " (default)"}</div>
+        <button
+          type="button"
+          className="flex max-w-full items-center gap-1 truncate font-mono text-accent-text hover:underline"
+          onClick={() => setEditing(true)}
+          title="Change model"
+        >
+          <span className="truncate">{provider.default_model ?? "—"}</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="col-span-2 flex flex-col gap-2 rounded-xl border border-line bg-raised p-3">
+      {options && options.length > 0 ? (
+        <Select
+          label="Model"
+          value={value}
+          onChange={setValue}
+          options={[...new Set([value, ...options])].filter(Boolean).map((m) => ({ value: m, label: m }))}
+        />
+      ) : (
+        <Input label="Model" value={value} onChange={setValue} mono placeholder="model name" />
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={!value || saving} onClick={() => void save(value)}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {!options && (
+          <Button size="sm" variant="ghost" disabled={loading} onClick={() => void loadOptions()}>
+            {loading ? "Loading…" : "Load models"}
+          </Button>
+        )}
+        {provider.model_chosen && provider.provider_key !== CUSTOM && (
+          <Button size="sm" variant="ghost" disabled={saving} onClick={() => void save(null)}>
+            Use default
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+      </div>
+    </div>
   );
 }

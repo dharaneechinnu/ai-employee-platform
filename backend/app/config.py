@@ -55,6 +55,12 @@ class Settings(BaseSettings):
     public_app_url: str = "http://localhost:5173"
     public_api_url: str = "http://localhost:8000"
 
+    # Lets a company's own AI server or MCP tool server live on a
+    # private address or plain http. Local development only: in
+    # production it would let anyone make our servers call internal
+    # addresses.
+    allow_private_urls: bool = False
+
     # --- one-click connections (OAuth) -------------------------------
     # Register one OAuth app per provider for the whole platform. Each
     # company then connects its own account through it; tokens are
@@ -104,6 +110,8 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET must be set to a real value in production")
             if self.encryption_key == DEV_ENCRYPTION_KEY:
                 raise ValueError("ENCRYPTION_KEY must be set to a real value in production")
+            if self.allow_private_urls:
+                raise ValueError("ALLOW_PRIVATE_URLS is for local development only")
         return self
 
 

@@ -31,6 +31,7 @@ from app.schemas.ai_employee import EmployeeConfig
 from app.services.approval_service import ApprovalService
 from app.services.connection_service import ConnectionService
 from app.services.employee_service import build_system_prompt
+from app.services.mcp_service import McpService
 from app.services.notification_service import NotificationService, notify_safely
 from app.services.policy_service import PolicyService
 from app.services.provider_service import ProviderService
@@ -107,9 +108,11 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         assert run_db is not None
         writer = EventWriter(session, run_db.id, task.org_id)
 
-        provider_key, model = _split_model(config.model)
+        providers = ProviderService(session, task.org_id)
         try:
-            api_key = await ProviderService(session, task.org_id).resolve_api_key(provider_key)
+            provider_key, model = await providers.resolve_model(config.model)
+            api_key = await providers.resolve_api_key(provider_key)
+            base_url = await providers.resolve_base_url(provider_key)
         except NotFoundError:
             # No key connected. A clear message beats a mysterious
             # failure three steps into a run.
@@ -121,8 +124,8 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 RunStatus.FAILED,
                 stop_cause="provider_not_connected",
                 error=(
-                    f"No API key is connected for '{provider_key}'. "
-                    "Connect one in Settings before running tasks."
+                    "No AI key is connected for this AI Employee's model. "
+                    "An admin can add one in Providers."
                 ),
             )
 
@@ -161,6 +164,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         # for approval is picked up). Tools receive only the grant
         # they declare; the model never sees any of it.
         grants = await ConnectionService(session, task.org_id).resolve_grants()
+        grants.update(await McpService(session, task.org_id).grants())
         await session.commit()
 
         async def cancelled() -> bool:
@@ -168,9 +172,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             return bool(fresh)
 
         loop = AgentLoop(
-            provider=build_provider(provider_key, api_key),
+            provider=build_provider(provider_key, api_key, base_url=base_url),
             model=model,
-            tools=registry.for_employee(config.enabled_tools),
+            tools=registry.for_employee(config.enabled_tools, extra=resolver.extra_tools),
             tool_context=ToolContext(
                 org_id=task.org_id,
                 run_id=run_db.id,
@@ -199,7 +203,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
 
         if outcome.paused and outcome.pending_tool_call:
             call = outcome.pending_tool_call
-            tool_cls = registry.get(call["name"])
+            tool_cls = resolver.tool(call["name"])
             approval = await ApprovalService(session, task.org_id).create(
                 run_id=run_db.id,
                 tool_name=call["name"],
@@ -286,15 +290,3 @@ async def _finish(
     if task is not None:
         await notify_safely(NotificationService(session, run.org_id).task_finished(task, run))
     return {"status": str(status), "stop_cause": stop_cause, "run_id": str(run.id)}
-
-
-def _split_model(model: str) -> tuple[str, str]:
-    """Accept "gemini:gemini-2.0-flash" or a bare model name.
-
-    A bare name defaults to Gemini, which is the documented starting
-    provider, so existing configuration keeps working.
-    """
-    if ":" in model:
-        provider_key, _, name = model.partition(":")
-        return provider_key, name
-    return "gemini", model

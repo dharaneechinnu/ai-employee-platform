@@ -187,7 +187,11 @@ async def test_create_from_a_template(api: AsyncClient, session: AsyncSession) -
         headers=headers,
     )
     assert created.status_code == 201
-    assert "pull request" in created.json()["config"]["guided"]["what_it_does"].lower()
+    config = created.json()["config"]
+    assert "incident" in config["guided"]["what_it_does"].lower()
+    # Templates promise only what real tools can do, and come with them ticked.
+    assert "run_query" in config["enabled_tools"]
+    assert config["model"] == "auto"
 
 
 async def test_save_an_employee_as_a_company_template(

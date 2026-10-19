@@ -170,15 +170,15 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
         badge="STAFF ONLY"
         headline="Platform control room."
         ticker="Create, limit and suspend companies. Counts and health only."
-        orbit={[
-          { label: "Companies", tone: "var(--accent)", live: true },
-          { label: "Limits", tone: "var(--ok)" },
-          { label: "Suspensions", tone: "var(--bad)" },
+        points={[
+          "Create companies and send the first invite",
+          "Set how many AI Employees each may run",
+          "Suspend an account; customer data stays private",
         ]}
       />
       <section className="flex flex-[1_1_440px] items-center justify-center px-6 py-12">
-        <div className="halo rise w-full max-w-[420px] rounded-3xl p-[1.5px]" style={{ boxShadow: "0 40px 120px -50px var(--glow)", animationDelay: ".15s" }}>
-          <form onSubmit={submit} className="flex flex-col gap-[18px] rounded-[23px] bg-panel p-8 transition-colors duration-500">
+        <div className="rise w-full max-w-[400px]">
+          <form onSubmit={submit} className="flex flex-col gap-[18px]">
             <h2 className="font-display text-2xl font-semibold">Platform sign in</h2>
             <Input label="Email" type="email" value={email} onChange={setEmail} required autoComplete="username" />
             <Input label="Password" type="password" value={password} onChange={setPassword} required autoComplete="current-password" />
@@ -351,7 +351,7 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
             <Icon name="shield" size={18} strokeWidth={2.2} />
           </span>
           <span className="font-display text-base font-semibold">Platform admin</span>
-          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 font-mono text-[11px] tracking-[0.12em] text-accent-text">STAFF</span>
+          <span className="rounded-full bg-accent-soft px-2.5 py-0.5 font-mono text-xs tracking-[0.12em] text-accent-text">STAFF</span>
           <span className="ml-auto" />
           <ThemeToggle />
           <Button variant="ghost" size="sm" onClick={onSignOut}>
@@ -448,7 +448,7 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
             <section className="card rise overflow-hidden">
               <div className="overflow-x-auto">
                 <div className="min-w-[940px]">
-                  <div className="grid grid-cols-[minmax(220px,1.4fr)_120px_90px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
+                  <div className="grid grid-cols-[minmax(220px,1.4fr)_120px_90px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3 font-mono text-xs uppercase tracking-[0.1em] text-dim">
                     <span>Company</span>
                     <span>Status</span>
                     <span>Members</span>

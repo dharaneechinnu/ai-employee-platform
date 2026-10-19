@@ -19,11 +19,12 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.providers import build_provider
-from app.agent.providers.base import LLMError
+from app.agent.providers import CUSTOM_PROVIDER, build_provider
+from app.agent.providers.base import LLMError, LLMProvider
 from app.core.crypto import decrypt, encrypt
 from app.core.errors import NotFoundError, ValidationError
 from app.core.observability import get_logger
+from app.core.urls import check_service_url
 from app.db.models.provider import (
     ConnectionStatus,
     ProviderConfig,
@@ -32,6 +33,39 @@ from app.db.models.provider import (
 )
 
 log = get_logger(__name__)
+
+# "Use whichever AI the company connected." `gemini-flash` is the old
+# default, which was never a real Gemini model id, so it is treated the
+# same way rather than sent to Google and rejected.
+AUTO_MODEL = "auto"
+_AUTO_ALIASES = {AUTO_MODEL, "gemini-flash", ""}
+
+# When several providers are connected, the first working one in this
+# order wins: the free tiers first.
+_AUTO_PREFERENCE = [
+    "gemini",
+    "groq",
+    "deepseek",
+    "openrouter",
+    "mistral",
+    "openai",
+    "anthropic",
+    CUSTOM_PROVIDER,
+]
+
+MIN_KEY_LENGTH = 8
+
+
+def split_model(model: str) -> tuple[str, str]:
+    """Accept "gemini:gemini-2.0-flash" or a bare model name.
+
+    A bare name defaults to Gemini, which is the documented starting
+    provider, so existing configuration keeps working.
+    """
+    if ":" in model:
+        provider_key, _, name = model.partition(":")
+        return provider_key, name
+    return "gemini", model
 
 
 @dataclass(slots=True)
@@ -43,7 +77,11 @@ class ConnectedProvider:
     last_tested_at: datetime | None
     last_error: str | None
     trains_on_data: bool
+    # What runs: the company's chosen model, else the provider's default.
     default_model: str | None
+    # True when the company picked it, rather than taking the default.
+    model_chosen: bool = False
+    base_url: str | None = None
 
 
 class ProviderService:
@@ -77,19 +115,47 @@ class ProviderService:
         return [
             ConnectedProvider(
                 provider_key=config.provider_key,
-                display_name=supported.display_name,
+                display_name=config.label or supported.display_name,
                 key_last4=config.key_last4,
                 status=config.status,
                 last_tested_at=config.last_tested_at,
                 last_error=config.last_error,
                 trains_on_data=supported.trains_on_data,
-                default_model=supported.default_model,
+                default_model=config.model or supported.default_model,
+                model_chosen=config.model is not None,
+                base_url=config.base_url,
             )
             for config, supported in rows.all()
         ]
 
-    async def connect(self, *, provider_key: str, api_key: str) -> ProviderConfig:
+    async def connect(
+        self,
+        *,
+        provider_key: str,
+        api_key: str,
+        model: str | None = None,
+        base_url: str | None = None,
+        label: str | None = None,
+    ) -> ProviderConfig:
         supported = await self._supported(provider_key)
+        api_key = api_key.strip()
+        model = (model or "").strip() or None
+
+        if provider_key == CUSTOM_PROVIDER:
+            # Any OpenAI-compatible server: the company says where it is
+            # and which model it serves. A key is optional, because a
+            # self-hosted server often has none.
+            if not base_url:
+                raise ValidationError("Add your server's address, like https://llm.example.com/v1.")
+            if not model:
+                raise ValidationError("Add the model name your server runs, like llama-3.3-70b.")
+            base_url = check_service_url(base_url, what="server")
+            label = (label or "").strip()[:100] or None
+        else:
+            if len(api_key) < MIN_KEY_LENGTH:
+                raise ValidationError("That API key looks too short. Paste the whole key.")
+            base_url = None
+            label = None
 
         existing = await self.session.scalar(
             select(ProviderConfig).where(
@@ -99,7 +165,7 @@ class ProviderService:
         )
 
         ciphertext = encrypt(api_key, scope=self.org_id)
-        last4 = api_key[-4:] if len(api_key) >= 4 else "????"
+        last4 = api_key[-4:] if len(api_key) >= 4 else ("none" if not api_key else "????")
 
         if existing is not None:
             # Replacing a key, not revealing one: there is no read path.
@@ -107,6 +173,9 @@ class ProviderService:
             existing.key_last4 = last4
             existing.status = ConnectionStatus.UNTESTED
             existing.last_error = None
+            existing.model = model
+            existing.base_url = base_url
+            existing.label = label
             config = existing
         else:
             config = ProviderConfig(
@@ -114,6 +183,9 @@ class ProviderService:
                 provider_key=provider_key,
                 api_key_enc=ciphertext,
                 key_last4=last4,
+                model=model,
+                base_url=base_url,
+                label=label,
             )
             self.session.add(config)
 
@@ -131,12 +203,10 @@ class ProviderService:
         mysterious task failure three days later."""
         config = await self._config(provider_key)
         supported = await self._supported(provider_key)
-
-        api_key = decrypt(config.api_key_enc, scope=self.org_id)
-        provider = build_provider(provider_key, api_key)
+        provider = self._build(config)
 
         try:
-            await provider.check(supported.default_model or "gpt-4o-mini")
+            await provider.check(config.model or supported.default_model or "gpt-4o-mini")
         except LLMError as exc:
             config.status = ConnectionStatus.FAILED
             config.last_error = exc.message[:500]
@@ -146,6 +216,45 @@ class ProviderService:
 
         config.last_tested_at = datetime.now(UTC)
         return config
+
+    async def set_model(self, provider_key: str, model: str | None) -> ProviderConfig:
+        """Pick which model this provider runs. None goes back to the
+        provider's default. The connection is marked untested, because
+        a wrong model name fails just like a wrong key."""
+        config = await self._config(provider_key)
+        model = (model or "").strip() or None
+        if model is None and provider_key == CUSTOM_PROVIDER:
+            raise ValidationError("Your own server needs a model name.")
+        if model != config.model:
+            config.model = model
+            config.status = ConnectionStatus.UNTESTED
+            config.last_error = None
+        return config
+
+    async def list_models(self, provider_key: str) -> list[str]:
+        """Ask the provider which models this key can use."""
+        provider = self._build(await self._config(provider_key))
+        try:
+            return (await provider.list_models())[:300]
+        except LLMError as exc:
+            raise ValidationError(f"Could not load the model list: {exc.message[:300]}") from exc
+
+    def _build(self, config: ProviderConfig) -> LLMProvider:
+        api_key = decrypt(config.api_key_enc, scope=self.org_id)
+        return build_provider(config.provider_key, api_key, base_url=config.base_url)
+
+    async def resolve_api_key(self, provider_key: str) -> str:
+        """Decrypt a key for an outbound call.
+
+        The only place plaintext exists, called by the worker right
+        before a provider request. The value never enters the model's
+        context, so prompt injection has nothing to extract.
+        """
+        return decrypt((await self._config(provider_key)).api_key_enc, scope=self.org_id)
+
+    async def resolve_base_url(self, provider_key: str) -> str | None:
+        """Where the company's own server lives; None for every hosted provider."""
+        return (await self._config(provider_key)).base_url
 
     async def disconnect(self, provider_key: str) -> None:
         await self.session.delete(await self._config(provider_key))
@@ -161,14 +270,32 @@ class ProviderService:
             raise NotFoundError(f"'{provider_key}' is not connected.")
         return config
 
-    async def resolve_api_key(self, provider_key: str) -> str:
-        """Decrypt a key for an outbound call.
+    async def resolve_model(self, configured: str) -> tuple[str, str]:
+        """The provider and model a run should use.
 
-        The only place plaintext exists, called by the worker right
-        before a provider request. The value never enters the model's
-        context, so prompt injection has nothing to extract.
+        An explicit "provider:model" is used as it is. "auto" picks the
+        company's connected provider (a working one first) and that
+        provider's default model, so a new company that connected only
+        Groq does not fail on a Gemini default it never set up.
         """
-        return decrypt((await self._config(provider_key)).api_key_enc, scope=self.org_id)
+        if configured.strip() not in _AUTO_ALIASES:
+            return split_model(configured)
+
+        candidates = [c for c in await self.connected() if c.default_model]
+        if not candidates:
+            raise NotFoundError("No AI provider is connected.")
+
+        def rank(c: ConnectedProvider) -> tuple[int, int]:
+            failed = 1 if c.status is ConnectionStatus.FAILED else 0
+            order = (
+                _AUTO_PREFERENCE.index(c.provider_key)
+                if c.provider_key in _AUTO_PREFERENCE
+                else len(_AUTO_PREFERENCE)
+            )
+            return failed, order
+
+        best = min(candidates, key=rank)
+        return best.provider_key, best.default_model or ""
 
     async def model_choices(self) -> list[dict[str, object]]:
         """Models this company can actually pick, which means only the

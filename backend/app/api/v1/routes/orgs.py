@@ -11,10 +11,16 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from pydantic import BaseModel
+from sqlalchemy import func, select
 
 from app.api.v1.deps import ContextDep, RequestContext, SessionDep, require_permission
 from app.core.permissions import Permission
+from app.db.models.ai_employee import AIEmployee, EmployeeStatus
 from app.db.models.identity import Role
+from app.db.models.policy import Connection
+from app.db.models.provider import ProviderConfig
+from app.db.models.task import Task
 from app.db.repositories.identity_repo import MembershipRepository
 from app.schemas.auth import (
     InviteRequest,
@@ -28,6 +34,50 @@ router = APIRouter(prefix="/orgs/{org_id}", tags=["organizations"])
 
 ManageMembers = Annotated[RequestContext, Depends(require_permission(Permission.MEMBER_MANAGE))]
 ReadMembers = Annotated[RequestContext, Depends(require_permission(Permission.MEMBER_READ))]
+ReadTasks = Annotated[RequestContext, Depends(require_permission(Permission.TASK_READ))]
+
+
+class SetupStatus(BaseModel):
+    """How far a company is through first-time setup.
+
+    Counts only, so members may read it too: a member stuck because no
+    AI key exists should see why, without seeing the key.
+    """
+
+    ai_connected: bool
+    apps_connected: bool
+    employees: int
+    employees_active: int
+    tasks: int
+
+
+@router.get("/setup", summary="First-time setup progress")
+async def setup_status(ctx: ReadTasks, session: SessionDep) -> SetupStatus:
+    async def count(stmt: object) -> int:
+        return int(await session.scalar(stmt) or 0)  # type: ignore[call-overload]
+
+    org = ctx.org_id
+    return SetupStatus(
+        ai_connected=await count(
+            select(func.count()).select_from(ProviderConfig).where(ProviderConfig.org_id == org)
+        )
+        > 0,
+        apps_connected=await count(
+            select(func.count())
+            .select_from(Connection)
+            .where(Connection.org_id == org, Connection.enabled.is_(True))
+        )
+        > 0,
+        employees=await count(
+            select(func.count()).select_from(AIEmployee).where(AIEmployee.org_id == org)
+        ),
+        employees_active=await count(
+            select(func.count())
+            .select_from(AIEmployee)
+            .where(AIEmployee.org_id == org, AIEmployee.status == EmployeeStatus.ACTIVE)
+        ),
+        tasks=await count(select(func.count()).select_from(Task).where(Task.org_id == org)),
+    )
 
 
 @router.get("/members", response_model=list[MemberSummary], summary="List members")

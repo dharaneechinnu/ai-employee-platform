@@ -235,7 +235,10 @@ _SENSITIVE = {"api_key", "token", "password", "secret", "authorization", "creden
 def _redact(payload: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, value in payload.items():
-        if any(marker in key.lower() for marker in _SENSITIVE):
+        # Token counts ("prompt_tokens") are usage numbers, not secrets.
+        if key.lower().endswith("_tokens"):
+            out[key] = value
+        elif any(marker in key.lower() for marker in _SENSITIVE):
             out[key] = "[redacted]"
         elif isinstance(value, dict):
             out[key] = _redact(value)

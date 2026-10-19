@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import AgentTree from "../components/AgentTree";
+import SetupGuide, { type SetupStatus } from "../components/SetupGuide";
+import VoiceInput from "../components/VoiceInput";
 import { Icon, type IconName } from "../components/icons";
 import {
   Avatar,
@@ -30,7 +32,8 @@ import {
   type Task,
   type TaskListItem,
 } from "../lib/api";
-import { useAuth } from "../lib/auth";
+import { useAuth, useIsAdmin } from "../lib/auth";
+import { formatDateTime, toolLabel } from "../lib/labels";
 
 /**
  * Phase 4. Assigning a task returns immediately; the run happens in a
@@ -72,10 +75,13 @@ export default function Tasks() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  const isAdmin = useIsAdmin();
+  const [setup, setSetup] = useState<SetupStatus | null>(null);
 
   async function loadTasks() {
     if (!org) return;
     setTasks(await api.get<TaskListItem[]>(`/orgs/${org.id}/tasks`));
+    setSetup(await api.get<SetupStatus>(`/orgs/${org.id}/setup`).catch(() => null));
   }
 
   useEffect(() => {
@@ -189,11 +195,12 @@ export default function Tasks() {
       </PageHeader>
 
       <PageBody>
+        {setup && <SetupGuide status={setup} isAdmin={isAdmin} />}
         <form onSubmit={assign} className="card rise flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="flex-1 font-display text-[17px] font-semibold">Assign work</h2>
             {active.length > 0 && (
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="AI Employee">
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="AI Employee" data-coach="employee-pick">
                 {active.map((employee) => {
                   const on = employee.id === employeeId;
                   return (
@@ -203,7 +210,7 @@ export default function Tasks() {
                       role="radio"
                       aria-checked={on}
                       onClick={() => setEmployeeId(employee.id)}
-                      className={`flex h-[42px] items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-sm font-medium transition-colors ${
+                      className={`flex h-11 items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-sm font-medium transition-colors ${
                         on
                           ? "border-accent bg-accent-soft text-ink"
                           : "border-line2 text-muted hover:border-accent-line hover:text-ink"
@@ -229,6 +236,7 @@ export default function Tasks() {
             </Empty>
           ) : (
             <>
+              <div data-coach="composer">
               <TextArea
                 label="What should it do?"
                 hideLabel
@@ -236,14 +244,27 @@ export default function Tasks() {
                 value={input}
                 onChange={setInput}
                 inputRef={composer}
-                placeholder="What should it do? For example: look at bug 42 and suggest a fix."
+                placeholder="What should it do? For example: summarise yesterday's support emails."
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void assign();
                 }}
               />
+              </div>
               <ErrorNote message={error} />
               <div className="flex flex-wrap items-center gap-3.5">
-                <span className="flex items-center gap-2.5 text-[13px] text-muted">
+                {org && (
+                  <VoiceInput
+                    orgId={org.id}
+                    onError={setError}
+                    onText={(spoken) => {
+                      // Added to what is already typed, so speaking can
+                      // finish a sentence started on the keyboard.
+                      setInput((typed) => (typed.trim() ? `${typed.trimEnd()} ${spoken}` : spoken));
+                      composer.current?.focus();
+                    }}
+                  />
+                )}
+                <span className="flex items-center gap-2.5 text-[13px] text-muted" data-coach="dry-run">
                   <Switch checked={dryRun} onChange={setDryRun} label="Dry run" />
                   Dry run: plan only, nothing is changed or sent
                 </span>
@@ -251,7 +272,11 @@ export default function Tasks() {
                   <span className="hidden text-xs text-dim sm:inline">
                     <span className="kbd">Ctrl</span> + <span className="kbd">Enter</span>
                   </span>
-                  <Button type="submit" disabled={busy || !input.trim() || !employeeId}>
+                  <Button
+                    type="submit"
+                    disabled={busy || !input.trim() || !employeeId || setup?.ai_connected === false}
+                    title={setup?.ai_connected === false ? "Connect an AI key first" : undefined}
+                  >
                     {busy ? "Assigning…" : `Assign to ${pickedName ?? "…"}`}
                     <Icon name="arrow" size={16} strokeWidth={2.2} />
                   </Button>
@@ -264,7 +289,7 @@ export default function Tasks() {
         {/* The agent tree needs the full width; the list steps aside until
             you go back to the timeline. */}
         <div className={`grid grid-cols-1 items-start gap-5 ${treeView ? "" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]"}`}>
-          <section className={`flex flex-col gap-3 ${treeView ? "hidden" : ""}`}>
+          <section className={`flex flex-col gap-3 ${treeView ? "hidden" : ""}`} data-coach="task-list">
             <div className="flex flex-wrap items-center gap-2.5">
               <Tabs
                 label="Filter tasks"
@@ -308,7 +333,7 @@ export default function Tasks() {
                     <span className="flex w-full items-center gap-2 text-[13px] text-muted">
                       <Avatar name={employee?.name ?? "?"} size={20} />
                       {employee?.name ?? "Unknown"}
-                      <span className="ml-auto font-mono text-xs text-dim" title={new Date(task.created_at).toLocaleString()}>
+                      <span className="ml-auto font-mono text-xs text-dim" title={formatDateTime(task.created_at)}>
                         {relativeTime(task.created_at)}
                       </span>
                     </span>
@@ -329,9 +354,9 @@ export default function Tasks() {
                 notifyActivity();
               }}
             />
-          ) : (
+          ) : tasks?.length ? (
             <Empty message="Pick a task" hint="Its live run appears here." />
-          )}
+          ) : null}
         </div>
       </PageBody>
     </>
@@ -381,7 +406,15 @@ function RunPanel({
       // finished before this page opened still shows its full trace.
       const trace = await api.get<{ events: RunEvent[] }>(`/orgs/${org.id}/runs/${loaded.run.id}/trace`);
       if (cancelled) return;
-      setEvents(trace.events);
+      // The saved trace nests each event's fields under `payload`; the
+      // live stream sends them flat. Same shape for both, so a finished
+      // run's timeline names its tools just like a live one.
+      setEvents(
+        trace.events.map((e) => {
+          const { payload, ...rest } = e as RunEvent & { payload?: Record<string, unknown> };
+          return { ...(payload ?? {}), ...rest } as RunEvent;
+        }),
+      );
 
       if (["running", "awaiting_approval", "queued"].includes(loaded.run.status)) {
         const lastSeq = trace.events.at(-1)?.seq ?? 0;
@@ -432,12 +465,15 @@ function RunPanel({
   const delegations = events.filter((e) => e.type === "tool_call" && e.tool === "delegate_to_specialist").length;
 
   return (
-    <section className="card rise overflow-hidden" aria-label="Run">
+    <section className="card rise overflow-hidden" aria-label="Run" data-coach="run-panel">
       <div className="flex flex-col gap-3.5 border-b border-line px-5 pb-4 pt-5">
         <div className="flex items-start gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <h2 className="font-display text-[19px] font-semibold tracking-[-0.015em]">{task.title ?? "Untitled"}</h2>
-            <p className="whitespace-pre-wrap text-sm leading-normal text-muted">{task.input}</p>
+            {/* The title is the start of the request, so only the rest is shown. */}
+            {restOfRequest(task.title, task.input) && (
+              <p className="whitespace-pre-wrap text-sm leading-normal text-muted">{restOfRequest(task.title, task.input)}</p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <StatusChip status={task.status} />
@@ -446,24 +482,26 @@ function RunPanel({
         </div>
 
         {task.run && (
-          <div className="grid grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-3 gap-2.5" data-coach="run-stats">
             <Stat label="Steps" value={String(task.run.step_count)} />
-            <Stat label="Tokens" value={(task.run.prompt_tokens + task.run.output_tokens).toLocaleString()} />
+            <Stat label="AI usage (tokens)" value={(task.run.prompt_tokens + task.run.output_tokens).toLocaleString("en-IN")} />
             {/* Estimated, not billed: with BYOK we never see their invoice. */}
             <Stat label="Est. cost" value={`~$${Number(task.run.estimated_cost_usd).toFixed(4)}`} />
           </div>
         )}
 
+        <div data-coach="run-tabs" className="self-start">
         <Tabs
           label="Run view"
           value={view}
           onChange={setView}
           items={[
-            { key: "timeline", label: "Timeline", count: events.length },
+            { key: "timeline", label: "Timeline", count: timelineRows(events, running).length },
             { key: "tree", label: "Agent tree", count: delegations },
             { key: "result", label: "Result" },
           ]}
         />
+        </div>
       </div>
 
       <div className="px-5 py-4">
@@ -496,7 +534,7 @@ function RunPanel({
 
       {running && (
         <div className="flex gap-2.5 border-t border-line px-5 py-3.5">
-          <Button variant="ghost" onClick={() => void cancel()}>
+          <Button variant="ghost" onClick={() => void cancel()} data-coach="run-cancel">
             Cancel run
           </Button>
         </div>
@@ -519,17 +557,46 @@ function Stat({ label, value }: { label: string; value: string }) {
 const EVENT_LABELS: Record<string, string> = {
   run_started: "Started",
   thinking: "Thinking",
-  llm_call: "Model call",
-  tool_call: "Using tool",
-  tool_result: "Tool result",
-  tool_blocked: "Blocked by policy",
-  approval_requested: "Waiting for approval",
+  llm_call: "Asked the AI",
+  tool_call: "Using a tool",
+  tool_result: "Got the result",
+  tool_blocked: "Not allowed by your Permissions",
+  approval_requested: "Waiting for a person to approve",
   approval_granted: "Approved",
   parallel_started: "Running in parallel",
   run_finished: "Finished",
   run_stopped: "Stopped",
-  provider_error: "Provider error",
+  provider_error: "The AI service returned an error",
 };
+
+const STOP_CAUSES: Record<string, string> = {
+  max_steps: "hit its step limit",
+  max_tokens: "hit its usage limit",
+  timeout: "took longer than 10 minutes",
+  cancelled: "cancelled by a person",
+  provider_not_connected: "no AI key is connected",
+  provider_error: "the AI service failed",
+  rejected: "a person said no",
+  expired: "nobody approved in time",
+};
+
+/** The row's headline: the plain name of the tool when there is one. */
+function eventTitle(event: RunEvent): string {
+  const tool = typeof event.tool === "string" ? toolLabel(event.tool) : null;
+  if (tool && event.type === "tool_call" && event.tool !== "delegate_to_specialist") return tool;
+  if (tool && event.type === "tool_result") return event.ok === false ? `Didn't work: ${tool}` : `Done: ${tool}`;
+  if (tool && event.type === "tool_blocked") return `Not allowed: ${tool}`;
+  if (tool && event.type === "approval_requested") return `Waiting for approval: ${tool}`;
+  if (event.type === "tool_call" && event.tool === "delegate_to_specialist") return "Asked a colleague";
+  return EVENT_LABELS[event.type] ?? event.type;
+}
+
+/** The technical detail, kept for the curious as a tooltip. */
+function eventTechnical(event: RunEvent): string {
+  return [event.type, event.tool, event.model, event.prompt_tokens != null ? `${Number(event.prompt_tokens) + Number(event.output_tokens ?? 0)} tokens` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 function eventStyle(event: RunEvent): { tone: "run" | "ok" | "ask" | "bad" | "brand" | "mute"; icon?: IconName } {
   if (event.tool === "delegate_to_specialist" && event.type === "tool_call") return { tone: "brand", icon: "tree" };
@@ -554,19 +621,22 @@ function eventStyle(event: RunEvent): { tone: "run" | "ok" | "ask" | "bad" | "br
 }
 
 function eventDetail(event: RunEvent): string {
+  const args = (event.arguments ?? {}) as Record<string, unknown>;
   if (event.tool === "delegate_to_specialist" && event.type === "tool_call") {
-    const args = (event.arguments ?? {}) as { specialist_name?: string };
-    return `asked ${args.specialist_name ?? "a specialist"}`;
+    return `asked ${String(args.specialist_name ?? "a specialist")}`;
   }
   if (event.type === "parallel_started") return `${event.count} at once`;
-  if (event.type === "llm_call") {
-    const tokens = Number(event.prompt_tokens ?? 0) + Number(event.output_tokens ?? 0);
-    return [event.model, tokens ? `${tokens.toLocaleString()} tok` : null, event.latency_ms ? `${event.latency_ms} ms` : null]
-      .filter(Boolean)
-      .join(" · ");
+  if (event.type === "llm_call") return event.latency_ms ? `answered in ${(Number(event.latency_ms) / 1000).toFixed(1)} s` : "";
+  if (event.type === "tool_call") {
+    // The one argument that says what this step is about.
+    const key = ["url", "query", "to", "subject", "file_id", "content"].find((k) => typeof args[k] === "string");
+    return key ? String(args[key]).slice(0, 90) : "";
   }
-  if (event.type === "tool_result") return [event.tool, event.ok === false ? String(event.error_class ?? "error") : "ok"].join(" · ");
-  return [event.tool, event.model, event.cause, event.reason, event.error].filter(Boolean).join(" · ");
+  if (event.type === "tool_result") return event.ok === false ? String(event.error ?? "it reported a problem") : "";
+  if (event.type === "run_stopped" || event.type === "run_finished") {
+    return event.cause && event.cause !== "completed" ? STOP_CAUSES[String(event.cause)] ?? String(event.cause) : "";
+  }
+  return [event.reason, event.error].filter(Boolean).join(" · ");
 }
 
 const TONE_STEP: Record<string, string> = {
@@ -577,6 +647,43 @@ const TONE_STEP: Record<string, string> = {
   brand: "bg-accent-soft border-accent-line text-accent-text",
   mute: "bg-raised border-line2 text-dim",
 };
+
+/** The request without the part already shown as its title. */
+function restOfRequest(title: string | null | undefined, input: string): string {
+  const text = input.trim();
+  if (!title) return text;
+  const head = title.trim().replace(/[.?!…]+$/, "");
+  if (!text.toLowerCase().startsWith(head.toLowerCase())) return text;
+  return text.slice(head.length).replace(/^[\s.?!…:,-]+/, "").trim();
+}
+
+type Row = { event: RunEvent; result?: RunEvent };
+
+/**
+ * One row per thing that happened, not per event: a tool call and its
+ * result share a row, and "Thinking" only shows while it is happening
+ * (every step thinks, so a permanent row for it would just repeat).
+ */
+export function timelineRows(events: RunEvent[], running: boolean): Row[] {
+  const rows: Row[] = [];
+  events.forEach((event, i) => {
+    if (event.type === "thinking") {
+      if (running && i === events.length - 1) rows.push({ event });
+      return;
+    }
+    if (event.type === "tool_result") {
+      for (let k = rows.length - 1; k >= 0; k--) {
+        const row = rows[k];
+        if (row.event.type === "tool_call" && row.event.tool === event.tool && !row.result) {
+          row.result = event;
+          return;
+        }
+      }
+    }
+    rows.push({ event });
+  });
+  return rows;
+}
 
 function Timeline({ events, running }: { events: RunEvent[]; running: boolean }) {
   const end = useRef<HTMLLIElement>(null);
@@ -604,30 +711,31 @@ function Timeline({ events, running }: { events: RunEvent[]; running: boolean })
   return (
     <ol className="relative flex max-h-[30rem] flex-col gap-0.5 overflow-y-auto pr-1">
       <li aria-hidden="true" className="absolute bottom-6 left-[19px] top-6 w-0.5" style={{ background: "linear-gradient(var(--line2),var(--run))" }} />
-      {events.map((event, i) => {
-        const style = eventStyle(event);
-        const last = i === events.length - 1;
-        const live = last && running;
-        const detail = eventDetail(event);
+      {timelineRows(events, running).map(({ event, result }, i, rows) => {
+        const failed = result?.ok === false;
+        const style = result ? (failed ? { tone: "bad" as const, icon: "x" as IconName } : { tone: "mute" as const, icon: "check" as IconName }) : eventStyle(event);
+        const last = i === rows.length - 1;
+        const live = last && running && !result;
+        const detail = failed ? String(result?.error ?? "it reported a problem") : eventDetail(event);
         return (
           <li key={event.seq} className="slide-in relative flex gap-3.5 py-1.5" style={{ animationDelay: `${Math.min(i, 10) * 0.03}s` }}>
             {live ? (
               <span className="halo relative h-10 w-10 shrink-0 rounded-xl p-[1.5px]">
                 <span className="flex h-full w-full items-center justify-center rounded-[10.5px] bg-run-soft font-mono text-xs text-run-text">
-                  {event.seq}
+                  {i + 1}
                 </span>
               </span>
             ) : (
               <span className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border font-mono text-xs ${TONE_STEP[style.tone]}`}>
-                {style.icon ? <Icon name={style.icon} size={17} /> : event.seq}
+                {style.icon ? <Icon name={style.icon} size={17} /> : i + 1}
               </span>
             )}
-            <div className="flex min-w-0 flex-col gap-0.5 pt-0.5">
-              <span className={`text-sm font-medium ${live ? "text-run-text" : ""}`}>
-                {EVENT_LABELS[event.type] ?? event.type}
+            <div className="flex min-w-0 flex-col gap-0.5 pt-0.5" title={eventTechnical(event)}>
+              <span className={`text-sm font-medium ${live ? "text-run-text" : ""} ${failed ? "text-bad-text" : ""}`}>
+                {eventTitle(event)}
                 {live && <span className="caret">_</span>}
               </span>
-              {detail && <span className="truncate font-mono text-xs text-muted">{detail}</span>}
+              {detail && <span className="truncate text-xs text-muted">{detail}</span>}
             </div>
           </li>
         );

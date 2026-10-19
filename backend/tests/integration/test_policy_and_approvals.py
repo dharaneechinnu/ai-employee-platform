@@ -75,7 +75,7 @@ class SendsThenAnswers(LLMProvider):
 def stub_sender(monkeypatch: pytest.MonkeyPatch) -> None:
     import app.workers.jobs.agent_run as job
 
-    monkeypatch.setattr(job, "build_provider", lambda key, api_key: SendsThenAnswers(api_key))
+    monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: SendsThenAnswers(api_key))
 
 
 async def _setup(api: AsyncClient, session: AsyncSession, tools: list[str]) -> tuple[Any, str]:
@@ -322,6 +322,42 @@ async def test_setting_the_policy_to_auto_skips_the_approval(
 
     assert result["status"] != "awaiting_approval"
     assert (await api.get(f"/api/v1/orgs/{acme.org_id}/approvals", headers=headers)).json() == []
+
+
+async def test_always_allow_on_one_tool_needs_no_approval(
+    api: AsyncClient, session: AsyncSession, stub_sender: None
+) -> None:
+    """The switch on Connections and in the tool picker sets a rule for
+    one tool. "Always allow" on a send means no approval is requested,
+    and setting it back to "Ask me first" brings the approval back."""
+    acme, employee_id = await _setup(api, session, ["send_email"])
+    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    rule = {"scope": "tool", "scope_value": "send_email", "side_effect": None}
+
+    saved = await api.put(
+        f"/api/v1/orgs/{acme.org_id}/policies", json={**rule, "setting": "auto"}, headers=headers
+    )
+    assert saved.status_code == 200, saved.text
+    tools = await api.get(f"/api/v1/orgs/{acme.org_id}/tools", headers=headers)
+    assert {t["name"]: t for t in tools.json()}["send_email"]["effective_setting"] == "auto"
+
+    first = await api.post(
+        f"/api/v1/orgs/{acme.org_id}/tasks",
+        json={"employee_id": employee_id, "input": "Send it"},
+        headers=headers,
+    )
+    assert (await _run(first.json()["id"]))["status"] != "awaiting_approval"
+    assert (await api.get(f"/api/v1/orgs/{acme.org_id}/approvals", headers=headers)).json() == []
+
+    await api.put(
+        f"/api/v1/orgs/{acme.org_id}/policies", json={**rule, "setting": "ask"}, headers=headers
+    )
+    second = await api.post(
+        f"/api/v1/orgs/{acme.org_id}/tasks",
+        json={"employee_id": employee_id, "input": "Send it again"},
+        headers=headers,
+    )
+    assert (await _run(second.json()["id"]))["status"] == "awaiting_approval"
 
 
 async def test_blocking_a_tool_stops_it_being_used(

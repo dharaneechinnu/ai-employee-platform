@@ -16,6 +16,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 
+from app.agent.mcp.tools import McpTool
 from app.agent.tools.registry import BLOCKED_ACTIONS, registry
 from app.api.v1.deps import RequestContext, SessionDep, require_permission
 from app.core.permissions import Permission
@@ -59,6 +60,10 @@ class ToolCatalogueEntry(BaseModel):
     # The connection kind this tool needs, so the tool picker can say
     # "connect Google first" instead of letting it fail at run time.
     requires_connection: str | None = None
+    # Set for tools from an MCP server: the server's own wording, since
+    # the app has no built-in label for them.
+    label: str | None = None
+    pack_label: str | None = None
 
 
 class ApprovalResponse(BaseModel):
@@ -119,8 +124,9 @@ async def tool_catalogue(ctx: CanRead, session: SessionDep) -> list[ToolCatalogu
     resolver = await PolicyService(session, ctx.org_id).resolver()
     entries = []
 
-    for tool in registry.all():
+    for tool in [*registry.all(), *resolver.extra_tools.values()]:
         decision = resolver.evaluate(tool.name)
+        is_mcp = issubclass(tool, McpTool)
         entries.append(
             ToolCatalogueEntry(
                 name=tool.name,
@@ -130,10 +136,18 @@ async def tool_catalogue(ctx: CanRead, session: SessionDep) -> list[ToolCatalogu
                 effective_setting=decision.setting,
                 reason=decision.reason,
                 permanently_blocked=tool.name in BLOCKED_ACTIONS,
-                requires_connection=tool.requires_connection,
+                # An MCP tool is listed only while its server is connected.
+                requires_connection=None if is_mcp else tool.requires_connection,
+                label=(tool.title or humanise(tool.remote_name)) if is_mcp else None,  # type: ignore[attr-defined]
+                pack_label=tool.server_name if is_mcp else None,  # type: ignore[attr-defined]
             )
         )
     return entries
+
+
+def humanise(name: str) -> str:
+    words = name.replace("_", " ").replace("-", " ").strip()
+    return words[:1].upper() + words[1:]
 
 
 @router.get("/approvals", response_model=list[ApprovalResponse], summary="Pending approvals")
@@ -184,7 +198,7 @@ async def _decide(
         # is why the state lives in Postgres rather than in the process.
         run = await session.get(Run, a.run_id)
         if run is not None:
-            await enqueue_task(run.task_id)
+            await enqueue_task(run.task_id, resume_after=a.id)
 
     return ApprovalResponse(
         id=a.id,

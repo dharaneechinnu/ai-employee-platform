@@ -209,3 +209,29 @@ def test_delegation_is_labelled_as_a_write() -> None:
     """A specialist may take write actions of its own, so delegation is
     not a read."""
     assert DelegateToSpecialist.side_effect is SideEffect.WRITE
+
+
+def test_specialists_follow_the_company_permission_rules() -> None:
+    """Delegating must not be a way round Permissions. "Ask me first"
+    becomes a refusal, because a specialist cannot pause for a person;
+    its manager does that step instead, with the normal approval."""
+    from app.agent.tools.packs.delegation import specialist_policy
+    from app.db.models.policy import PolicySetting
+    from app.services.policy_service import Decision
+
+    rules = {
+        "get_webpage": PolicySetting.AUTO,
+        "gmail_send": PolicySetting.ASK,
+        "send_email": PolicySetting.BLOCKED,
+    }
+
+    class Resolver:
+        def evaluate(self, tool_name: str) -> Decision:
+            return Decision(rules[tool_name], "set by your company for this tool")
+
+    check = specialist_policy(Resolver())
+    assert check("get_webpage")[0] == "auto"
+    assert check("send_email")[0] == "blocked"
+    setting, reason = check("gmail_send")
+    assert setting == "blocked"
+    assert "manager" in reason

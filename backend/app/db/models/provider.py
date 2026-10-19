@@ -79,6 +79,13 @@ class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(String(500))
 
+    # The model this company picked. NULL means the provider's default.
+    model: Mapped[str | None] = mapped_column(String(200))
+    # Only for the "custom" provider: where the company's own
+    # OpenAI-compatible server lives, and what they call it.
+    base_url: Mapped[str | None] = mapped_column(String(500))
+    label: Mapped[str | None] = mapped_column(String(100))
+
     __table_args__ = (
         UniqueConstraint("org_id", "provider_key", name="uq_provider_config_org_provider"),
         Index("ix_provider_configs_org_id", "org_id"),

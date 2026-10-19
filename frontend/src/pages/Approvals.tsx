@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Icon } from "../components/icons";
+import ProposedAction from "../components/ProposedAction";
 import {
   Button,
   Chip,
@@ -13,6 +14,7 @@ import {
   statusTone,
   useToast,
 } from "../components/ui";
+import { effectLabel, formatDateTime, toolAction, toolLabel } from "../lib/labels";
 import { notifyActivity } from "../lib/activity";
 import { ApiError, api, type Approval } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -59,7 +61,9 @@ export default function Approvals() {
       await api.post(`/orgs/${org.id}/approvals/${approval.id}/${approve ? "approve" : "reject"}`);
       setItems((current) => current?.filter((a) => a.id !== approval.id) ?? null);
       toast(
-        approve ? `Approved. The run continues with ${approval.tool_name}.` : `Rejected. ${approval.tool_name} will not run.`,
+        approve
+          ? `Approved. The run carries on: ${toolAction(approval.tool_name)}.`
+          : `Rejected. "${toolLabel(approval.tool_name)}" will not happen.`,
         approve ? "ok" : "info",
       );
       notifyActivity();
@@ -124,19 +128,10 @@ function ApprovalCard({
       className="card rise relative overflow-hidden"
       style={{
         animationDelay: `${index * 0.08}s`,
-        ...(destructive
-          ? { borderColor: "var(--ask)", boxShadow: "0 0 0 1px var(--ask-soft), 0 30px 60px -36px var(--ask-glow)" }
-          : {}),
+        ...(destructive ? { borderColor: "var(--ask)" } : {}),
       }}
     >
-      {destructive && (
-        <span aria-hidden="true" className="absolute inset-x-0 top-0 h-0.5 overflow-hidden">
-          <span
-            className="absolute inset-0"
-            style={{ background: "linear-gradient(90deg,transparent,var(--ask),transparent)", animation: "scan 2.4s ease-in-out infinite" }}
-          />
-        </span>
-      )}
+      {destructive && <span aria-hidden="true" className="absolute inset-x-0 top-0 h-[3px] bg-ask" />}
 
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-ask-soft text-ask-text">
@@ -144,14 +139,14 @@ function ApprovalCard({
         </span>
         <div className="flex min-w-[220px] flex-1 flex-col gap-0.5">
           <span className="text-[15px] font-medium">
-            Wants to run <span className="font-mono text-ask-text">{approval.tool_name}</span>
+            Wants to <span className="text-ask-text">{toolAction(approval.tool_name)}</span>
           </span>
           {approval.task_title && (
             <span className="truncate text-[13px] text-muted">Task: {approval.task_title}</span>
           )}
         </div>
-        <Chip tone={statusTone(approval.side_effect)}>{approval.side_effect}</Chip>
-        <span className="flex items-center gap-2" title={new Date(approval.expires_at).toLocaleString()}>
+        <Chip tone={statusTone(approval.side_effect)}>{effectLabel(approval.side_effect)}</Chip>
+        <span className="flex items-center gap-2" title={`Expires ${formatDateTime(approval.expires_at)}`}>
           <svg width="38" height="38" viewBox="0 0 40 40" aria-hidden="true" className="-rotate-90">
             <circle cx="20" cy="20" r="17" fill="none" stroke="var(--line2)" strokeWidth="3" />
             <circle
@@ -182,19 +177,21 @@ function ApprovalCard({
           </span>
         </div>
 
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[14px] border border-line bg-sunken px-4 py-3.5 font-mono text-[13px] leading-[1.7] text-muted">
-          <JsonView value={approval.proposed} />
-        </pre>
+        <div data-coach="approval-action">
+          <ProposedAction values={approval.proposed as Record<string, unknown>} />
+        </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
           {destructive ? (
-            <HoldButton onConfirm={() => onDecide(true)}>{busy ? "Recording…" : "Hold to approve"}</HoldButton>
+            <span data-coach="approval-approve" className="inline-flex">
+              <HoldButton onConfirm={() => onDecide(true)}>{busy ? "Recording…" : "Hold to approve"}</HoldButton>
+            </span>
           ) : (
-            <Button variant="ok" icon="check" disabled={busy} onClick={() => onDecide(true)}>
+            <Button variant="ok" icon="check" disabled={busy} onClick={() => onDecide(true)} data-coach="approval-approve">
               Approve
             </Button>
           )}
-          <Button variant="danger-ghost" disabled={busy} onClick={() => onDecide(false)}>
+          <Button variant="danger-ghost" disabled={busy} onClick={() => onDecide(false)} data-coach="approval-reject">
             Reject
           </Button>
           <Link to="/tasks" className="btn btn-ghost">
@@ -212,8 +209,12 @@ function describe(approval: Approval): string {
   const p = approval.proposed as Record<string, unknown>;
   switch (approval.tool_name) {
     case "send_email":
+    case "gmail_send":
+    case "outlook_send":
       return `one email goes to ${String(p.to ?? "the recipient")} right away. A sent email cannot be recalled.`;
     case "save_draft":
+    case "gmail_create_draft":
+    case "outlook_create_draft":
       return `a draft to ${String(p.to ?? "the recipient")} is saved. Nothing is sent.`;
     case "get_webpage":
       return `one public page (${String(p.url ?? "a web address")}) is read. Nothing is changed or sent.`;
@@ -222,35 +223,8 @@ function describe(approval: Approval): string {
     case "remember":
       return "this is saved to memory, where other runs can recall it.";
     default:
-      if (approval.side_effect === "destructive") return `${approval.tool_name} runs with the values below. This cannot be undone.`;
-      if (approval.side_effect === "write") return `${approval.tool_name} runs with the values below and changes data.`;
-      return `${approval.tool_name} runs with the values below. Nothing is changed.`;
+      if (approval.side_effect === "destructive") return `it will ${toolAction(approval.tool_name)}, exactly as below. This can't be undone.`;
+      if (approval.side_effect === "write") return `it will ${toolAction(approval.tool_name)}, exactly as below.`;
+      return `it will ${toolAction(approval.tool_name)}. Nothing is changed.`;
   }
-}
-
-/** JSON with keys and strings coloured, rendered as text (never as HTML). */
-function JsonView({ value }: { value: unknown }) {
-  const text = JSON.stringify(value, null, 2);
-  const parts = text.split(/("(?:[^"\\]|\\.)*"(?:\s*:)?)/g);
-  return (
-    <>
-      {parts.map((part, i) => {
-        if (/^".*":$/.test(part.replace(/\s+/g, ""))) {
-          return (
-            <span key={i} className="text-accent-text">
-              {part}
-            </span>
-          );
-        }
-        if (part.startsWith('"')) {
-          return (
-            <span key={i} className="text-ok-text">
-              {part}
-            </span>
-          );
-        }
-        return <span key={i}>{part}</span>;
-      })}
-    </>
-  );
 }

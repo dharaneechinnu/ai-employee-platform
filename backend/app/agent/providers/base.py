@@ -56,6 +56,10 @@ class Message:
     tool_calls: list[ToolCall] = field(default_factory=list)
     tool_call_id: str | None = None  # set on TOOL messages
     name: str | None = None  # the tool's name, on TOOL messages
+    # The provider's own content blocks for an assistant turn, kept so
+    # they can be sent back unchanged. Claude needs this: its thinking
+    # blocks must be returned exactly as received or the next turn fails.
+    raw: list[dict[str, Any]] | None = None
 
 
 @dataclass(slots=True)
@@ -155,6 +159,14 @@ class LLMProvider(ABC):
         temperature: float = 0.2,
         max_tokens: int = 4096,
     ) -> LLMReply: ...
+
+    async def list_models(self) -> list[str]:
+        """Model ids this key can use, for the model picker.
+
+        Optional: an adapter that cannot list returns nothing, and the
+        company types a model name instead.
+        """
+        return []
 
     @abstractmethod
     async def check(self, model: str) -> None:

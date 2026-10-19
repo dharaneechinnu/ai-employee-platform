@@ -39,7 +39,17 @@ class AvailableProvider(BaseModel):
 
 class ConnectRequest(BaseModel):
     provider_key: str = Field(min_length=1, max_length=50)
-    api_key: str = Field(min_length=8, max_length=500)
+    # Optional only for "custom": a self-hosted server often has no key.
+    api_key: str = Field(default="", max_length=500)
+    model: str | None = Field(default=None, max_length=200)
+    # "custom" only: the OpenAI-compatible server's address and a name.
+    base_url: str | None = Field(default=None, max_length=500)
+    label: str | None = Field(default=None, max_length=100)
+
+
+class SetModelRequest(BaseModel):
+    # None goes back to the provider's default.
+    model: str | None = Field(default=None, max_length=200)
 
 
 class ConnectedProviderResponse(BaseModel):
@@ -51,6 +61,8 @@ class ConnectedProviderResponse(BaseModel):
     last_error: str | None
     trains_on_data: bool
     default_model: str | None
+    model_chosen: bool = False
+    base_url: str | None = None
 
 
 class ModelChoice(BaseModel):
@@ -99,7 +111,13 @@ async def connect(
     body: ConnectRequest, ctx: CanManage, session: SessionDep
 ) -> ConnectedProviderResponse:
     service = ProviderService(session, ctx.org_id)
-    await service.connect(provider_key=body.provider_key, api_key=body.api_key)
+    await service.connect(
+        provider_key=body.provider_key,
+        api_key=body.api_key,
+        model=body.model,
+        base_url=body.base_url,
+        label=body.label,
+    )
 
     match = next(c for c in await service.connected() if c.provider_key == body.provider_key)
     return ConnectedProviderResponse(**asdict(match))
@@ -117,6 +135,30 @@ async def test(provider_key: str, ctx: CanManage, session: SessionDep) -> Connec
 
     match = next(c for c in await service.connected() if c.provider_key == provider_key)
     return ConnectedProviderResponse(**asdict(match))
+
+
+@router.put(
+    "/providers/{provider_key}/model",
+    response_model=ConnectedProviderResponse,
+    summary="Pick which model this provider runs",
+)
+async def set_model(
+    provider_key: str, body: SetModelRequest, ctx: CanManage, session: SessionDep
+) -> ConnectedProviderResponse:
+    service = ProviderService(session, ctx.org_id)
+    await service.set_model(provider_key, body.model)
+    await session.flush()
+    match = next(c for c in await service.connected() if c.provider_key == provider_key)
+    return ConnectedProviderResponse(**asdict(match))
+
+
+@router.get(
+    "/providers/{provider_key}/models",
+    response_model=list[str],
+    summary="Models this key can use, as the provider lists them",
+)
+async def list_models(provider_key: str, ctx: CanManage, session: SessionDep) -> list[str]:
+    return await ProviderService(session, ctx.org_id).list_models(provider_key)
 
 
 @router.delete(

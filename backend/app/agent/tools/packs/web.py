@@ -7,8 +7,6 @@ proxy into the private network — the classic SSRF shape.
 
 from __future__ import annotations
 
-import ipaddress
-import socket
 from urllib.parse import urlparse
 
 import httpx
@@ -16,25 +14,9 @@ from pydantic import BaseModel, Field
 
 from app.agent.tools.base import SideEffect, Tool, ToolContext, ToolResult
 from app.agent.tools.registry import register
+from app.core.urls import is_private_address as _is_private_address
 
 MAX_CHARS = 20_000
-
-
-def _is_private_address(hostname: str) -> bool:
-    """True for anything that resolves inside the network.
-
-    Checked after DNS resolution, not on the literal string: a public
-    hostname can be made to resolve to 127.0.0.1 or 169.254.169.254,
-    which is how SSRF usually gets past a naive check.
-    """
-    try:
-        for info in socket.getaddrinfo(hostname, None):
-            ip = ipaddress.ip_address(info[4][0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                return True
-    except (socket.gaierror, ValueError):
-        return True  # cannot resolve it, so do not fetch it
-    return False
 
 
 class GetWebpageArgs(BaseModel):

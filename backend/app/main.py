@@ -16,12 +16,14 @@ from app.api.v1.routes import (
     auth,
     connections,
     health,
+    mcp,
     memory,
     notifications,
     orgs,
     platform,
     policies,
     providers,
+    speech,
     tasks,
 )
 from app.config import Settings, get_settings
@@ -86,6 +88,8 @@ def create_app() -> FastAPI:
     app.include_router(connections.callback_router, prefix=settings.api_v1_prefix)
     app.include_router(notifications.router, prefix=settings.api_v1_prefix)
     app.include_router(approval_links.router, prefix=settings.api_v1_prefix)
+    app.include_router(speech.router, prefix=settings.api_v1_prefix)
+    app.include_router(mcp.router, prefix=settings.api_v1_prefix)
 
     return app
 
