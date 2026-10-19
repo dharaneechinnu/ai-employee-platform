@@ -40,7 +40,7 @@ class Recall(Tool):
         from app.core.errors import ConflictError
         from app.services.memory_service import MemoryService
 
-        service = MemoryService(session, ctx.org_id)
+        service = MemoryService(session, ctx.owner_id)
         try:
             hits = await service.recall(
                 args.query,
@@ -108,7 +108,7 @@ class Remember(Tool):
             MemoryScope.ORG if args.company_wide or employee_id is None else MemoryScope.EMPLOYEE
         )
 
-        memory = await MemoryService(session, ctx.org_id).remember(
+        memory = await MemoryService(session, ctx.owner_id).remember(
             content=args.content,
             kind=MemoryKind.FACT,
             scope=scope,

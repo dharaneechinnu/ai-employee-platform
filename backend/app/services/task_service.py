@@ -42,9 +42,9 @@ class TaskWithRun:
 
 
 class TaskService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     # ------------------------------------------------------------- create
 
@@ -58,7 +58,9 @@ class TaskService:
         user_id: uuid.UUID,
     ) -> Task:
         employee = await self.session.scalar(
-            select(AIEmployee).where(AIEmployee.id == employee_id, AIEmployee.org_id == self.org_id)
+            select(AIEmployee).where(
+                AIEmployee.id == employee_id, AIEmployee.owner_id == self.owner_id
+            )
         )
         if employee is None:
             raise NotFoundError("No such AI Employee.")
@@ -78,7 +80,7 @@ class TaskService:
             raise ValidationError("That AI Employee has no configuration.")
 
         task = Task(
-            org_id=self.org_id,
+            owner_id=self.owner_id,
             employee_id=employee_id,
             # Pinned now. A later edit must not rewrite what this run did.
             employee_version_id=version.id,
@@ -98,7 +100,7 @@ class TaskService:
 
     async def get(self, task_id: uuid.UUID) -> TaskWithRun:
         task = await self.session.scalar(
-            select(Task).where(Task.id == task_id, Task.org_id == self.org_id)
+            select(Task).where(Task.id == task_id, Task.owner_id == self.owner_id)
         )
         if task is None:
             raise NotFoundError("No such task.")
@@ -111,7 +113,7 @@ class TaskService:
     async def list_tasks(self, *, limit: int = 50) -> list[Task]:
         result = await self.session.scalars(
             select(Task)
-            .where(Task.org_id == self.org_id)
+            .where(Task.owner_id == self.owner_id)
             .order_by(Task.created_at.desc())
             .limit(limit)
         )
@@ -119,7 +121,7 @@ class TaskService:
 
     async def get_run(self, run_id: uuid.UUID) -> Run:
         run = await self.session.scalar(
-            select(Run).where(Run.id == run_id, Run.org_id == self.org_id)
+            select(Run).where(Run.id == run_id, Run.owner_id == self.owner_id)
         )
         if run is None:
             raise NotFoundError("No such run.")
@@ -191,10 +193,10 @@ class EventWriter:
     show clients an event that is not in the permanent record.
     """
 
-    def __init__(self, session: AsyncSession, run_id: uuid.UUID, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, run_id: uuid.UUID, owner_id: uuid.UUID) -> None:
         self.session = session
         self.run_id = run_id
-        self.org_id = org_id
+        self.owner_id = owner_id
         self._seq: int | None = None
 
     async def _next_seq(self) -> int:
@@ -216,7 +218,7 @@ class EventWriter:
         seq = await self._next_seq()
         event = RunEvent(
             run_id=self.run_id,
-            org_id=self.org_id,
+            owner_id=self.owner_id,
             seq=seq,
             type=type_,
             payload=_redact(payload or {}),

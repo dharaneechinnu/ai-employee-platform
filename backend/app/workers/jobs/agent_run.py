@@ -87,7 +87,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
 
         if run is None:
             run = Run(
-                org_id=task.org_id,
+                owner_id=task.owner_id,
                 task_id=task.id,
                 attempt=1,
                 status=RunStatus.RUNNING,
@@ -106,9 +106,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
     async with maker() as session:
         run_db = await session.get(Run, run.id)
         assert run_db is not None
-        writer = EventWriter(session, run_db.id, task.org_id)
+        writer = EventWriter(session, run_db.id, task.owner_id)
 
-        providers = ProviderService(session, task.org_id)
+        providers = ProviderService(session, task.owner_id)
         try:
             provider_key, model = await providers.resolve_model(config.model)
             api_key = await providers.resolve_api_key(provider_key)
@@ -134,7 +134,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             run_db.heartbeat_at = datetime.now(UTC)
             await session.commit()
 
-        resolver = await PolicyService(session, task.org_id).resolver()
+        resolver = await PolicyService(session, task.owner_id).resolver()
 
         def check_policy(tool_name: str) -> tuple[str, str]:
             decision = resolver.evaluate(tool_name)
@@ -163,8 +163,8 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         # again on resume, so a token refreshed while the run waited
         # for approval is picked up). Tools receive only the grant
         # they declare; the model never sees any of it.
-        grants = await ConnectionService(session, task.org_id).resolve_grants()
-        grants.update(await McpService(session, task.org_id).grants())
+        grants = await ConnectionService(session, task.owner_id).resolve_grants()
+        grants.update(await McpService(session, task.owner_id).grants())
         await session.commit()
 
         async def cancelled() -> bool:
@@ -176,7 +176,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             model=model,
             tools=registry.for_employee(config.enabled_tools, extra=resolver.extra_tools),
             tool_context=ToolContext(
-                org_id=task.org_id,
+                owner_id=task.owner_id,
                 run_id=run_db.id,
                 dry_run=task.dry_run,
                 grants=grants,
@@ -204,7 +204,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         if outcome.paused and outcome.pending_tool_call:
             call = outcome.pending_tool_call
             tool_cls = resolver.tool(call["name"])
-            approval = await ApprovalService(session, task.org_id).create(
+            approval = await ApprovalService(session, task.owner_id).create(
                 run_id=run_db.id,
                 tool_name=call["name"],
                 side_effect=tool_cls.side_effect.value if tool_cls else "write",
@@ -221,7 +221,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             # After the commit, so the approval exists by the time
             # anyone clicks the link in the message.
             await notify_safely(
-                NotificationService(session, task.org_id).approval_requested(approval)
+                NotificationService(session, task.owner_id).approval_requested(approval)
             )
             return {
                 "status": "awaiting_approval",
@@ -233,7 +233,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         session.add(
             LLMCall(
                 run_id=run_db.id,
-                org_id=task.org_id,
+                owner_id=task.owner_id,
                 provider_key=provider_key,
                 model=model,
                 prompt_tokens=outcome.prompt_tokens,
@@ -288,5 +288,5 @@ async def _finish(
     await session.commit()
     log.info("run_finished", run_id=str(run.id), status=str(status), cause=stop_cause)
     if task is not None:
-        await notify_safely(NotificationService(session, run.org_id).task_finished(task, run))
+        await notify_safely(NotificationService(session, run.owner_id).task_finished(task, run))
     return {"status": str(status), "stop_cause": stop_cause, "run_id": str(run.id)}

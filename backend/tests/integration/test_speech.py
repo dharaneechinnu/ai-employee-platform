@@ -46,7 +46,7 @@ async def _company(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
     if groq:
         connected = await api.post(
-            f"/api/v1/orgs/{acme.org_id}/providers",
+            f"/api/v1/me/providers",
             json={"provider_key": "groq", "api_key": GROQ_KEY},
             headers=headers,
         )
@@ -58,7 +58,7 @@ async def test_without_a_groq_key_the_browser_does_the_listening(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     acme, headers = await _company(api, session, groq=False)
-    response = await api.get(f"/api/v1/orgs/{acme.org_id}/speech", headers=headers)
+    response = await api.get(f"/api/v1/me/speech", headers=headers)
     assert response.status_code == 200
     assert response.json()["engine"] == "browser"
     assert response.json()["model"] is None
@@ -69,7 +69,7 @@ async def test_with_a_groq_key_whisper_transcribes(
 ) -> None:
     acme, headers = await _company(api, session, groq=True)
 
-    engine = await api.get(f"/api/v1/orgs/{acme.org_id}/speech", headers=headers)
+    engine = await api.get(f"/api/v1/me/speech", headers=headers)
     assert engine.json() == {
         "engine": "whisper",
         "model": "whisper-large-v3-turbo",
@@ -77,7 +77,7 @@ async def test_with_a_groq_key_whisper_transcribes(
     }
 
     response = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/speech/transcribe?language=en",
+        f"/api/v1/me/speech/transcribe?language=en",
         content=WEBM,
         headers={**headers, "Content-Type": "audio/webm;codecs=opus"},
     )
@@ -92,14 +92,14 @@ async def test_with_a_groq_key_whisper_transcribes(
     assert b"whisper-large-v3-turbo" in fake_groq["body"]
 
 
-async def test_a_member_can_use_voice_typing(
+async def test_voice_typing_works(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
     acme, _ = await _company(api, session, groq=True)
     response = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/speech/transcribe",
+        f"/api/v1/me/speech/transcribe",
         content=WEBM,
-        headers={"Authorization": f"Bearer {acme.member_token}", "Content-Type": "audio/webm"},
+        headers={"Authorization": f"Bearer {acme.token}", "Content-Type": "audio/webm"},
     )
     assert response.status_code == 200, response.text
 
@@ -109,7 +109,7 @@ async def test_transcribing_without_a_groq_key_says_what_to_do(
 ) -> None:
     acme, headers = await _company(api, session, groq=False)
     response = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/speech/transcribe",
+        f"/api/v1/me/speech/transcribe",
         content=WEBM,
         headers={**headers, "Content-Type": "audio/webm"},
     )
@@ -121,7 +121,7 @@ async def test_bad_uploads_are_refused_before_groq_is_called(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
     acme, headers = await _company(api, session, groq=True)
-    url = f"/api/v1/orgs/{acme.org_id}/speech/transcribe"
+    url = f"/api/v1/me/speech/transcribe"
 
     wrong_type = await api.post(
         url, content=WEBM, headers={**headers, "Content-Type": "text/plain"}
@@ -152,7 +152,7 @@ async def test_groq_failures_become_clear_errors(
     acme, headers = await _company(api, session, groq=True)
     fake_groq["status"] = groq_status
     response = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/speech/transcribe",
+        f"/api/v1/me/speech/transcribe",
         content=WEBM,
         headers={**headers, "Content-Type": "audio/webm"},
     )
@@ -161,15 +161,19 @@ async def test_groq_failures_become_clear_errors(
     assert "nope" not in response.text
 
 
-async def test_another_company_cannot_use_your_groq_key(
+async def test_another_person_cannot_use_your_groq_key(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
     acme, _ = await _company(api, session, groq=True)
     other = await seed_company(session, api, name="Globex", slug="globex")
     response = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/speech/transcribe",
+        f"/api/v1/me/speech/transcribe",
         content=WEBM,
         headers={"Authorization": f"Bearer {other.admin_token}", "Content-Type": "audio/webm"},
     )
-    assert response.status_code in (403, 404)
+    # No id in the path to forge any more: they are scoped to
+    # themselves, and they have connected no key, so the answer is
+    # about their own empty account rather than a refusal about
+    # somebody else's.
+    assert response.status_code in (403, 404, 422)
     assert "url" not in fake_groq

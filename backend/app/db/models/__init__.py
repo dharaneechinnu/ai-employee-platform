@@ -12,12 +12,10 @@ from app.db.models.ai_employee import (
 )
 from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.db.models.identity import (
-    Invitation,
-    Membership,
     PlatformAdmin,
     PlatformAdminAudit,
     RefreshToken,
-    Role,
+    SetupToken,
     User,
 )
 from app.db.models.mcp import McpServer
@@ -35,7 +33,6 @@ from app.db.models.memory import (
     RunSummary,
 )
 from app.db.models.notification import NotificationSettings
-from app.db.models.organization import Organization, OrgStatus
 from app.db.models.policy import (
     Approval,
     ApprovalStatus,
@@ -80,10 +77,8 @@ __all__ = [
     "EmbeddingConfig",
     "EmployeeStatus",
     "EventType",
-    "Invitation",
     "LLMCall",
     "McpServer",
-    "Membership",
     "Memory",
     "MemoryKind",
     "MemoryScope",
@@ -94,8 +89,6 @@ __all__ = [
     "NotificationSettings",
     "OrgConnectionAccess",
     "OrgOAuthApp",
-    "OrgStatus",
-    "Organization",
     "PlatformAdmin",
     "PlatformAdminAudit",
     "PlatformOAuthApp",
@@ -107,12 +100,12 @@ __all__ = [
     "ProviderKind",
     "ReembedJob",
     "RefreshToken",
-    "Role",
     "Run",
     "RunCheckpoint",
     "RunEvent",
     "RunStatus",
     "RunSummary",
+    "SetupToken",
     "SupportedProvider",
     "Task",
     "TaskStatus",

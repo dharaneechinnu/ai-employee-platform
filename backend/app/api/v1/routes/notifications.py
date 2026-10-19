@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.api.v1.deps import RequestContext, SessionDep, require_permission
+from app.api.v1.deps import ContextDep, SessionDep
 from app.config import get_settings
-from app.core.permissions import Permission
 from app.db.models.notification import NotificationSettings
 from app.services.notification_service import NotificationService
 
-router = APIRouter(prefix="/orgs/{org_id}", tags=["notifications"])
+router = APIRouter(prefix="/me", tags=["notifications"])
 
-CanManage = Annotated[RequestContext, Depends(require_permission(Permission.ORG_MANAGE))]
 
 
 class NotificationSettingsResponse(BaseModel):
@@ -66,8 +62,8 @@ def _response(row: NotificationSettings) -> NotificationSettingsResponse:
     response_model=NotificationSettingsResponse,
     summary="How we are notified",
 )
-async def get_settings_route(ctx: CanManage, session: SessionDep) -> NotificationSettingsResponse:
-    return _response(await NotificationService(session, ctx.org_id).settings())
+async def get_settings_route(ctx: ContextDep, session: SessionDep) -> NotificationSettingsResponse:
+    return _response(await NotificationService(session, ctx.owner_id).settings())
 
 
 @router.put(
@@ -76,9 +72,9 @@ async def get_settings_route(ctx: CanManage, session: SessionDep) -> Notificatio
     summary="Change how we are notified",
 )
 async def update_settings(
-    body: UpdateNotificationSettings, ctx: CanManage, session: SessionDep
+    body: UpdateNotificationSettings, ctx: ContextDep, session: SessionDep
 ) -> NotificationSettingsResponse:
-    row = await NotificationService(session, ctx.org_id).update(**body.model_dump())
+    row = await NotificationService(session, ctx.owner_id).update(**body.model_dump())
     return _response(row)
 
 
@@ -87,6 +83,6 @@ async def update_settings(
     response_model=TestResult,
     summary="Send a test message on every enabled channel",
 )
-async def send_test(ctx: CanManage, session: SessionDep) -> TestResult:
-    result = await NotificationService(session, ctx.org_id).send_test(ctx.user)
+async def send_test(ctx: ContextDep, session: SessionDep) -> TestResult:
+    result = await NotificationService(session, ctx.owner_id).send_test(ctx.user)
     return TestResult(email=result.get("email", "off"), slack=result.get("slack", "off"))

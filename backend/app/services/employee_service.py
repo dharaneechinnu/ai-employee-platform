@@ -17,7 +17,7 @@ from app.db.models.ai_employee import (
     EmployeeStatus,
     Template,
 )
-from app.db.models.organization import Organization
+from app.db.models.identity import User
 from app.schemas.ai_employee import EmployeeConfig, GuidedInstructions
 
 log = get_logger(__name__)
@@ -70,9 +70,9 @@ class EmployeeWithVersion:
 
 
 class EmployeeService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     # ------------------------------------------------------------- quota
 
@@ -81,21 +81,23 @@ class EmployeeService:
             select(func.count())
             .select_from(AIEmployee)
             .where(
-                AIEmployee.org_id == self.org_id,
+                AIEmployee.owner_id == self.owner_id,
                 AIEmployee.status.in_(COUNTS_TOWARD_LIMIT),
             )
         )
         return (await self.session.scalar(stmt)) or 0
 
     async def limit(self) -> int:
-        org = await self.session.get(Organization, self.org_id)
-        return org.max_employees if org else 0
+        user = await self.session.get(User, self.owner_id)
+        return user.max_employees if user else 0
 
     # ------------------------------------------------------------- read
 
     async def get(self, employee_id: uuid.UUID) -> EmployeeWithVersion:
         employee = await self.session.scalar(
-            select(AIEmployee).where(AIEmployee.id == employee_id, AIEmployee.org_id == self.org_id)
+            select(AIEmployee).where(
+                AIEmployee.id == employee_id, AIEmployee.owner_id == self.owner_id
+            )
         )
         if employee is None:
             # None both for "absent" and "another company's" - the caller
@@ -116,7 +118,10 @@ class EmployeeService:
     async def list_employees(self) -> list[AIEmployee]:
         result = await self.session.scalars(
             select(AIEmployee)
-            .where(AIEmployee.org_id == self.org_id, AIEmployee.status != EmployeeStatus.ARCHIVED)
+            .where(
+                AIEmployee.owner_id == self.owner_id,
+                AIEmployee.status != EmployeeStatus.ARCHIVED,
+            )
             .order_by(AIEmployee.created_at.desc())
         )
         return list(result.all())
@@ -156,7 +161,7 @@ class EmployeeService:
         build_system_prompt(config, name=name, job_title=job_title)
 
         employee = AIEmployee(
-            org_id=self.org_id,
+            owner_id=self.owner_id,
             name=name,
             job_title=job_title,
             department=department,
@@ -168,7 +173,7 @@ class EmployeeService:
         await self.session.flush()
 
         version = AIEmployeeVersion(
-            org_id=self.org_id,
+            owner_id=self.owner_id,
             employee_id=employee.id,
             version_no=1,
             config=config.model_dump(mode="json"),
@@ -178,7 +183,7 @@ class EmployeeService:
         await self.session.flush()
 
         employee.current_version_id = version.id
-        log.info("ai_employee_created", employee_id=str(employee.id), org_id=str(self.org_id))
+        log.info("ai_employee_created", employee_id=str(employee.id), owner_id=str(self.owner_id))
         return EmployeeWithVersion(employee=employee, version=version)
 
     async def update(
@@ -211,7 +216,7 @@ class EmployeeService:
             # silently rewrite the history of every task that already ran
             # on the previous settings.
             version = AIEmployeeVersion(
-                org_id=self.org_id,
+                owner_id=self.owner_id,
                 employee_id=employee.id,
                 version_no=current.version.version_no + 1,
                 config=config.model_dump(mode="json"),
@@ -246,8 +251,8 @@ class EmployeeService:
         """Platform templates plus this company's own, never another's."""
         result = await self.session.scalars(
             select(Template)
-            .where((Template.org_id.is_(None)) | (Template.org_id == self.org_id))
-            .order_by(Template.org_id.is_(None).desc(), Template.name)
+            .where((Template.owner_id.is_(None)) | (Template.owner_id == self.owner_id))
+            .order_by(Template.owner_id.is_(None).desc(), Template.name)
         )
         return list(result.all())
 
@@ -256,7 +261,7 @@ class EmployeeService:
     ) -> Template:
         current = await self.get(employee_id)
         template = Template(
-            org_id=self.org_id,  # always scoped: a company template is private
+            owner_id=self.owner_id,  # always scoped: a company template is private
             name=name,
             description=description,
             department=current.employee.department,
@@ -270,7 +275,7 @@ class EmployeeService:
         template = await self.session.scalar(
             select(Template).where(
                 Template.id == template_id,
-                (Template.org_id.is_(None)) | (Template.org_id == self.org_id),
+                (Template.owner_id.is_(None)) | (Template.owner_id == self.owner_id),
             )
         )
         if template is None:

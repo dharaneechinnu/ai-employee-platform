@@ -10,20 +10,16 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
-from app.api.v1.deps import RequestContext, SessionDep, require_permission
-from app.core.permissions import Permission
+from app.api.v1.deps import ContextDep, SessionDep
 from app.db.models.provider import ConnectionStatus
 from app.services.provider_service import ProviderService
 
-router = APIRouter(prefix="/orgs/{org_id}", tags=["providers"])
+router = APIRouter(prefix="/me", tags=["providers"])
 
-CanManage = Annotated[RequestContext, Depends(require_permission(Permission.PROVIDER_MANAGE))]
-CanRead = Annotated[RequestContext, Depends(require_permission(Permission.EMPLOYEE_READ))]
 
 
 class AvailableProvider(BaseModel):
@@ -76,7 +72,7 @@ class ModelChoice(BaseModel):
 @router.get(
     "/providers/available", response_model=list[AvailableProvider], summary="The provider menu"
 )
-async def available(ctx: CanManage, session: SessionDep) -> list[AvailableProvider]:
+async def available(ctx: ContextDep, session: SessionDep) -> list[AvailableProvider]:
     return [
         AvailableProvider(
             key=p.key,
@@ -85,7 +81,7 @@ async def available(ctx: CanManage, session: SessionDep) -> list[AvailableProvid
             docs_url=p.docs_url,
             trains_on_data=p.trains_on_data,
         )
-        for p in await ProviderService(session, ctx.org_id).available()
+        for p in await ProviderService(session, ctx.owner_id).available()
     ]
 
 
@@ -94,10 +90,10 @@ async def available(ctx: CanManage, session: SessionDep) -> list[AvailableProvid
     response_model=list[ConnectedProviderResponse],
     summary="Which providers we have connected",
 )
-async def connected(ctx: CanManage, session: SessionDep) -> list[ConnectedProviderResponse]:
+async def connected(ctx: ContextDep, session: SessionDep) -> list[ConnectedProviderResponse]:
     return [
         ConnectedProviderResponse(**asdict(c))
-        for c in await ProviderService(session, ctx.org_id).connected()
+        for c in await ProviderService(session, ctx.owner_id).connected()
     ]
 
 
@@ -108,9 +104,9 @@ async def connected(ctx: CanManage, session: SessionDep) -> list[ConnectedProvid
     summary="Connect a provider with our own key",
 )
 async def connect(
-    body: ConnectRequest, ctx: CanManage, session: SessionDep
+    body: ConnectRequest, ctx: ContextDep, session: SessionDep
 ) -> ConnectedProviderResponse:
-    service = ProviderService(session, ctx.org_id)
+    service = ProviderService(session, ctx.owner_id)
     await service.connect(
         provider_key=body.provider_key,
         api_key=body.api_key,
@@ -128,8 +124,12 @@ async def connect(
     response_model=ConnectedProviderResponse,
     summary="Check the key works",
 )
-async def test(provider_key: str, ctx: CanManage, session: SessionDep) -> ConnectedProviderResponse:
-    service = ProviderService(session, ctx.org_id)
+async def test(
+    provider_key: str,
+    ctx: ContextDep,
+    session: SessionDep,
+) -> ConnectedProviderResponse:
+    service = ProviderService(session, ctx.owner_id)
     await service.test(provider_key)
     await session.flush()
 
@@ -143,9 +143,9 @@ async def test(provider_key: str, ctx: CanManage, session: SessionDep) -> Connec
     summary="Pick which model this provider runs",
 )
 async def set_model(
-    provider_key: str, body: SetModelRequest, ctx: CanManage, session: SessionDep
+    provider_key: str, body: SetModelRequest, ctx: ContextDep, session: SessionDep
 ) -> ConnectedProviderResponse:
-    service = ProviderService(session, ctx.org_id)
+    service = ProviderService(session, ctx.owner_id)
     await service.set_model(provider_key, body.model)
     await session.flush()
     match = next(c for c in await service.connected() if c.provider_key == provider_key)
@@ -157,8 +157,8 @@ async def set_model(
     response_model=list[str],
     summary="Models this key can use, as the provider lists them",
 )
-async def list_models(provider_key: str, ctx: CanManage, session: SessionDep) -> list[str]:
-    return await ProviderService(session, ctx.org_id).list_models(provider_key)
+async def list_models(provider_key: str, ctx: ContextDep, session: SessionDep) -> list[str]:
+    return await ProviderService(session, ctx.owner_id).list_models(provider_key)
 
 
 @router.delete(
@@ -166,15 +166,15 @@ async def list_models(provider_key: str, ctx: CanManage, session: SessionDep) ->
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Disconnect a provider",
 )
-async def disconnect(provider_key: str, ctx: CanManage, session: SessionDep) -> None:
-    await ProviderService(session, ctx.org_id).disconnect(provider_key)
+async def disconnect(provider_key: str, ctx: ContextDep, session: SessionDep) -> None:
+    await ProviderService(session, ctx.owner_id).disconnect(provider_key)
 
 
 @router.get("/models", response_model=list[ModelChoice], summary="Models we can pick")
-async def models(ctx: CanRead, session: SessionDep) -> list[ModelChoice]:
+async def models(ctx: ContextDep, session: SessionDep) -> list[ModelChoice]:
     """Only models from providers this company has actually connected,
     so the dropdown cannot offer something that will fail at run time."""
     return [
         ModelChoice(**choice)
-        for choice in await ProviderService(session, ctx.org_id).model_choices()
+        for choice in await ProviderService(session, ctx.owner_id).model_choices()
     ]

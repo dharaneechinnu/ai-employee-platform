@@ -3,7 +3,7 @@
 Every query in the application goes through a repository. No route and no
 service builds a `select()` itself.
 
-The reason is `org_id`. Filtering happens in exactly one place here, so
+The reason is `owner_id`. Filtering happens in exactly one place here, so
 "can company A read company B's data?" is a single-file audit rather than
 a review of every query in the codebase.
 """
@@ -39,34 +39,40 @@ class BaseRepository[ModelT: Base]:
         await self.session.flush()
 
 
-class OrgScopedRepository[ModelT: Base](BaseRepository[ModelT]):
-    """For every table that holds customer data.
+class OwnerScopedRepository[ModelT: Base](BaseRepository[ModelT]):
+    """For every table that holds a person's own data.
 
     Two safety properties:
 
     - `_scoped()` is the only entry point for building a query, and it
-      always applies the `org_id` filter.
-    - `create()` sets `org_id` itself, so a caller cannot pass another
-      company's id even by accident.
+      always applies the `owner_id` filter.
+    - `create()` sets `owner_id` itself, so a caller cannot pass
+      someone else's id even by accident.
+
+    The shape outlived the company concept on purpose. One scope
+    column on every table, filtered in one place, is what keeps "can
+    one person read another's data?" a single-file audit rather than a
+    sweep of every query — as true for individuals as it was for
+    companies.
     """
 
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         super().__init__(session)
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     @property
-    def _org_column(self) -> Any:
-        # Guaranteed present: the tenant-isolation test fails CI for any
-        # model used here that lacks org_id.
-        return self.model.__table__.c.org_id
+    def _owner_column(self) -> Any:
+        # Guaranteed present: the isolation test fails CI for any model
+        # used here that lacks owner_id.
+        return self.model.__table__.c.owner_id
 
     def _scoped(self) -> Select[Any]:
-        return select(self.model).where(self._org_column == self.org_id)
+        return select(self.model).where(self._owner_column == self.owner_id)
 
     async def get(self, id_: uuid.UUID) -> ModelT | None:
-        """Returns None both when the row is absent and when it belongs to
-        another company. Callers turn None into 404 — never 403 — so the
-        existence of another company's data is never revealed."""
+        """Returns None both when the row is absent and when it belongs
+        to somebody else. Callers turn None into 404 — never 403 — so
+        the existence of another person's data is never revealed."""
         stmt = self._scoped().where(self.model.__table__.c.id == id_)
         return cast("ModelT | None", await self.session.scalar(stmt))
 
@@ -75,11 +81,15 @@ class OrgScopedRepository[ModelT: Base](BaseRepository[ModelT]):
         return cast("Sequence[ModelT]", result.all())
 
     async def count(self) -> int:
-        stmt = select(func.count()).select_from(self.model).where(self._org_column == self.org_id)
+        stmt = (
+            select(func.count())
+            .select_from(self.model)
+            .where(self._owner_column == self.owner_id)
+        )
         return (await self.session.scalar(stmt)) or 0
 
     def create(self, **data: Any) -> ModelT:
-        data.pop("org_id", None)  # never trust a caller-supplied org_id
-        instance = self.model(org_id=self.org_id, **data)
+        data.pop("owner_id", None)  # never trust a caller-supplied owner_id
+        instance = self.model(owner_id=self.owner_id, **data)
         self.session.add(instance)
         return instance

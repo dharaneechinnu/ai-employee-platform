@@ -179,16 +179,16 @@ def tools_for(kind: str) -> list[str]:
 
 
 class ConnectionService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     # --- reading -------------------------------------------------------
 
     async def _access(self) -> dict[ConnectionKind, OrgConnectionAccess]:
         """This company's rulings, keyed by kind. Absent means inherit."""
         rows = await self.session.scalars(
-            select(OrgConnectionAccess).where(OrgConnectionAccess.org_id == self.org_id)
+            select(OrgConnectionAccess).where(OrgConnectionAccess.owner_id == self.owner_id)
         )
         return {row.kind: row for row in rows.all()}
 
@@ -199,7 +199,7 @@ class ConnectionService:
             ruling = access.get(kind)
             oauth = get_oauth_provider(kind.value)
             configured = (
-                await resolve_client(self.session, oauth, self.org_id) is not None
+                await resolve_client(self.session, oauth, self.owner_id) is not None
                 if oauth
                 else True
             )
@@ -223,7 +223,7 @@ class ConnectionService:
     async def list_all(self) -> list[ConnectionView]:
         rows = await self.session.scalars(
             select(Connection)
-            .where(Connection.org_id == self.org_id)
+            .where(Connection.owner_id == self.owner_id)
             .order_by(Connection.kind, Connection.created_at)
         )
         return [self._view(c) for c in rows.all()]
@@ -231,7 +231,7 @@ class ConnectionService:
     async def get(self, connection_id: uuid.UUID) -> Connection:
         conn = await self.session.scalar(
             select(Connection).where(
-                Connection.id == connection_id, Connection.org_id == self.org_id
+                Connection.id == connection_id, Connection.owner_id == self.owner_id
             )
         )
         if conn is None:
@@ -269,7 +269,7 @@ class ConnectionService:
         read path for the secret itself, here or anywhere.
         """
         rows = await self.session.scalars(
-            select(OrgOAuthApp).where(OrgOAuthApp.org_id == self.org_id)
+            select(OrgOAuthApp).where(OrgOAuthApp.owner_id == self.owner_id)
         )
         return {
             row.provider.value: {"client_id": row.client_id, "secret_last4": row.secret_last4}
@@ -294,16 +294,16 @@ class ConnectionService:
 
         existing = await self.session.scalar(
             select(OrgOAuthApp).where(
-                OrgOAuthApp.org_id == self.org_id, OrgOAuthApp.provider == provider.kind
+                OrgOAuthApp.owner_id == self.owner_id, OrgOAuthApp.provider == provider.kind
             )
         )
         # The company's own key, so their scope opens it.
-        ciphertext = encrypt(client_secret, scope=self.org_id)
+        ciphertext = encrypt(client_secret, scope=self.owner_id)
         last4 = client_secret[-4:] if len(client_secret) >= 4 else "????"
 
         if existing is None:
             existing = OrgOAuthApp(
-                org_id=self.org_id,
+                owner_id=self.owner_id,
                 provider=provider.kind,
                 client_id=client_id,
                 client_secret_enc=ciphertext,
@@ -324,7 +324,7 @@ class ConnectionService:
         row = (
             await self.session.scalar(
                 select(OrgOAuthApp).where(
-                    OrgOAuthApp.org_id == self.org_id, OrgOAuthApp.provider == provider.kind
+                    OrgOAuthApp.owner_id == self.owner_id, OrgOAuthApp.provider == provider.kind
                 )
             )
             if provider
@@ -358,7 +358,7 @@ class ConnectionService:
         provider = get_oauth_provider(kind)
         if provider is None:
             raise ValidationError(f"'{kind}' does not support one-click connection.")
-        client = await resolve_client(self.session, provider, self.org_id)
+        client = await resolve_client(self.session, provider, self.owner_id)
         if client is None:
             raise ValidationError(
                 f"{provider.display_name} sign-in is not set up yet. Add your own "
@@ -374,14 +374,14 @@ class ConnectionService:
         # and person started this without a table of pending sign-ins.
         state = sign_for(
             "oauth_state",
-            {"org": str(self.org_id), "sub": str(user_id), "kind": provider.kind.value},
+            {"org": str(self.owner_id), "sub": str(user_id), "kind": provider.kind.value},
             minutes=STATE_MINUTES,
         )
         return provider.authorize(client_id=client_id, state=state)
 
     @staticmethod
     def read_state(state: str, kind: str) -> tuple[uuid.UUID, uuid.UUID]:
-        """(org_id, user_id) from a callback's state, or raise."""
+        """(owner_id, user_id) from a callback's state, or raise."""
         try:
             claims = verify(state, "oauth_state")
             if claims.get("kind") != kind:
@@ -432,7 +432,7 @@ class ConnectionService:
 
         existing = await self.session.scalar(
             select(Connection).where(
-                Connection.org_id == self.org_id,
+                Connection.owner_id == self.owner_id,
                 Connection.kind == provider.kind,
                 Connection.label == account,
             )
@@ -442,7 +442,7 @@ class ConnectionService:
         if not refresh_token and existing is not None:
             # Reconnecting the same account: some providers only issue a
             # refresh token on the first consent. Keep the one we have.
-            refresh_token = json.loads(decrypt(existing.credential_enc, scope=self.org_id)).get(
+            refresh_token = json.loads(decrypt(existing.credential_enc, scope=self.owner_id)).get(
                 "refresh_token"
             )
         if not refresh_token:
@@ -463,8 +463,10 @@ class ConnectionService:
             "connected_by": str(user_id),
         }
 
-        conn = existing or Connection(org_id=self.org_id, kind=provider.kind, label=account[:100])
-        conn.credential_enc = encrypt(json.dumps(secret), scope=self.org_id)
+        conn = existing or Connection(
+            owner_id=self.owner_id, kind=provider.kind, label=account[:100]
+        )
+        conn.credential_enc = encrypt(json.dumps(secret), scope=self.owner_id)
         conn.credential_last4 = refresh_token[-4:]
         conn.config = config
         conn.status = STATUS_CONNECTED
@@ -474,14 +476,14 @@ class ConnectionService:
         if existing is None:
             self.session.add(conn)
         await self.session.flush()
-        log.info("connection_oauth_connected", org_id=str(self.org_id), kind=kind)
+        log.info("connection_oauth_connected", owner_id=str(self.owner_id), kind=kind)
         return conn
 
     async def _fresh_access_token(self, conn: Connection, *, force: bool = False) -> str:
         """The stored access token, refreshed first if it is close to
         expiring. A refresh that the provider rejects means the company
         revoked access, so the connection is marked for reconnecting."""
-        secret = json.loads(decrypt(conn.credential_enc, scope=self.org_id))
+        secret = json.loads(decrypt(conn.credential_enc, scope=self.owner_id))
         if not force and secret.get("expires_at", 0) - time.time() > REFRESH_MARGIN_S:
             return str(secret["access_token"])
 
@@ -511,7 +513,7 @@ class ConnectionService:
             # Microsoft rotates refresh tokens; Google usually does not.
             secret["refresh_token"] = fresh["refresh_token"]
             conn.credential_last4 = fresh["refresh_token"][-4:]
-        conn.credential_enc = encrypt(json.dumps(secret), scope=self.org_id)
+        conn.credential_enc = encrypt(json.dumps(secret), scope=self.owner_id)
         await self.session.flush()
         return str(secret["access_token"])
 
@@ -537,13 +539,13 @@ class ConnectionService:
 
         existing = await self.session.scalar(
             select(Connection).where(
-                Connection.org_id == self.org_id,
+                Connection.owner_id == self.owner_id,
                 Connection.kind == kind_enum,
                 Connection.label == label,
             )
         )
-        conn = existing or Connection(org_id=self.org_id, kind=kind_enum, label=label)
-        conn.credential_enc = encrypt(secret, scope=self.org_id)
+        conn = existing or Connection(owner_id=self.owner_id, kind=kind_enum, label=label)
+        conn.credential_enc = encrypt(secret, scope=self.owner_id)
         conn.credential_last4 = secret[-4:] if len(secret) >= 4 else "????"
         conn.config = clean
         conn.status = STATUS_UNTESTED
@@ -552,7 +554,7 @@ class ConnectionService:
         if existing is None:
             self.session.add(conn)
         await self.session.flush()
-        log.info("connection_manual_saved", org_id=str(self.org_id), kind=kind)
+        log.info("connection_manual_saved", owner_id=str(self.owner_id), kind=kind)
         return conn
 
     # --- test, toggle, remove -----------------------------------------
@@ -576,9 +578,9 @@ class ConnectionService:
                 if resp.status_code >= 400:
                     raise ValidationError(f"The provider answered {resp.status_code}.")
             elif conn.kind is ConnectionKind.EMAIL:
-                await _test_email(conn.config, decrypt(conn.credential_enc, scope=self.org_id))
+                await _test_email(conn.config, decrypt(conn.credential_enc, scope=self.owner_id))
             elif conn.kind is ConnectionKind.DATABASE:
-                await _test_database(conn.config, decrypt(conn.credential_enc, scope=self.org_id))
+                await _test_database(conn.config, decrypt(conn.credential_enc, scope=self.owner_id))
             conn.status = STATUS_CONNECTED
             conn.last_error = None
         except Exception as exc:  # noqa: BLE001 - the reason is shown to the admin
@@ -599,7 +601,7 @@ class ConnectionService:
         conn = await self.get(connection_id)
         await self.session.delete(conn)
         await self.session.flush()
-        log.info("connection_removed", org_id=str(self.org_id), kind=conn.kind.value)
+        log.info("connection_removed", owner_id=str(self.owner_id), kind=conn.kind.value)
 
     # --- the worker's read path ---------------------------------------
 
@@ -612,7 +614,7 @@ class ConnectionService:
         """
         rows = await self.session.scalars(
             select(Connection)
-            .where(Connection.org_id == self.org_id, Connection.enabled.is_(True))
+            .where(Connection.owner_id == self.owner_id, Connection.enabled.is_(True))
             .order_by(Connection.updated_at.desc())
         )
         grants: dict[str, Grant] = {}
@@ -624,7 +626,7 @@ class ConnectionService:
                 if conn.kind in (ConnectionKind.GOOGLE, ConnectionKind.MICROSOFT):
                     credential = await self._fresh_access_token(conn)
                 else:
-                    credential = decrypt(conn.credential_enc, scope=self.org_id)
+                    credential = decrypt(conn.credential_enc, scope=self.owner_id)
             except Exception as exc:  # noqa: BLE001 - one bad connection must not stop a run
                 log.warning("connection_unusable", kind=kind, error=_short(exc))
                 continue
@@ -674,7 +676,7 @@ async def _test_database(config: dict[str, Any], password: str) -> None:
     from app.agent.tools.base import ToolContext
     from app.agent.tools.packs.sql import _engine
 
-    engine = _engine(ToolContext(org_id=uuid.uuid4(), credential=password, config=config))
+    engine = _engine(ToolContext(owner_id=uuid.uuid4(), credential=password, config=config))
     try:
         async with asyncio.timeout(HTTP_TIMEOUT_S), engine.connect() as conn:
             await conn.execute(text("SELECT 1"))

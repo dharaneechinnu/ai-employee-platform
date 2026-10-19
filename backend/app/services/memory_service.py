@@ -44,20 +44,20 @@ class SearchHit:
 
 
 class MemoryService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     # ------------------------------------------------------------- config
 
     async def config(self) -> EmbeddingConfig:
-        config = await self.session.get(EmbeddingConfig, self.org_id)
+        config = await self.session.get(EmbeddingConfig, self.owner_id)
         if config is None:
             # Local by default: free, no key, no rate limit, and no
             # company document leaves the server.
             spec = AVAILABLE_MODELS[DEFAULT_PROVIDER]
             config = EmbeddingConfig(
-                org_id=self.org_id,
+                owner_id=self.owner_id,
                 provider_key=spec.provider_key,
                 model=spec.model,
                 dim=spec.dim,
@@ -68,7 +68,7 @@ class MemoryService:
 
     async def provider(self) -> EmbeddingProvider:
         config = await self.config()
-        api_key = decrypt(config.api_key_enc, scope=self.org_id) if config.api_key_enc else None
+        api_key = decrypt(config.api_key_enc, scope=self.owner_id) if config.api_key_enc else None
         return build_embedding_provider(config.provider_key, api_key=api_key, model=config.model)
 
     async def set_provider(self, *, provider_key: str, api_key: str | None) -> EmbeddingConfig:
@@ -89,7 +89,7 @@ class MemoryService:
         config.provider_key = spec.provider_key
         config.model = spec.model
         config.dim = spec.dim
-        config.api_key_enc = encrypt(api_key, scope=self.org_id) if api_key else None
+        config.api_key_enc = encrypt(api_key, scope=self.owner_id) if api_key else None
         await self.session.flush()
         return config
 
@@ -113,7 +113,7 @@ class MemoryService:
         vector = await provider.embed_one(content)
 
         memory = Memory(
-            org_id=self.org_id,
+            owner_id=self.owner_id,
             employee_id=employee_id if scope is MemoryScope.EMPLOYEE else None,
             scope=scope,
             kind=kind,
@@ -127,7 +127,9 @@ class MemoryService:
         await self.session.flush()
 
         vector_table = VECTOR_TABLES[config.dim]
-        self.session.add(vector_table(memory_id=memory.id, org_id=self.org_id, embedding=vector))
+        self.session.add(
+            vector_table(memory_id=memory.id, owner_id=self.owner_id, embedding=vector)
+        )
         await self.session.flush()
         return memory
 
@@ -140,7 +142,7 @@ class MemoryService:
 
     async def get(self, memory_id: uuid.UUID) -> Memory:
         memory = await self.session.scalar(
-            select(Memory).where(Memory.id == memory_id, Memory.org_id == self.org_id)
+            select(Memory).where(Memory.id == memory_id, Memory.owner_id == self.owner_id)
         )
         if memory is None:
             raise NotFoundError("No such memory.")
@@ -149,7 +151,7 @@ class MemoryService:
     async def list_memories(
         self, *, employee_id: uuid.UUID | None = None, limit: int = 100
     ) -> list[Memory]:
-        stmt = select(Memory).where(Memory.org_id == self.org_id)
+        stmt = select(Memory).where(Memory.owner_id == self.owner_id)
         if employee_id is not None:
             stmt = stmt.where(or_(Memory.employee_id == employee_id, Memory.employee_id.is_(None)))
         result = await self.session.scalars(stmt.order_by(Memory.created_at.desc()).limit(limit))
@@ -165,7 +167,7 @@ class MemoryService:
         mismatched = await self.session.scalar(
             select(func.count())
             .select_from(Memory)
-            .where(Memory.org_id == self.org_id, Memory.embedding_model != config.model)
+            .where(Memory.owner_id == self.owner_id, Memory.embedding_model != config.model)
         )
         if mismatched:
             # Refuse rather than return confident nonsense. Comparing
@@ -189,7 +191,7 @@ class MemoryService:
         rows = await self.session.execute(
             select(Memory, vector_table.embedding.cosine_distance(query_vector).label("distance"))  # type: ignore[attr-defined]
             .join(vector_table, vector_table.memory_id == Memory.id)  # type: ignore[attr-defined]
-            .where(Memory.org_id == self.org_id, scope_filter)
+            .where(Memory.owner_id == self.owner_id, scope_filter)
             .order_by(text("distance"))
             .limit(limit * 2)
         )
@@ -212,7 +214,7 @@ class MemoryService:
                 ),
             )
             .where(
-                Memory.org_id == self.org_id,
+                Memory.owner_id == self.owner_id,
                 scope_filter,
                 Memory.content_tsv.op("@@")(func.plainto_tsquery("english", query)),
             )
@@ -240,7 +242,7 @@ class MemoryService:
             await self.session.scalar(
                 select(func.count())
                 .select_from(Memory)
-                .where(Memory.org_id == self.org_id, Memory.embedding_model != config.model)
+                .where(Memory.owner_id == self.owner_id, Memory.embedding_model != config.model)
             )
         ) or 0
 
@@ -259,7 +261,7 @@ class MemoryService:
             stale = (
                 await self.session.scalars(
                     select(Memory)
-                    .where(Memory.org_id == self.org_id, Memory.embedding_model != config.model)
+                    .where(Memory.owner_id == self.owner_id, Memory.embedding_model != config.model)
                     .limit(batch_size)
                 )
             ).all()
@@ -276,7 +278,7 @@ class MemoryService:
 
                 await self.session.flush()
                 self.session.add(
-                    vector_table(memory_id=memory.id, org_id=self.org_id, embedding=vector)
+                    vector_table(memory_id=memory.id, owner_id=self.owner_id, embedding=vector)
                 )
                 memory.embedding_model = config.model
                 memory.embedding_dim = config.dim
@@ -284,5 +286,5 @@ class MemoryService:
 
             await self.session.flush()
 
-        log.info("reembed_complete", org_id=str(self.org_id), processed=processed)
+        log.info("reembed_complete", owner_id=str(self.owner_id), processed=processed)
         return processed

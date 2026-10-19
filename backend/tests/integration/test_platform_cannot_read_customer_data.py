@@ -53,27 +53,27 @@ async def seeded(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/providers",
+        f"/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": SECRET_API_KEY},
         headers=headers,
     )
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/memory",
+        f"/api/v1/me/memory",
         json={"content": SECRET_MEMORY_TEXT},
         headers=headers,
     )
     employee = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees",
+        f"/api/v1/me/ai-employees",
         json={"name": "Bot", "config": {"guided": {"what_it_does": "work"}}},
         headers=headers,
     )
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee.json()["id"], "input": SECRET_TASK_TEXT},
         headers=headers,
     )
 
-    return {"org_id": str(acme.org_id), "token": await _platform_token(api, session)}
+    return {"owner_id": str(acme.owner_id), "token": await _platform_token(api, session)}
 
 
 async def test_no_platform_endpoint_leaks_customer_content(
@@ -86,7 +86,7 @@ async def test_no_platform_endpoint_leaks_customer_content(
     someone remembers to extend this test.
     """
     headers = {"Authorization": f"Bearer {seeded['token']}"}
-    org_id = seeded["org_id"]
+    owner_id = seeded["owner_id"]
 
     spec = (await api.get("/openapi.json")).json()
     platform_gets = [
@@ -98,7 +98,7 @@ async def test_no_platform_endpoint_leaks_customer_content(
 
     checked = 0
     for path in platform_gets:
-        response = await api.get(path.replace("{org_id}", org_id), headers=headers)
+        response = await api.get(path.replace("{owner_id}", owner_id), headers=headers)
         if response.status_code != 200:
             continue
 
@@ -124,13 +124,13 @@ async def test_the_customer_routes_are_closed_to_platform_staff(
     all: staff would simply call the customer route instead.
     """
     headers = {"Authorization": f"Bearer {seeded['token']}"}
-    org_id = seeded["org_id"]
+    owner_id = seeded["owner_id"]
 
     for path in (
-        f"/api/v1/orgs/{org_id}/tasks",
-        f"/api/v1/orgs/{org_id}/memory",
-        f"/api/v1/orgs/{org_id}/providers",
-        f"/api/v1/orgs/{org_id}/ai-employees",
+        f"/api/v1/me/tasks",
+        f"/api/v1/me/memory",
+        f"/api/v1/me/providers",
+        f"/api/v1/me/ai-employees",
     ):
         response = await api.get(path, headers=headers)
         assert response.status_code in (401, 403, 404), f"{path} accepted a platform token"
@@ -141,13 +141,12 @@ async def test_company_detail_shows_counts_but_no_content(
 ) -> None:
     """The supported shape: how many and how healthy."""
     response = await api.get(
-        f"/api/v1/platform/companies/{seeded['org_id']}",
+        f"/api/v1/platform/people/{seeded['owner_id']}",
         headers={"Authorization": f"Bearer {seeded['token']}"},
     )
     assert response.status_code == 200
     body = response.json()
 
-    assert body["member_count"] == 2
     assert body["task_count"] == 1
     assert body["employees_used"] == 1
     # Whether a provider is connected, never which key.
@@ -162,11 +161,11 @@ async def test_the_audit_log_records_platform_actions(
     headers = {"Authorization": f"Bearer {seeded['token']}"}
 
     created = await api.post(
-        "/api/v1/platform/companies",
+        "/api/v1/platform/people",
         json={
             "name": "Globex",
             "slug": "globex",
-            "first_admin_email": "owner@globex.com",
+            "email": "owner@globex.com",
             "max_employees": 2,
         },
         headers=headers,
@@ -176,6 +175,6 @@ async def test_the_audit_log_records_platform_actions(
     entries = await api.get("/api/v1/platform/audit", headers=headers)
     actions = [e["action"] for e in entries.json()]
 
-    assert "company_created" in actions
+    assert "account_created" in actions
     assert "platform_login" in actions
     assert entries.json()[0]["admin_email"] == "staff@platformco.com"

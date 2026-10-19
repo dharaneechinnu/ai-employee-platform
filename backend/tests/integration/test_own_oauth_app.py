@@ -45,16 +45,16 @@ async def staff(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
     return {"Authorization": f"Bearer {await _platform_token(api, session)}"}
 
 
-async def _google(api: AsyncClient, org_id: object, headers: dict[str, str]) -> dict:
-    listing = await api.get(f"/api/v1/orgs/{org_id}/connections/available", headers=headers)
+async def _google(api: AsyncClient, owner_id: object, headers: dict[str, str]) -> dict:
+    listing = await api.get(f"/api/v1/me/connections/available", headers=headers)
     return next(a for a in listing.json() if a["kind"] == "google")
 
 
-async def _client_id_in_use(api: AsyncClient, org_id: object, headers: dict[str, str]) -> str:
+async def _client_id_in_use(api: AsyncClient, owner_id: object, headers: dict[str, str]) -> str:
     from urllib.parse import parse_qs, urlparse
 
     start = await api.post(
-        f"/api/v1/orgs/{org_id}/connections/oauth/google/start", headers=headers
+        f"/api/v1/me/connections/oauth/google/start", headers=headers
     )
     query = parse_qs(urlparse(start.json()["authorize_url"]).query)
     return str(query["client_id"][0])
@@ -67,10 +67,10 @@ async def test_a_company_can_switch_one_click_on_by_itself(
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
-    assert (await _google(api, acme.org_id, headers))["configured"] is False
+    assert (await _google(api, acme.owner_id, headers))["configured"] is False
 
     saved = await api.put(
-        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        f"/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers=headers,
     )
@@ -79,8 +79,8 @@ async def test_a_company_can_switch_one_click_on_by_itself(
     # Google's console and must match to the character.
     assert saved.json()["redirect_uri"].endswith("/oauth/google/callback")
 
-    assert (await _google(api, acme.org_id, headers))["configured"] is True
-    assert await _client_id_in_use(api, acme.org_id, headers) == OWN_ID
+    assert (await _google(api, acme.owner_id, headers))["configured"] is True
+    assert await _client_id_in_use(api, acme.owner_id, headers) == OWN_ID
 
 
 async def test_a_companys_own_app_wins_over_the_platforms(
@@ -98,14 +98,14 @@ async def test_a_companys_own_app_wins_over_the_platforms(
         headers=staff,
     )
     await api.put(
-        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        f"/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers=acme_h,
     )
 
-    assert await _client_id_in_use(api, acme.org_id, acme_h) == OWN_ID
+    assert await _client_id_in_use(api, acme.owner_id, acme_h) == OWN_ID
     # The company that did nothing still gets the platform's app.
-    assert await _client_id_in_use(api, other.org_id, other_h) == PLATFORM_ID
+    assert await _client_id_in_use(api, other.owner_id, other_h) == PLATFORM_ID
 
 
 async def test_removing_our_own_app_falls_back_to_the_platforms(
@@ -120,17 +120,17 @@ async def test_removing_our_own_app_falls_back_to_the_platforms(
         headers=staff,
     )
     await api.put(
-        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        f"/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers=headers,
     )
-    assert await _client_id_in_use(api, acme.org_id, headers) == OWN_ID
+    assert await _client_id_in_use(api, acme.owner_id, headers) == OWN_ID
 
     removed = await api.delete(
-        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google", headers=headers
+        f"/api/v1/me/connections/oauth-apps/google", headers=headers
     )
     assert removed.status_code == 204
-    assert await _client_id_in_use(api, acme.org_id, headers) == PLATFORM_ID
+    assert await _client_id_in_use(api, acme.owner_id, headers) == PLATFORM_ID
 
 
 async def test_one_companys_app_is_invisible_to_another(
@@ -140,17 +140,17 @@ async def test_one_companys_app_is_invisible_to_another(
     other = await seed_company(session, api, name="Globex", slug="globex")
 
     await api.put(
-        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        f"/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
 
     listing = await api.get(
-        f"/api/v1/orgs/{other.org_id}/connections/oauth-apps",
+        f"/api/v1/me/connections/oauth-apps",
         headers={"Authorization": f"Bearer {other.admin_token}"},
     )
     assert listing.json() == []
-    assert (await _google(api, other.org_id, {"Authorization": f"Bearer {other.admin_token}"}))[
+    assert (await _google(api, other.owner_id, {"Authorization": f"Bearer {other.admin_token}"}))[
         "configured"
     ] is False
 
@@ -160,24 +160,14 @@ async def test_the_secret_is_never_returned(api: AsyncClient, session: AsyncSess
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     saved = await api.put(
-        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        f"/api/v1/me/connections/oauth-apps/google",
         json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
         headers=headers,
     )
-    listing = await api.get(f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps", headers=headers)
+    listing = await api.get(f"/api/v1/me/connections/oauth-apps", headers=headers)
 
     for body in (saved.json(), listing.json()):
         assert OWN_SECRET not in json.dumps(body)
     assert saved.json()["secret_last4"] == OWN_SECRET[-4:]
 
 
-async def test_a_member_cannot_register_one(api: AsyncClient, session: AsyncSession) -> None:
-    """Connecting apps is admin work, like every other connection."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-
-    response = await api.put(
-        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
-        json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
-        headers={"Authorization": f"Bearer {acme.member_token}"},
-    )
-    assert response.status_code == 403

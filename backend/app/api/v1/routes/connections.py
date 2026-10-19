@@ -18,27 +18,23 @@ from datetime import datetime
 from typing import Annotated, Any
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Query, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from app.api.v1.deps import RequestContext, SessionDep, require_permission
+from app.api.v1.deps import ContextDep, SessionDep
 from app.config import get_settings
 from app.core.errors import AppError
 from app.core.observability import get_logger
-from app.core.permissions import Permission, role_has
 from app.core.signed import InvalidSignedTokenError
-from app.db.repositories.identity_repo import MembershipRepository
 from app.services.connection_service import ConnectionService
 from app.services.oauth_providers import get_oauth_provider
 
 log = get_logger(__name__)
 
-router = APIRouter(prefix="/orgs/{org_id}", tags=["connections"])
+router = APIRouter(prefix="/me", tags=["connections"])
 callback_router = APIRouter(tags=["connections"])
 
-CanManage = Annotated[RequestContext, Depends(require_permission(Permission.CONNECTION_MANAGE))]
-CanRead = Annotated[RequestContext, Depends(require_permission(Permission.EMPLOYEE_READ))]
 
 
 class AvailableConnectionResponse(BaseModel):
@@ -110,20 +106,20 @@ class ToggleRequest(BaseModel):
     response_model=list[AvailableConnectionResponse],
     summary="Apps that can be connected",
 )
-async def available(ctx: CanRead, session: SessionDep) -> list[AvailableConnectionResponse]:
+async def available(ctx: ContextDep, session: SessionDep) -> list[AvailableConnectionResponse]:
     return [
         AvailableConnectionResponse(**asdict(a))
-        for a in await ConnectionService(session, ctx.org_id).available()
+        for a in await ConnectionService(session, ctx.owner_id).available()
     ]
 
 
 @router.get("/connections", response_model=list[ConnectionResponse], summary="Our connected apps")
-async def list_connections(ctx: CanRead, session: SessionDep) -> list[ConnectionResponse]:
+async def list_connections(ctx: ContextDep, session: SessionDep) -> list[ConnectionResponse]:
     # Members may see which apps are connected (it explains what their
     # AI Employees can do); only admins can change them.
     return [
         ConnectionResponse(**asdict(c))
-        for c in await ConnectionService(session, ctx.org_id).list_all()
+        for c in await ConnectionService(session, ctx.owner_id).list_all()
     ]
 
 
@@ -132,8 +128,8 @@ async def list_connections(ctx: CanRead, session: SessionDep) -> list[Connection
     response_model=OAuthStartResponse,
     summary="Begin a one-click connection",
 )
-async def oauth_start(kind: str, ctx: CanManage, session: SessionDep) -> OAuthStartResponse:
-    url = await ConnectionService(session, ctx.org_id).start_oauth(kind, user_id=ctx.user_id)
+async def oauth_start(kind: str, ctx: ContextDep, session: SessionDep) -> OAuthStartResponse:
+    url = await ConnectionService(session, ctx.owner_id).start_oauth(kind, user_id=ctx.user_id)
     return OAuthStartResponse(authorize_url=url)
 
 
@@ -144,9 +140,9 @@ async def oauth_start(kind: str, ctx: CanManage, session: SessionDep) -> OAuthSt
     summary="Connect an app by hand (mailbox or database)",
 )
 async def create_manual(
-    body: ManualConnectionRequest, ctx: CanManage, session: SessionDep
+    body: ManualConnectionRequest, ctx: ContextDep, session: SessionDep
 ) -> ConnectionResponse:
-    service = ConnectionService(session, ctx.org_id)
+    service = ConnectionService(session, ctx.owner_id)
     conn = await service.create_manual(
         kind=body.kind, label=body.label, secret=body.secret, config=body.config
     )
@@ -160,9 +156,9 @@ async def create_manual(
     summary="Check a connection works",
 )
 async def test_connection(
-    connection_id: uuid.UUID, ctx: CanManage, session: SessionDep
+    connection_id: uuid.UUID, ctx: ContextDep, session: SessionDep
 ) -> ConnectionResponse:
-    service = ConnectionService(session, ctx.org_id)
+    service = ConnectionService(session, ctx.owner_id)
     conn = await service.test(connection_id)
     await session.refresh(conn)
     return ConnectionResponse(**asdict(service.view(conn)))
@@ -174,9 +170,9 @@ async def test_connection(
     summary="Pause or resume a connection",
 )
 async def toggle_connection(
-    connection_id: uuid.UUID, body: ToggleRequest, ctx: CanManage, session: SessionDep
+    connection_id: uuid.UUID, body: ToggleRequest, ctx: ContextDep, session: SessionDep
 ) -> ConnectionResponse:
-    service = ConnectionService(session, ctx.org_id)
+    service = ConnectionService(session, ctx.owner_id)
     conn = await service.set_enabled(connection_id, body.enabled)
     await session.refresh(conn)
     return ConnectionResponse(**asdict(service.view(conn)))
@@ -187,8 +183,8 @@ async def toggle_connection(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Disconnect an app",
 )
-async def delete_connection(connection_id: uuid.UUID, ctx: CanManage, session: SessionDep) -> None:
-    await ConnectionService(session, ctx.org_id).delete(connection_id)
+async def delete_connection(connection_id: uuid.UUID, ctx: ContextDep, session: SessionDep) -> None:
+    await ConnectionService(session, ctx.owner_id).delete(connection_id)
 
 
 def _back_to_app(**params: str) -> RedirectResponse:
@@ -215,18 +211,18 @@ async def oauth_callback(
         return _back_to_app(error="The sign-in did not complete.")
 
     try:
-        org_id, user_id = ConnectionService.read_state(state, kind)
+        owner_id, user_id = ConnectionService.read_state(state, kind)
     except InvalidSignedTokenError as exc:
         return _back_to_app(error=str(exc))
 
-    # Permissions are re-checked now, not trusted from when the sign-in
-    # started: the person may have lost admin rights in between.
-    membership = await MembershipRepository(session).get_for_user_and_org(user_id, org_id)
-    if membership is None or not role_has(membership.role, Permission.CONNECTION_MANAGE):
-        return _back_to_app(error="You no longer have permission to connect apps.")
+    # Re-checked now rather than trusted from when the sign-in
+    # started: the state signed then says who began it, and this says
+    # whether that is still the person who owns the account.
+    if user_id != owner_id:
+        return _back_to_app(error="That sign-in was started by somebody else.")
 
     try:
-        conn = await ConnectionService(session, org_id).complete_oauth(
+        conn = await ConnectionService(session, owner_id).complete_oauth(
             kind, code=code, user_id=user_id
         )
         await session.commit()
@@ -245,9 +241,9 @@ async def oauth_callback(
     summary="Our own sign-in apps",
 )
 async def list_own_oauth_apps(
-    ctx: CanManage, session: SessionDep
+    ctx: ContextDep, session: SessionDep
 ) -> list[OwnOAuthAppResponse]:
-    service = ConnectionService(session, ctx.org_id)
+    service = ConnectionService(session, ctx.owner_id)
     saved = await service.own_oauth_apps()
     out: list[OwnOAuthAppResponse] = []
     for kind, row in saved.items():
@@ -271,7 +267,7 @@ async def list_own_oauth_apps(
     summary="Use our own sign-in app",
 )
 async def save_own_oauth_app(
-    kind: str, body: OwnOAuthAppRequest, ctx: CanManage, session: SessionDep
+    kind: str, body: OwnOAuthAppRequest, ctx: ContextDep, session: SessionDep
 ) -> OwnOAuthAppResponse:
     """Switch one-click on for this company without anyone else acting.
 
@@ -279,7 +275,7 @@ async def save_own_oauth_app(
     the other route, for a company that would rather its own name be
     on the consent screen, or that does not want to wait.
     """
-    row = await ConnectionService(session, ctx.org_id).save_own_oauth_app(
+    row = await ConnectionService(session, ctx.owner_id).save_own_oauth_app(
         kind=kind, client_id=body.client_id, client_secret=body.client_secret
     )
     await session.commit()
@@ -299,6 +295,6 @@ async def save_own_oauth_app(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Stop using our own app",
 )
-async def delete_own_oauth_app(kind: str, ctx: CanManage, session: SessionDep) -> None:
-    await ConnectionService(session, ctx.org_id).delete_own_oauth_app(kind)
+async def delete_own_oauth_app(kind: str, ctx: ContextDep, session: SessionDep) -> None:
+    await ConnectionService(session, ctx.owner_id).delete_own_oauth_app(kind)
     await session.commit()

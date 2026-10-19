@@ -25,8 +25,7 @@ from app.api.v1.deps import SessionDep
 from app.core.errors import AuthError, NotFoundError
 from app.core.security import decode_access_token
 from app.db.models.ai_employee import COUNTS_TOWARD_LIMIT, AIEmployee
-from app.db.models.identity import Membership, PlatformAdmin, PlatformAdminAudit
-from app.db.models.organization import Organization, OrgStatus
+from app.db.models.identity import PlatformAdmin, PlatformAdminAudit, User
 from app.db.models.provider import ProviderConfig
 from app.db.models.task import Task
 from app.db.repositories.identity_repo import PlatformAdminRepository
@@ -51,31 +50,31 @@ class PlatformTokenResponse(BaseModel):
     token_type: str = "bearer"  # noqa: S105 - the OAuth scheme name
 
 
-class CreateCompanyRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=200)
-    slug: str = Field(min_length=2, max_length=100, pattern=r"^[a-z0-9][a-z0-9-]*$")
-    first_admin_email: EmailStr
+class CreatePersonRequest(BaseModel):
+    email: EmailStr
+    full_name: str | None = Field(default=None, max_length=200)
     max_employees: int = Field(default=3, ge=0, le=1000)
 
 
-class CreateCompanyResponse(BaseModel):
+class CreatePersonResponse(BaseModel):
     id: uuid.UUID
-    name: str
-    slug: str
+    email: EmailStr
+    full_name: str | None
     max_employees: int
-    invite_token: str
+    # Shown once, right after creation. Only its hash is stored, so a
+    # lost link means issuing another rather than looking one up.
+    setup_token: str
 
 
-class CompanyRow(BaseModel):
+class PersonRow(BaseModel):
     """What the Platform Admin may see: counts and health, never content."""
 
     id: uuid.UUID
-    name: str
-    slug: str
-    status: str
+    email: EmailStr
+    full_name: str | None
+    active: bool
     max_employees: int
     employees_used: int
-    member_count: int
 
 
 class SetLimitRequest(BaseModel):
@@ -152,17 +151,16 @@ class ProviderStatusRow(BaseModel):
     last_tested_at: datetime | None
 
 
-class CompanyDetail(BaseModel):
+class PersonDetail(BaseModel):
     """Counts and health. Never content."""
 
     id: uuid.UUID
-    name: str
-    slug: str
-    status: str
+    email: EmailStr
+    full_name: str | None
+    active: bool
     created_at: datetime
     max_employees: int
     employees_used: int
-    member_count: int
     task_count: int
     providers: list[ProviderStatusRow]
 
@@ -208,99 +206,82 @@ async def platform_login(body: PlatformLoginRequest, session: SessionDep) -> Pla
 
 
 @router.post(
-    "/companies",
-    response_model=CreateCompanyResponse,
+    "/people",
+    response_model=CreatePersonResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create a company and its first invite",
+    summary="Create an account and its setup link",
 )
-async def create_company(
-    body: CreateCompanyRequest, admin: AdminDep, session: SessionDep
-) -> CreateCompanyResponse:
-    org, raw_token = await PlatformService(session).create_company(
+async def create_person(
+    body: CreatePersonRequest, admin: AdminDep, session: SessionDep
+) -> CreatePersonResponse:
+    user, raw_token = await PlatformService(session).create_person(
         admin_id=admin.id,
-        name=body.name,
-        slug=body.slug,
-        first_admin_email=body.first_admin_email,
+        email=body.email,
+        full_name=body.full_name,
         max_employees=body.max_employees,
     )
-    # The invite token appears here once. There is no email service, so
-    # the Platform Admin copies this and sends it themselves.
-    return CreateCompanyResponse(
-        id=org.id,
-        name=org.name,
-        slug=org.slug,
-        max_employees=org.max_employees,
-        invite_token=raw_token,
+    await session.commit()
+    # Shown here once. There is no email service, so the Platform
+    # Admin copies the link and sends it themselves. The person sets
+    # their own password through it, so staff never know it.
+    return CreatePersonResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        max_employees=user.max_employees,
+        setup_token=raw_token,
     )
 
 
-@router.get("/companies", response_model=list[CompanyRow], summary="List companies")
-async def list_companies(admin: AdminDep, session: SessionDep) -> list[CompanyRow]:
-    stats = await PlatformService(session).list_companies()
+def _row(user: User, employees_used: int = 0) -> PersonRow:
+    return PersonRow(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        active=user.is_active,
+        max_employees=user.max_employees,
+        employees_used=employees_used,
+    )
+
+
+@router.get("/people", response_model=list[PersonRow], summary="List accounts")
+async def list_people(admin: AdminDep, session: SessionDep) -> list[PersonRow]:
     return [
-        CompanyRow(
-            id=s.org.id,
-            name=s.org.name,
-            slug=s.org.slug,
-            status=s.org.status.value,
-            max_employees=s.org.max_employees,
-            employees_used=s.employee_count,
-            member_count=s.member_count,
-        )
-        for s in stats
+        _row(stat.user, stat.employee_count)
+        for stat in await PlatformService(session).list_people()
     ]
 
 
 @router.patch(
-    "/companies/{org_id}/limits", response_model=CompanyRow, summary="Change the employee limit"
+    "/people/{owner_id}/limits", response_model=PersonRow, summary="Change the employee limit"
 )
 async def set_limit(
-    org_id: uuid.UUID, body: SetLimitRequest, admin: AdminDep, session: SessionDep
-) -> CompanyRow:
-    org = await PlatformService(session).set_employee_limit(
-        admin_id=admin.id, org_id=org_id, max_employees=body.max_employees
+    owner_id: uuid.UUID, body: SetLimitRequest, admin: AdminDep, session: SessionDep
+) -> PersonRow:
+    user = await PlatformService(session).set_employee_limit(
+        admin_id=admin.id, owner_id=owner_id, max_employees=body.max_employees
     )
-    return CompanyRow(
-        id=org.id,
-        name=org.name,
-        slug=org.slug,
-        status=org.status.value,
-        max_employees=org.max_employees,
-        employees_used=0,
-        member_count=0,
+    await session.commit()
+    return _row(user)
+
+
+@router.post("/people/{owner_id}/suspend", response_model=PersonRow, summary="Suspend")
+async def suspend(owner_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> PersonRow:
+    """They cannot sign in. Nothing of theirs is read or deleted."""
+    user = await PlatformService(session).set_active(
+        admin_id=admin.id, owner_id=owner_id, active=False
     )
+    await session.commit()
+    return _row(user)
 
 
-async def _set_status(
-    org_id: uuid.UUID, admin: PlatformAdmin, session: SessionDep, status_: OrgStatus
-) -> CompanyRow:
-    org = await PlatformService(session).set_status(
-        admin_id=admin.id, org_id=org_id, status=status_
+@router.post("/people/{owner_id}/restore", response_model=PersonRow, summary="Restore")
+async def restore(owner_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> PersonRow:
+    user = await PlatformService(session).set_active(
+        admin_id=admin.id, owner_id=owner_id, active=True
     )
-    return CompanyRow(
-        id=org.id,
-        name=org.name,
-        slug=org.slug,
-        status=org.status.value,
-        max_employees=org.max_employees,
-        employees_used=0,
-        member_count=0,
-    )
-
-
-@router.post("/companies/{org_id}/suspend", response_model=CompanyRow, summary="Suspend")
-async def suspend(org_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> CompanyRow:
-    return await _set_status(org_id, admin, session, OrgStatus.SUSPENDED)
-
-
-@router.post("/companies/{org_id}/reactivate", response_model=CompanyRow, summary="Reactivate")
-async def reactivate(org_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> CompanyRow:
-    return await _set_status(org_id, admin, session, OrgStatus.ACTIVE)
-
-
-@router.post("/companies/{org_id}/close", response_model=CompanyRow, summary="Close")
-async def close(org_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> CompanyRow:
-    return await _set_status(org_id, admin, session, OrgStatus.CLOSED)
+    await session.commit()
+    return _row(user)
 
 
 @router.get("/audit", response_model=list[AuditEntry], summary="The diary")
@@ -336,11 +317,11 @@ async def audit_log(
 
 
 @router.get(
-    "/companies/{org_id}",
-    response_model=CompanyDetail,
+    "/people/{owner_id}",
+    response_model=PersonDetail,
     summary="One company: counts and health only",
 )
-async def company_detail(org_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> CompanyDetail:
+async def company_detail(owner_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> PersonDetail:
     """Deliberately thin.
 
     There is no sibling endpoint that returns this company's tasks,
@@ -348,35 +329,31 @@ async def company_detail(org_id: uuid.UUID, admin: AdminDep, session: SessionDep
     the customer to share what they see. That trade is the whole point:
     "we technically cannot read your data" is a promise worth keeping.
     """
-    org = await session.get(Organization, org_id)
-    if org is None:
-        raise NotFoundError("No such company.")
+    user = await session.get(User, owner_id)
+    if user is None:
+        raise NotFoundError("No such account.")
 
-    members = await session.scalar(
-        select(func.count()).select_from(Membership).where(Membership.org_id == org_id)
-    )
     employees = await session.scalar(
         select(func.count())
         .select_from(AIEmployee)
-        .where(AIEmployee.org_id == org_id, AIEmployee.status.in_(COUNTS_TOWARD_LIMIT))
+        .where(AIEmployee.owner_id == owner_id, AIEmployee.status.in_(COUNTS_TOWARD_LIMIT))
     )
     tasks = await session.scalar(
-        select(func.count()).select_from(Task).where(Task.org_id == org_id)
+        select(func.count()).select_from(Task).where(Task.owner_id == owner_id)
     )
 
     configs = (
-        await session.scalars(select(ProviderConfig).where(ProviderConfig.org_id == org_id))
+        await session.scalars(select(ProviderConfig).where(ProviderConfig.owner_id == owner_id))
     ).all()
 
-    return CompanyDetail(
-        id=org.id,
-        name=org.name,
-        slug=org.slug,
-        status=org.status.value,
-        created_at=org.created_at,
-        max_employees=org.max_employees,
+    return PersonDetail(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        active=user.is_active,
+        created_at=user.created_at,
+        max_employees=user.max_employees,
         employees_used=employees or 0,
-        member_count=members or 0,
         task_count=tasks or 0,
         providers=[
             ProviderStatusRow(
@@ -473,12 +450,12 @@ def _one(apps: list[OAuthAppView], provider_key: str) -> OAuthAppRow:
 
 
 @router.get(
-    "/companies/{org_id}/connections",
+    "/people/{owner_id}/connections",
     response_model=list[ConnectionAccessRow],
     summary="Which connections this company may use",
 )
 async def company_connection_access(
-    org_id: uuid.UUID, admin: AdminDep, session: SessionDep
+    owner_id: uuid.UUID, admin: AdminDep, session: SessionDep
 ) -> list[ConnectionAccessRow]:
     """Still counts and settings, never content.
 
@@ -486,21 +463,21 @@ async def company_connection_access(
     nothing about what is in anyone's inbox, and there is no endpoint
     here that would.
     """
-    if await session.get(Organization, org_id) is None:
-        raise NotFoundError("No such company.")
+    if await session.get(User, owner_id) is None:
+        raise NotFoundError("No such account.")
     return [
         ConnectionAccessRow(**asdict(row))
-        for row in await PlatformService(session).connection_access(org_id)
+        for row in await PlatformService(session).connection_access(owner_id)
     ]
 
 
 @router.put(
-    "/companies/{org_id}/connections/{kind}",
+    "/people/{owner_id}/connections/{kind}",
     response_model=list[ConnectionAccessRow],
     summary="Open or close one connection for one company",
 )
 async def set_company_connection_access(
-    org_id: uuid.UUID,
+    owner_id: uuid.UUID,
     kind: str,
     body: SetConnectionAccessRequest,
     admin: AdminDep,
@@ -509,12 +486,12 @@ async def set_company_connection_access(
     service = PlatformService(session)
     await service.set_connection_access(
         admin_id=admin.id,
-        org_id=org_id,
+        owner_id=owner_id,
         kind=kind,
         allowed=body.allowed,
         note=body.note,
     )
     await session.commit()
     return [
-        ConnectionAccessRow(**asdict(row)) for row in await service.connection_access(org_id)
+        ConnectionAccessRow(**asdict(row)) for row in await service.connection_access(owner_id)
     ]

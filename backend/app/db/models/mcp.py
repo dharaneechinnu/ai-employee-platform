@@ -28,8 +28,8 @@ from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class McpServer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "mcp_servers"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     # Part of every tool name ("mcp__crm__find_customer"), so it is
@@ -49,6 +49,6 @@ class McpServer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     last_error: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (
-        UniqueConstraint("org_id", "slug", name="uq_mcp_server_org_slug"),
-        Index("ix_mcp_servers_org", "org_id"),
+        UniqueConstraint("owner_id", "slug", name="uq_mcp_server_org_slug"),
+        Index("ix_mcp_servers_owner", "owner_id"),
     )

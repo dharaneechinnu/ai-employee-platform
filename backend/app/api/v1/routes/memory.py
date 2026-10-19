@@ -4,21 +4,18 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
 from app.agent.embeddings import AVAILABLE_MODELS
-from app.api.v1.deps import RequestContext, SessionDep, require_permission
-from app.core.permissions import Permission
+from app.api.v1.deps import ContextDep, SessionDep
 from app.db.models.memory import MemoryKind, MemoryScope
 from app.services.memory_service import MemoryService
 
-router = APIRouter(prefix="/orgs/{org_id}", tags=["memory"])
+router = APIRouter(prefix="/me", tags=["memory"])
 
-CanRead = Annotated[RequestContext, Depends(require_permission(Permission.MEMORY_READ))]
-CanWrite = Annotated[RequestContext, Depends(require_permission(Permission.MEMORY_WRITE))]
 
 
 class MemoryResponse(BaseModel):
@@ -87,9 +84,9 @@ def _to_response(memory: Any) -> MemoryResponse:
 
 @router.get("/memory", response_model=list[MemoryResponse], summary="Browse memories")
 async def list_memory(
-    ctx: CanRead, session: SessionDep, employee_id: uuid.UUID | None = None
+    ctx: ContextDep, session: SessionDep, employee_id: uuid.UUID | None = None
 ) -> list[MemoryResponse]:
-    memories = await MemoryService(session, ctx.org_id).list_memories(employee_id=employee_id)
+    memories = await MemoryService(session, ctx.owner_id).list_memories(employee_id=employee_id)
     return [_to_response(m) for m in memories]
 
 
@@ -100,9 +97,9 @@ async def list_memory(
     summary="Add a memory by hand",
 )
 async def create_memory(
-    body: CreateMemoryRequest, ctx: CanWrite, session: SessionDep
+    body: CreateMemoryRequest, ctx: ContextDep, session: SessionDep
 ) -> MemoryResponse:
-    memory = await MemoryService(session, ctx.org_id).remember(
+    memory = await MemoryService(session, ctx.owner_id).remember(
         content=body.content,
         kind=body.kind,
         scope=body.scope,
@@ -115,15 +112,15 @@ async def create_memory(
 @router.delete(
     "/memory/{memory_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a memory"
 )
-async def delete_memory(memory_id: uuid.UUID, ctx: CanWrite, session: SessionDep) -> None:
-    await MemoryService(session, ctx.org_id).forget(memory_id)
+async def delete_memory(memory_id: uuid.UUID, ctx: ContextDep, session: SessionDep) -> None:
+    await MemoryService(session, ctx.owner_id).forget(memory_id)
 
 
 @router.post("/memory/search", response_model=list[SearchHitResponse], summary="Search memory")
 async def search_memory(
-    body: SearchRequest, ctx: CanRead, session: SessionDep
+    body: SearchRequest, ctx: ContextDep, session: SessionDep
 ) -> list[SearchHitResponse]:
-    hits = await MemoryService(session, ctx.org_id).recall(
+    hits = await MemoryService(session, ctx.owner_id).recall(
         body.query, employee_id=body.employee_id, limit=body.limit
     )
     return [
@@ -143,7 +140,7 @@ async def search_memory(
     response_model=list[EmbeddingProviderOption],
     summary="Embedding providers we can choose",
 )
-async def embedding_providers(ctx: CanRead) -> list[EmbeddingProviderOption]:
+async def embedding_providers(ctx: ContextDep) -> list[EmbeddingProviderOption]:
     return [
         EmbeddingProviderOption(
             key=spec.provider_key,
@@ -158,8 +155,8 @@ async def embedding_providers(ctx: CanRead) -> list[EmbeddingProviderOption]:
 @router.get(
     "/embedding-config", response_model=EmbeddingConfigResponse, summary="Our current provider"
 )
-async def get_embedding_config(ctx: CanRead, session: SessionDep) -> EmbeddingConfigResponse:
-    service = MemoryService(session, ctx.org_id)
+async def get_embedding_config(ctx: ContextDep, session: SessionDep) -> EmbeddingConfigResponse:
+    service = MemoryService(session, ctx.owner_id)
     config = await service.config()
     return EmbeddingConfigResponse(
         provider_key=config.provider_key,
@@ -175,7 +172,7 @@ async def get_embedding_config(ctx: CanRead, session: SessionDep) -> EmbeddingCo
     summary="Switch provider (requires re-embedding)",
 )
 async def set_embedding_config(
-    body: SetEmbeddingProviderRequest, ctx: CanWrite, session: SessionDep
+    body: SetEmbeddingProviderRequest, ctx: ContextDep, session: SessionDep
 ) -> EmbeddingConfigResponse:
     """Switching provider invalidates every existing vector.
 
@@ -184,7 +181,7 @@ async def set_embedding_config(
     everything has been re-embedded. The count in the response tells
     the UI how much work that is.
     """
-    service = MemoryService(session, ctx.org_id)
+    service = MemoryService(session, ctx.owner_id)
     config = await service.set_provider(provider_key=body.provider_key, api_key=body.api_key)
     return EmbeddingConfigResponse(
         provider_key=config.provider_key,
@@ -195,6 +192,6 @@ async def set_embedding_config(
 
 
 @router.post("/embedding-config/reembed", summary="Re-embed everything with the current provider")
-async def reembed(ctx: CanWrite, session: SessionDep) -> dict[str, int]:
-    processed = await MemoryService(session, ctx.org_id).reembed_all()
+async def reembed(ctx: ContextDep, session: SessionDep) -> dict[str, int]:
+    processed = await MemoryService(session, ctx.owner_id).reembed_all()
     return {"reembedded": processed}

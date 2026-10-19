@@ -1,3 +1,3 @@
-from app.db.repositories.base import BaseRepository, OrgScopedRepository
+from app.db.repositories.base import BaseRepository, OwnerScopedRepository
 
-__all__ = ["BaseRepository", "OrgScopedRepository"]
+__all__ = ["BaseRepository", "OwnerScopedRepository"]

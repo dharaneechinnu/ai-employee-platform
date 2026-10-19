@@ -59,7 +59,7 @@ class ToolContext:
     in the conversation.
     """
 
-    org_id: uuid.UUID
+    owner_id: uuid.UUID
     run_id: uuid.UUID | None = None
     credential: str | None = None
     config: dict[str, Any] | None = None

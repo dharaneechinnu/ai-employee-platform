@@ -50,8 +50,8 @@ DB_CONNECTION = {
 }
 
 
-async def _available(api: AsyncClient, org_id: object, headers: dict[str, str], kind: str) -> dict:
-    listing = await api.get(f"/api/v1/orgs/{org_id}/connections/available", headers=headers)
+async def _available(api: AsyncClient, owner_id: object, headers: dict[str, str], kind: str) -> dict:
+    listing = await api.get(f"/api/v1/me/connections/available", headers=headers)
     return next(a for a in listing.json() if a["kind"] == kind)
 
 
@@ -60,7 +60,7 @@ async def test_everything_is_open_until_someone_says_otherwise(
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
 
-    rows = await api.get(f"/api/v1/platform/companies/{acme.org_id}/connections", headers=staff)
+    rows = await api.get(f"/api/v1/platform/people/{acme.owner_id}/connections", headers=staff)
     assert rows.status_code == 200
     for row in rows.json():
         assert row["allowed"] is True
@@ -77,18 +77,18 @@ async def test_closing_one_connection_for_one_company(
     other_admin = {"Authorization": f"Bearer {other.admin_token}"}
 
     closed = await api.put(
-        f"/api/v1/platform/companies/{acme.org_id}/connections/database",
+        f"/api/v1/platform/people/{acme.owner_id}/connections/database",
         json={"allowed": False, "note": "Not included on your plan."},
         headers=staff,
     )
     assert closed.status_code == 200
 
-    acme_db = await _available(api, acme.org_id, acme_admin, "database")
+    acme_db = await _available(api, acme.owner_id, acme_admin, "database")
     assert acme_db["allowed"] is False
     assert acme_db["blocked_note"] == "Not included on your plan."
 
     # The ruling is about one company, not the connection itself.
-    other_db = await _available(api, other.org_id, other_admin, "database")
+    other_db = await _available(api, other.owner_id, other_admin, "database")
     assert other_db["allowed"] is True
 
 
@@ -100,18 +100,18 @@ async def test_a_closed_connection_cannot_be_created_anyway(
     acme_admin = {"Authorization": f"Bearer {acme.admin_token}"}
 
     allowed = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/connections", json=DB_CONNECTION, headers=acme_admin
+        f"/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin
     )
     assert allowed.status_code == 201
 
     await api.put(
-        f"/api/v1/platform/companies/{acme.org_id}/connections/database",
+        f"/api/v1/platform/people/{acme.owner_id}/connections/database",
         json={"allowed": False, "note": "Not included on your plan."},
         headers=staff,
     )
 
     refused = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/connections", json=DB_CONNECTION, headers=acme_admin
+        f"/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin
     )
     # Forbidden, not unprocessable: the request is fine, the company is not.
     assert refused.status_code == 403
@@ -125,12 +125,12 @@ async def test_returning_a_company_to_the_platform_default(
     acme = await seed_company(session, api, name="Acme", slug="acme")
 
     await api.put(
-        f"/api/v1/platform/companies/{acme.org_id}/connections/database",
+        f"/api/v1/platform/people/{acme.owner_id}/connections/database",
         json={"allowed": False},
         headers=staff,
     )
     back = await api.put(
-        f"/api/v1/platform/companies/{acme.org_id}/connections/database",
+        f"/api/v1/platform/people/{acme.owner_id}/connections/database",
         json={"allowed": None},
         headers=staff,
     )
@@ -148,8 +148,8 @@ async def test_a_company_cannot_open_a_connection_for_itself(
     acme_admin = {"Authorization": f"Bearer {acme.admin_token}"}
 
     for method, path in (
-        ("GET", f"/api/v1/platform/companies/{acme.org_id}/connections"),
-        ("PUT", f"/api/v1/platform/companies/{acme.org_id}/connections/database"),
+        ("GET", f"/api/v1/platform/people/{acme.owner_id}/connections"),
+        ("PUT", f"/api/v1/platform/people/{acme.owner_id}/connections/database"),
     ):
         response = await api.request(method, path, headers=acme_admin, json={"allowed": True})
         assert response.status_code in (401, 403), f"{method} {path} accepted a company token"
@@ -161,7 +161,7 @@ async def test_the_decision_is_recorded(
     acme = await seed_company(session, api, name="Acme", slug="acme")
 
     await api.put(
-        f"/api/v1/platform/companies/{acme.org_id}/connections/database",
+        f"/api/v1/platform/people/{acme.owner_id}/connections/database",
         json={"allowed": False},
         headers=staff,
     )

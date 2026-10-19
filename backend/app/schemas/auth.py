@@ -8,11 +8,8 @@ time.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-
-from app.db.models.identity import Role
 
 # Long enough to resist guessing, short enough not to push people toward
 # writing it down. Length beats composition rules, so there are none.
@@ -52,52 +49,20 @@ class TokenResponse(BaseModel):
     expires_in: int
 
 
-class OrgSummary(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    slug: str
-    role: Role
-
-
 class MeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     email: EmailStr
     full_name: str | None
-    organizations: list[OrgSummary]
+    # The cap the platform set for this person; the UI shows
+    # "2 of 5 AI Employees" from it.
+    max_employees: int
 
 
-class MemberSummary(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class SetupRequest(BaseModel):
+    """Setting a password from the link the Platform Admin sent."""
 
-    id: uuid.UUID
-    email: EmailStr
-    full_name: str | None
-    role: Role
-
-
-class InviteRequest(BaseModel):
-    email: EmailStr
-    role: Role = Role.MEMBER
-
-
-class InviteResponse(BaseModel):
-    """Carries the raw token exactly once, at creation.
-
-    There is no email service, so the admin copies this link and sends it
-    themselves. We store only the hash, so this response is the single
-    opportunity to see the token — it cannot be retrieved later.
-    """
-
-    id: uuid.UUID
-    email: EmailStr
-    role: Role
-    invite_token: str
-    expires_at: datetime
-
-
-class UpdateMemberRoleRequest(BaseModel):
-    role: Role
+    token: str = Field(min_length=10, max_length=200)
+    password: str = Field(min_length=12, max_length=200)
+    full_name: str | None = Field(default=None, max_length=200)

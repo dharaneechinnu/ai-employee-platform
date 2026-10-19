@@ -18,7 +18,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.providers.base import LLMProvider, LLMReply, Message, Role, StopReason, Usage
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_company, seed_person
 
 GUIDED = {
     "what_it_does": "Answer questions about bugs.",
@@ -61,13 +61,13 @@ async def _setup(api: AsyncClient, session: AsyncSession) -> tuple[Any, str, str
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/providers",
+        f"/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": "test-key-abcd1234"},
         headers=headers,
     )
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees",
+        f"/api/v1/me/ai-employees",
         json={
             "name": "Bug Fixer Bot",
             "job_title": "GitHub Helper",
@@ -77,7 +77,7 @@ async def _setup(api: AsyncClient, session: AsyncSession) -> tuple[Any, str, str
     )
     employee_id = created.json()["id"]
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees/{employee_id}/activate", headers=headers
+        f"/api/v1/me/ai-employees/{employee_id}/activate", headers=headers
     )
     return acme, employee_id, acme.admin_token
 
@@ -88,7 +88,7 @@ async def test_creating_a_task_returns_immediately(api: AsyncClient, session: As
     acme, employee_id, token = await _setup(api, session)
 
     response = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Look at bug 42"},
         headers={"Authorization": f"Bearer {token}"},
     )
@@ -106,7 +106,7 @@ async def test_the_worker_runs_the_task_and_records_the_result(
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Look at bug 42"},
         headers=headers,
     )
@@ -118,7 +118,7 @@ async def test_the_worker_runs_the_task_and_records_the_result(
     result = await _execute(get_sessionmaker(), uuid.UUID(task_id))
     assert result["stop_cause"] == "completed"
 
-    finished = await api.get(f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}", headers=headers)
+    finished = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
     body = finished.json()
     assert body["status"] == "completed"
     assert body["run"]["output"] == "The bug is on line 24."
@@ -134,7 +134,7 @@ async def test_the_run_trace_records_every_step(
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Look at bug 42"},
         headers=headers,
     )
@@ -145,10 +145,10 @@ async def test_the_run_trace_records_every_step(
 
     await _execute(get_sessionmaker(), uuid.UUID(task_id))
 
-    task = await api.get(f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}", headers=headers)
+    task = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
     run_id = task.json()["run"]["id"]
 
-    trace = await api.get(f"/api/v1/orgs/{acme.org_id}/runs/{run_id}/trace", headers=headers)
+    trace = await api.get(f"/api/v1/me/runs/{run_id}/trace", headers=headers)
     events = trace.json()["events"]
 
     assert [e["type"] for e in events][:2] == ["run_started", "thinking"]
@@ -164,14 +164,14 @@ async def test_a_task_without_a_connected_provider_fails_with_a_clear_message(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees",
+        f"/api/v1/me/ai-employees",
         json={"name": "Bot", "config": {"guided": GUIDED, "model": "gemini-2.0-flash"}},
         headers=headers,
     )
     employee_id = created.json()["id"]
 
     task = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "do something"},
         headers=headers,
     )
@@ -182,7 +182,7 @@ async def test_a_task_without_a_connected_provider_fails_with_a_clear_message(
 
     await _execute(get_sessionmaker(), uuid.UUID(task_id))
 
-    finished = await api.get(f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}", headers=headers)
+    finished = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
     body = finished.json()
     assert body["status"] == "failed"
     assert "No AI key is connected" in body["run"]["error_message"]
@@ -206,29 +206,29 @@ async def test_the_automatic_model_uses_whichever_provider_is_connected(
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/providers",
+        f"/api/v1/me/providers",
         json={"provider_key": "groq", "api_key": "gsk_test-key-1234"},
         headers=headers,
     )
 
     for model in ("auto", "gemini-flash"):
         created = await api.post(
-            f"/api/v1/orgs/{acme.org_id}/ai-employees",
+            f"/api/v1/me/ai-employees",
             json={"name": f"Bot {model}", "config": {"guided": GUIDED, "model": model}},
             headers=headers,
         )
         employee_id = created.json()["id"]
         await api.post(
-            f"/api/v1/orgs/{acme.org_id}/ai-employees/{employee_id}/activate", headers=headers
+            f"/api/v1/me/ai-employees/{employee_id}/activate", headers=headers
         )
         task = await api.post(
-            f"/api/v1/orgs/{acme.org_id}/tasks",
+            f"/api/v1/me/tasks",
             json={"employee_id": employee_id, "input": "hello"},
             headers=headers,
         )
         await job._execute(job.get_sessionmaker(), uuid.UUID(task.json()["id"]))
         done = await api.get(
-            f"/api/v1/orgs/{acme.org_id}/tasks/{task.json()['id']}", headers=headers
+            f"/api/v1/me/tasks/{task.json()['id']}", headers=headers
         )
         assert done.json()["status"] == "completed", done.text
 
@@ -241,7 +241,7 @@ async def test_a_new_employee_defaults_to_the_automatic_model(
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees",
+        f"/api/v1/me/ai-employees",
         json={"name": "Bot", "config": {"guided": GUIDED}},
         headers=headers,
     )
@@ -253,14 +253,14 @@ async def test_cancelling_a_queued_task(api: AsyncClient, session: AsyncSession)
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Look at bug 42"},
         headers=headers,
     )
     task_id = created.json()["id"]
 
     cancelled = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}/cancel", headers=headers
+        f"/api/v1/me/tasks/{task_id}/cancel", headers=headers
     )
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
@@ -273,12 +273,12 @@ async def test_a_cancelled_task_is_not_run_by_the_worker(
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Look at bug 42"},
         headers=headers,
     )
     task_id = created.json()["id"]
-    await api.post(f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}/cancel", headers=headers)
+    await api.post(f"/api/v1/me/tasks/{task_id}/cancel", headers=headers)
 
     from app.db.session import get_sessionmaker
     from app.workers.jobs.agent_run import _execute
@@ -293,24 +293,24 @@ async def test_tasks_appear_in_the_list(api: AsyncClient, session: AsyncSession)
     headers = {"Authorization": f"Bearer {token}"}
 
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "first"},
         headers=headers,
     )
 
-    listed = await api.get(f"/api/v1/orgs/{acme.org_id}/tasks", headers=headers)
+    listed = await api.get(f"/api/v1/me/tasks", headers=headers)
     assert listed.status_code == 200
     assert len(listed.json()) == 1
 
 
-async def test_a_member_can_create_a_task(api: AsyncClient, session: AsyncSession) -> None:
+async def test_anyone_signed_in_can_create_a_task(api: AsyncClient, session: AsyncSession) -> None:
     """Member uses the AI Employees an Admin built."""
     acme, employee_id, _ = await _setup(api, session)
 
     response = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "please look at this"},
-        headers={"Authorization": f"Bearer {acme.member_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     assert response.status_code == 202
 
@@ -322,26 +322,26 @@ async def test_company_a_cannot_read_company_b_tasks(
     globex = await seed_company(session, api, name="Globex", slug="globex")
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "secret work"},
         headers={"Authorization": f"Bearer {token}"},
     )
     task_id = created.json()["id"]
 
     response = await api.get(
-        f"/api/v1/orgs/{globex.org_id}/tasks/{task_id}",
+        f"/api/v1/me/tasks/{task_id}",
         headers={"Authorization": f"Bearer {globex.admin_token}"},
     )
     assert response.status_code == 404
 
 
-async def test_setup_progress_is_visible_to_members(
+async def test_setup_progress_is_visible(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     acme = await seed_company(session, api, name="Acme", slug="acme")
-    url = f"/api/v1/orgs/{acme.org_id}/setup"
+    url = f"/api/v1/me/setup"
 
-    fresh = await api.get(url, headers={"Authorization": f"Bearer {acme.member_token}"})
+    fresh = await api.get(url, headers={"Authorization": f"Bearer {acme.token}"})
     assert fresh.status_code == 200
     assert fresh.json() == {
         "ai_connected": False,
@@ -352,13 +352,18 @@ async def test_setup_progress_is_visible_to_members(
     }
 
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/providers",
+        f"/api/v1/me/providers",
         json={"provider_key": "groq", "api_key": "gsk_test-key-1234"},
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
-    later = await api.get(url, headers={"Authorization": f"Bearer {acme.member_token}"})
+    later = await api.get(url, headers={"Authorization": f"Bearer {acme.token}"})
     assert later.json()["ai_connected"] is True
 
-    other = await seed_company(session, api, name="Globex", slug="globex")
-    leak = await api.get(url, headers={"Authorization": f"Bearer {other.admin_token}"})
-    assert leak.status_code == 404
+    # The same URL for everybody, answered from the token. Another
+    # person asking gets their own progress, not a 404 and not a
+    # glimpse of this one's.
+    other = await seed_person(session, api)
+    theirs = await api.get(url, headers={"Authorization": f"Bearer {other.token}"})
+    assert theirs.status_code == 200
+    assert theirs.json()["ai_connected"] is False
+    assert theirs.json()["tasks"] == 0

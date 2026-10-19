@@ -3,21 +3,17 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 
 from app.db.models.identity import (
-    Invitation,
-    Membership,
     PlatformAdmin,
     PlatformAdminAudit,
     RefreshToken,
-    Role,
+    SetupToken,
     User,
 )
-from app.db.models.organization import Organization
 from app.db.repositories.base import BaseRepository
 
 
@@ -31,63 +27,6 @@ class UserRepository(BaseRepository[User]):
         return await self.get_by_email(email) is not None
 
 
-class MembershipRepository(BaseRepository[Membership]):
-    model = Membership
-
-    async def get_for_user_and_org(
-        self, user_id: uuid.UUID, org_id: uuid.UUID
-    ) -> Membership | None:
-        return await self.session.scalar(
-            select(Membership).where(
-                Membership.user_id == user_id,
-                Membership.org_id == org_id,
-            )
-        )
-
-    async def list_orgs_for_user(self, user_id: uuid.UUID) -> Sequence[tuple[Organization, Role]]:
-        rows = await self.session.execute(
-            select(Organization, Membership.role)
-            .join(Membership, Membership.org_id == Organization.id)
-            .where(Membership.user_id == user_id)
-            .order_by(Organization.name)
-        )
-        return [(org, role) for org, role in rows.all()]
-
-    async def list_members(self, org_id: uuid.UUID) -> Sequence[tuple[User, Role]]:
-        rows = await self.session.execute(
-            select(User, Membership.role)
-            .join(Membership, Membership.user_id == User.id)
-            .where(Membership.org_id == org_id)
-            .order_by(User.email)
-        )
-        return [(user, role) for user, role in rows.all()]
-
-    async def count_admins(self, org_id: uuid.UUID) -> int:
-        from sqlalchemy import func
-
-        stmt = (
-            select(func.count())
-            .select_from(Membership)
-            .where(Membership.org_id == org_id, Membership.role == Role.ADMIN)
-        )
-        return (await self.session.scalar(stmt)) or 0
-
-
-class InvitationRepository(BaseRepository[Invitation]):
-    model = Invitation
-
-    async def get_by_token_hash(self, token_hash: str) -> Invitation | None:
-        return await self.session.scalar(
-            select(Invitation).where(Invitation.token_hash == token_hash)
-        )
-
-    async def list_pending(self, org_id: uuid.UUID) -> Sequence[Invitation]:
-        result = await self.session.scalars(
-            select(Invitation)
-            .where(Invitation.org_id == org_id, Invitation.used_at.is_(None))
-            .order_by(Invitation.created_at.desc())
-        )
-        return result.all()
 
 
 class RefreshTokenRepository(BaseRepository[RefreshToken]):
@@ -144,15 +83,10 @@ class PlatformAdminRepository(BaseRepository[PlatformAdmin]):
         return entry
 
 
-class OrganizationRepository(BaseRepository[Organization]):
-    """Not org-scoped: the organization *is* the tenant."""
+class SetupTokenRepository(BaseRepository[SetupToken]):
+    model = SetupToken
 
-    model = Organization
-
-    async def get_by_slug(self, slug: str) -> Organization | None:
-        return await self.session.scalar(select(Organization).where(Organization.slug == slug))
-
-    async def list_all(self) -> Sequence[Organization]:
-        """Platform-admin only. No tenant filter by design."""
-        result = await self.session.scalars(select(Organization).order_by(Organization.created_at))
-        return result.all()
+    async def get_by_token_hash(self, token_hash: str) -> SetupToken | None:
+        return await self.session.scalar(
+            select(SetupToken).where(SetupToken.token_hash == token_hash)
+        )

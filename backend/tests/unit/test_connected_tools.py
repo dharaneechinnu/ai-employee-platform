@@ -43,7 +43,7 @@ def fake_api(monkeypatch: pytest.MonkeyPatch) -> Callable[[Handler], list[httpx.
 
 def _ctx(kind: str = "google", **kwargs: Any) -> ToolContext:
     return ToolContext(
-        org_id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
         grants={kind: Grant(credential="tok-123", config={"account": "ops@acme.com"})},
         **kwargs,
     )
@@ -65,7 +65,7 @@ def test_every_connected_tool_is_registered_with_a_side_effect() -> None:
 
 
 async def test_a_tool_without_a_connection_says_how_to_fix_it() -> None:
-    result = await _run("gmail_search", ToolContext(org_id=uuid.uuid4()), {"query": "x"})
+    result = await _run("gmail_search", ToolContext(owner_id=uuid.uuid4()), {"query": "x"})
     assert not result.ok
     assert result.error_class == "not_connected"
     assert "Settings > Connections" in (result.message or "")

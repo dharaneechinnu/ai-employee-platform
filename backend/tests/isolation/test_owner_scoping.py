@@ -2,12 +2,12 @@
 
 This is the most important test in the repository.
 
-Every table that holds customer data must carry ``org_id`` directly —
+Every table that holds customer data must carry ``owner_id`` directly —
 not inferred by joining through a parent. That is what lets the
 repository layer filter on it in one place, and what makes a leak a
 single-file audit rather than a codebase-wide one.
 
-A table added without ``org_id`` fails CI. Adding a name to
+A table added without ``owner_id`` fails CI. Adding a name to
 GLOBAL_TABLES requires a reviewer to agree it genuinely holds no
 customer data.
 """
@@ -16,9 +16,12 @@ from app.db.models import Base
 
 # Tables that are deliberately NOT tenant-scoped, with the reason.
 GLOBAL_TABLES: dict[str, str] = {
-    "organizations": "the tenant itself — scoped by its own id",
-    "users": "a person may belong to several companies; the link is memberships",
-    "refresh_tokens": "belongs to a user, who spans companies",
+    "users": "the owner itself — scoped by its own id",
+    "refresh_tokens": "belongs to a user, and is reached only through that user's id",
+    "setup_tokens": (
+        "a one-time link for an account that has no password yet, so it is "
+        "looked up by its own hash before anyone is signed in"
+    ),
     "platform_admins": "platform staff, deliberately separate from users",
     "platform_admin_audit": "platform-level audit trail, not customer data",
     "supported_providers": "the provider menu, curated platform-wide",
@@ -30,18 +33,18 @@ GLOBAL_TABLES: dict[str, str] = {
 }
 
 
-def test_every_tenant_table_has_org_id() -> None:
+def test_every_scoped_table_has_owner_id() -> None:
     missing: list[str] = []
 
     for mapper in Base.registry.mappers:
         table = mapper.class_.__tablename__
         if table in GLOBAL_TABLES:
             continue
-        if "org_id" not in mapper.class_.__table__.columns:
+        if "owner_id" not in mapper.class_.__table__.columns:
             missing.append(table)
 
     assert not missing, (
-        f"These tables are missing org_id: {sorted(missing)}. "
+        f"These tables are missing owner_id: {sorted(missing)}. "
         "Add the column, or add the table to GLOBAL_TABLES with a written reason."
     )
 

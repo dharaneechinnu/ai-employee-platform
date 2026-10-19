@@ -23,9 +23,9 @@ from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class NotificationSettings(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "notification_settings"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
+    owner_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
-        ForeignKey("organizations.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
     )

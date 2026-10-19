@@ -85,9 +85,9 @@ class ConnectedProvider:
 
 
 class ProviderService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     async def available(self) -> list[SupportedProvider]:
         result = await self.session.scalars(
@@ -109,7 +109,7 @@ class ProviderService:
         rows = await self.session.execute(
             select(ProviderConfig, SupportedProvider)
             .join(SupportedProvider, SupportedProvider.key == ProviderConfig.provider_key)
-            .where(ProviderConfig.org_id == self.org_id)
+            .where(ProviderConfig.owner_id == self.owner_id)
             .order_by(SupportedProvider.display_name)
         )
         return [
@@ -159,12 +159,12 @@ class ProviderService:
 
         existing = await self.session.scalar(
             select(ProviderConfig).where(
-                ProviderConfig.org_id == self.org_id,
+                ProviderConfig.owner_id == self.owner_id,
                 ProviderConfig.provider_key == provider_key,
             )
         )
 
-        ciphertext = encrypt(api_key, scope=self.org_id)
+        ciphertext = encrypt(api_key, scope=self.owner_id)
         last4 = api_key[-4:] if len(api_key) >= 4 else ("none" if not api_key else "????")
 
         if existing is not None:
@@ -179,7 +179,7 @@ class ProviderService:
             config = existing
         else:
             config = ProviderConfig(
-                org_id=self.org_id,
+                owner_id=self.owner_id,
                 provider_key=provider_key,
                 api_key_enc=ciphertext,
                 key_last4=last4,
@@ -192,7 +192,7 @@ class ProviderService:
         await self.session.flush()
         log.info(
             "provider_connected",
-            org_id=str(self.org_id),
+            owner_id=str(self.owner_id),
             provider=provider_key,
             trains_on_data=supported.trains_on_data,
         )
@@ -240,7 +240,7 @@ class ProviderService:
             raise ValidationError(f"Could not load the model list: {exc.message[:300]}") from exc
 
     def _build(self, config: ProviderConfig) -> LLMProvider:
-        api_key = decrypt(config.api_key_enc, scope=self.org_id)
+        api_key = decrypt(config.api_key_enc, scope=self.owner_id)
         return build_provider(config.provider_key, api_key, base_url=config.base_url)
 
     async def resolve_api_key(self, provider_key: str) -> str:
@@ -250,7 +250,7 @@ class ProviderService:
         before a provider request. The value never enters the model's
         context, so prompt injection has nothing to extract.
         """
-        return decrypt((await self._config(provider_key)).api_key_enc, scope=self.org_id)
+        return decrypt((await self._config(provider_key)).api_key_enc, scope=self.owner_id)
 
     async def resolve_base_url(self, provider_key: str) -> str | None:
         """Where the company's own server lives; None for every hosted provider."""
@@ -262,7 +262,7 @@ class ProviderService:
     async def _config(self, provider_key: str) -> ProviderConfig:
         config = await self.session.scalar(
             select(ProviderConfig).where(
-                ProviderConfig.org_id == self.org_id,
+                ProviderConfig.owner_id == self.owner_id,
                 ProviderConfig.provider_key == provider_key,
             )
         )

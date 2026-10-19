@@ -13,7 +13,6 @@ outcome that does not leave an attacker with access.
 
 from __future__ import annotations
 
-import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -22,9 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.errors import (
-    ConflictError,
     InvalidCredentialsError,
-    NotFoundError,
     TokenReuseError,
     ValidationError,
 )
@@ -37,11 +34,10 @@ from app.core.security import (
     needs_rehash,
     verify_password,
 )
-from app.db.models.identity import Invitation, Membership, RefreshToken, Role, User
+from app.db.models.identity import RefreshToken, User
 from app.db.repositories.identity_repo import (
-    InvitationRepository,
-    MembershipRepository,
     RefreshTokenRepository,
+    SetupTokenRepository,
     UserRepository,
 )
 
@@ -59,9 +55,8 @@ class AuthService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.users = UserRepository(session)
-        self.memberships = MembershipRepository(session)
-        self.invitations = InvitationRepository(session)
         self.refresh_tokens = RefreshTokenRepository(session)
+        self.setup_tokens = SetupTokenRepository(session)
         self.settings = get_settings()
 
     # ------------------------------------------------------------- tokens
@@ -84,71 +79,36 @@ class AuthService:
             expires_in=self.settings.access_token_minutes * 60,
         )
 
-    # ------------------------------------------------------------- invites
+    # -------------------------------------------------------- first sign-in
 
-    async def create_invitation(
-        self,
-        *,
-        org_id: uuid.UUID,
-        email: str,
-        role: Role,
-        invited_by: uuid.UUID | None,
-    ) -> tuple[Invitation, str]:
-        email = email.lower()
-
-        existing_user = await self.users.get_by_email(email)
-        if existing_user is not None:
-            membership = await self.memberships.get_for_user_and_org(existing_user.id, org_id)
-            if membership is not None:
-                raise ConflictError("That person is already a member of this company.")
-
-        raw_token = secrets.token_urlsafe(32)
-        invitation = Invitation(
-            org_id=org_id,
-            email=email,
-            role=role,
-            token_hash=hash_token(raw_token),
-            expires_at=datetime.now(UTC) + timedelta(hours=self.settings.invite_expiry_hours),
-            invited_by=invited_by,
-        )
-        self.session.add(invitation)
-        await self.session.flush()
-
-        # The raw token is returned exactly once. Only its hash is stored,
-        # so it cannot be recovered later - a lost link means a new invite.
-        return invitation, raw_token
-
-    async def accept_invitation(
+    async def complete_setup(
         self, *, token: str, password: str, full_name: str | None
     ) -> IssuedTokens:
-        invitation = await self.invitations.get_by_token_hash(hash_token(token))
+        """Set the password on an account the Platform Admin created.
+
+        The admin creates the account but never a usable password, so
+        this is the only way one is ever set, and staff never know it.
+        """
+        setup = await self.setup_tokens.get_by_token_hash(hash_token(token))
         now = datetime.now(UTC)
 
-        # One message for every failure mode - expired, already used, or
-        # never existed. Distinguishing them would let someone probe for
+        # One message for every failure — expired, already used, or
+        # never existed. Telling them apart would let someone probe for
         # valid tokens.
-        if invitation is None or not invitation.is_usable(now):
-            raise ValidationError("This invitation link is not valid or has expired.")
+        if setup is None or setup.used_at is not None or setup.expires_at <= now:
+            raise ValidationError("This setup link is not valid or has expired.")
 
-        user = await self.users.get_by_email(invitation.email)
+        user = await self.users.get(setup.user_id)
         if user is None:
-            user = User(
-                email=invitation.email,
-                password_hash=hash_password(password),
-                full_name=full_name,
-            )
-            self.session.add(user)
-            await self.session.flush()
-        elif await self.memberships.get_for_user_and_org(user.id, invitation.org_id):
-            raise ConflictError("You are already a member of this company.")
+            raise ValidationError("This setup link is not valid or has expired.")
 
-        self.session.add(
-            Membership(user_id=user.id, org_id=invitation.org_id, role=invitation.role)
-        )
-        invitation.used_at = now
+        user.password_hash = hash_password(password)
+        if full_name:
+            user.full_name = full_name
+        setup.used_at = now
         user.last_login_at = now
 
-        log.info("invitation_accepted", user_id=str(user.id), org_id=str(invitation.org_id))
+        log.info("setup_completed", user_id=str(user.id))
         return await self._issue(user)
 
     # ------------------------------------------------------------- login
@@ -215,35 +175,3 @@ class AuthService:
             # Revoke the family, not just this token: logging out should
             # end the session everywhere it was rotated to.
             await self.refresh_tokens.revoke_family(stored.family_id)
-
-    # ------------------------------------------------------------- members
-
-    async def change_member_role(
-        self, *, org_id: uuid.UUID, target_user_id: uuid.UUID, new_role: Role
-    ) -> Membership:
-        membership = await self.memberships.get_for_user_and_org(target_user_id, org_id)
-        if membership is None:
-            raise NotFoundError("That person is not a member of this company.")
-
-        if (
-            membership.role == Role.ADMIN
-            and new_role != Role.ADMIN
-            and await self.memberships.count_admins(org_id) <= 1
-        ):
-            # Without this the last admin can demote themselves and lock
-            # the company out of its own settings, with no self-service
-            # way back in.
-            raise ConflictError("A company must keep at least one admin.")
-
-        membership.role = new_role
-        return membership
-
-    async def remove_member(self, *, org_id: uuid.UUID, target_user_id: uuid.UUID) -> None:
-        membership = await self.memberships.get_for_user_and_org(target_user_id, org_id)
-        if membership is None:
-            raise NotFoundError("That person is not a member of this company.")
-
-        if membership.role == Role.ADMIN and await self.memberships.count_admins(org_id) <= 1:
-            raise ConflictError("A company must keep at least one admin.")
-
-        await self.session.delete(membership)

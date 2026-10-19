@@ -83,12 +83,12 @@ async def _setup(api: AsyncClient, session: AsyncSession, tools: list[str]) -> t
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/providers",
+        f"/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": "test-key-abcd1234"},
         headers=headers,
     )
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees",
+        f"/api/v1/me/ai-employees",
         json={
             "name": "Support Bot",
             "config": {"guided": GUIDED, "model": "gemini-2.0-flash", "enabled_tools": tools},
@@ -97,7 +97,7 @@ async def _setup(api: AsyncClient, session: AsyncSession, tools: list[str]) -> t
     )
     employee_id = created.json()["id"]
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees/{employee_id}/activate", headers=headers
+        f"/api/v1/me/ai-employees/{employee_id}/activate", headers=headers
     )
     return acme, employee_id
 
@@ -116,7 +116,7 @@ async def test_the_default_policy_is_seeded(api: AsyncClient, session: AsyncSess
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
-    response = await api.get(f"/api/v1/orgs/{acme.org_id}/policies", headers=headers)
+    response = await api.get(f"/api/v1/me/policies", headers=headers)
     assert response.status_code == 200
 
     by_key = {(r["scope_value"], r["side_effect"]): r for r in response.json()}
@@ -134,7 +134,7 @@ async def test_a_company_can_set_a_rule_looser_than_the_default(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     response = await api.put(
-        f"/api/v1/orgs/{acme.org_id}/policies",
+        f"/api/v1/me/policies",
         json={
             "scope": "pack",
             "scope_value": "email",
@@ -155,7 +155,7 @@ async def test_a_company_can_set_a_rule_stricter_than_the_default(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     response = await api.put(
-        f"/api/v1/orgs/{acme.org_id}/policies",
+        f"/api/v1/me/policies",
         json={"scope": "pack", "scope_value": "web", "side_effect": "read", "setting": "blocked"},
         headers=headers,
     )
@@ -170,7 +170,7 @@ async def test_a_catastrophic_action_cannot_be_enabled(
     acme = await seed_company(session, api, name="Acme", slug="acme")
 
     response = await api.put(
-        f"/api/v1/orgs/{acme.org_id}/policies",
+        f"/api/v1/me/policies",
         json={"scope": "tool", "scope_value": "delete_repository", "setting": "auto"},
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
@@ -183,13 +183,13 @@ async def test_reset_returns_to_the_defaults(api: AsyncClient, session: AsyncSes
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     await api.put(
-        f"/api/v1/orgs/{acme.org_id}/policies",
+        f"/api/v1/me/policies",
         json={"scope": "pack", "scope_value": "web", "side_effect": "read", "setting": "blocked"},
         headers=headers,
     )
-    await api.post(f"/api/v1/orgs/{acme.org_id}/policies/reset", headers=headers)
+    await api.post(f"/api/v1/me/policies/reset", headers=headers)
 
-    rows = (await api.get(f"/api/v1/orgs/{acme.org_id}/policies", headers=headers)).json()
+    rows = (await api.get(f"/api/v1/me/policies", headers=headers)).json()
     assert all(r["is_default"] for r in rows)
 
 
@@ -199,7 +199,7 @@ async def test_the_tool_catalogue_shows_the_effective_setting(
     acme = await seed_company(session, api, name="Acme", slug="acme")
 
     response = await api.get(
-        f"/api/v1/orgs/{acme.org_id}/tools",
+        f"/api/v1/me/tools",
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
     by_name = {t["name"]: t for t in response.json()}
@@ -219,14 +219,14 @@ async def test_a_destructive_action_pauses_the_run_for_approval(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Reply to the invoice question"},
         headers=headers,
     )
     result = await _run(created.json()["id"])
     assert result["status"] == "awaiting_approval"
 
-    pending = await api.get(f"/api/v1/orgs/{acme.org_id}/approvals", headers=headers)
+    pending = await api.get(f"/api/v1/me/approvals", headers=headers)
     assert len(pending.json()) == 1
 
     approval = pending.json()[0]
@@ -243,19 +243,19 @@ async def test_approving_resumes_the_run(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Reply to the customer"},
         headers=headers,
     )
     task_id = created.json()["id"]
     await _run(task_id)
 
-    approval_id = (await api.get(f"/api/v1/orgs/{acme.org_id}/approvals", headers=headers)).json()[
+    approval_id = (await api.get(f"/api/v1/me/approvals", headers=headers)).json()[
         0
     ]["id"]
 
     decided = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/approvals/{approval_id}/approve", headers=headers
+        f"/api/v1/me/approvals/{approval_id}/approve", headers=headers
     )
     assert decided.json()["status"] == "approved"
 
@@ -263,7 +263,7 @@ async def test_approving_resumes_the_run(
     # conversation, which is why this survives a worker restart.
     await _run(task_id)
 
-    finished = await api.get(f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}", headers=headers)
+    finished = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
     assert finished.json()["status"] == "completed"
     assert finished.json()["run"]["output"] == "Email handled."
 
@@ -275,20 +275,20 @@ async def test_rejecting_ends_the_run_cleanly(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Reply to the customer"},
         headers=headers,
     )
     task_id = created.json()["id"]
     await _run(task_id)
 
-    approval_id = (await api.get(f"/api/v1/orgs/{acme.org_id}/approvals", headers=headers)).json()[
+    approval_id = (await api.get(f"/api/v1/me/approvals", headers=headers)).json()[
         0
     ]["id"]
 
-    await api.post(f"/api/v1/orgs/{acme.org_id}/approvals/{approval_id}/reject", headers=headers)
+    await api.post(f"/api/v1/me/approvals/{approval_id}/reject", headers=headers)
 
-    finished = await api.get(f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}", headers=headers)
+    finished = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
     assert finished.json()["status"] == "failed"
     assert "rejected" in finished.json()["run"]["error_message"].lower()
 
@@ -303,7 +303,7 @@ async def test_setting_the_policy_to_auto_skips_the_approval(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     await api.put(
-        f"/api/v1/orgs/{acme.org_id}/policies",
+        f"/api/v1/me/policies",
         json={
             "scope": "pack",
             "scope_value": "email",
@@ -314,14 +314,14 @@ async def test_setting_the_policy_to_auto_skips_the_approval(
     )
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Send it"},
         headers=headers,
     )
     result = await _run(created.json()["id"])
 
     assert result["status"] != "awaiting_approval"
-    assert (await api.get(f"/api/v1/orgs/{acme.org_id}/approvals", headers=headers)).json() == []
+    assert (await api.get(f"/api/v1/me/approvals", headers=headers)).json() == []
 
 
 async def test_always_allow_on_one_tool_needs_no_approval(
@@ -335,25 +335,25 @@ async def test_always_allow_on_one_tool_needs_no_approval(
     rule = {"scope": "tool", "scope_value": "send_email", "side_effect": None}
 
     saved = await api.put(
-        f"/api/v1/orgs/{acme.org_id}/policies", json={**rule, "setting": "auto"}, headers=headers
+        f"/api/v1/me/policies", json={**rule, "setting": "auto"}, headers=headers
     )
     assert saved.status_code == 200, saved.text
-    tools = await api.get(f"/api/v1/orgs/{acme.org_id}/tools", headers=headers)
+    tools = await api.get(f"/api/v1/me/tools", headers=headers)
     assert {t["name"]: t for t in tools.json()}["send_email"]["effective_setting"] == "auto"
 
     first = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Send it"},
         headers=headers,
     )
     assert (await _run(first.json()["id"]))["status"] != "awaiting_approval"
-    assert (await api.get(f"/api/v1/orgs/{acme.org_id}/approvals", headers=headers)).json() == []
+    assert (await api.get(f"/api/v1/me/approvals", headers=headers)).json() == []
 
     await api.put(
-        f"/api/v1/orgs/{acme.org_id}/policies", json={**rule, "setting": "ask"}, headers=headers
+        f"/api/v1/me/policies", json={**rule, "setting": "ask"}, headers=headers
     )
     second = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Send it again"},
         headers=headers,
     )
@@ -367,41 +367,24 @@ async def test_blocking_a_tool_stops_it_being_used(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     await api.put(
-        f"/api/v1/orgs/{acme.org_id}/policies",
+        f"/api/v1/me/policies",
         json={"scope": "tool", "scope_value": "send_email", "setting": "blocked"},
         headers=headers,
     )
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
+        f"/api/v1/me/tasks",
         json={"employee_id": employee_id, "input": "Send it"},
         headers=headers,
     )
     task_id = created.json()["id"]
     await _run(task_id)
 
-    task = await api.get(f"/api/v1/orgs/{acme.org_id}/tasks/{task_id}", headers=headers)
+    task = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
     run_id = task.json()["run"]["id"]
-    trace = await api.get(f"/api/v1/orgs/{acme.org_id}/runs/{run_id}/trace", headers=headers)
+    trace = await api.get(f"/api/v1/me/runs/{run_id}/trace", headers=headers)
 
     assert any(e["type"] == "tool_blocked" for e in trace.json()["events"])
-    assert (await api.get(f"/api/v1/orgs/{acme.org_id}/approvals", headers=headers)).json() == []
+    assert (await api.get(f"/api/v1/me/approvals", headers=headers)).json() == []
 
 
-async def test_a_member_cannot_decide_an_approval(
-    api: AsyncClient, session: AsyncSession, stub_sender: None
-) -> None:
-    acme, employee_id = await _setup(api, session, ["send_email"])
-
-    created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/tasks",
-        json={"employee_id": employee_id, "input": "Send it"},
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
-    )
-    await _run(created.json()["id"])
-
-    response = await api.get(
-        f"/api/v1/orgs/{acme.org_id}/approvals",
-        headers={"Authorization": f"Bearer {acme.member_token}"},
-    )
-    assert response.status_code == 403

@@ -41,19 +41,19 @@ def slugify(name: str) -> str:
 
 
 class McpService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     async def servers(self) -> list[McpServer]:
         result = await self.session.scalars(
-            select(McpServer).where(McpServer.org_id == self.org_id).order_by(McpServer.name)
+            select(McpServer).where(McpServer.owner_id == self.owner_id).order_by(McpServer.name)
         )
         return list(result.all())
 
     async def get(self, server_id: uuid.UUID) -> McpServer:
         server = await self.session.scalar(
-            select(McpServer).where(McpServer.id == server_id, McpServer.org_id == self.org_id)
+            select(McpServer).where(McpServer.id == server_id, McpServer.owner_id == self.owner_id)
         )
         if server is None:
             raise NotFoundError("That tool server is not connected.")
@@ -81,11 +81,11 @@ class McpService:
         tools = await self._discover(url, token)
 
         server = McpServer(
-            org_id=self.org_id,
+            owner_id=self.owner_id,
             name=name[:100],
             slug=slug,
             url=url,
-            token_enc=encrypt(token, scope=self.org_id) if token else None,
+            token_enc=encrypt(token, scope=self.owner_id) if token else None,
             token_last4=token[-4:] if token and len(token) >= 4 else None,
             tools=tools,
             status=STATUS_CONNECTED,
@@ -93,7 +93,7 @@ class McpService:
         )
         self.session.add(server)
         await self.session.flush()
-        log.info("mcp_server_added", org_id=str(self.org_id), slug=slug, tools=len(tools))
+        log.info("mcp_server_added", owner_id=str(self.owner_id), slug=slug, tools=len(tools))
         return server
 
     async def sync(self, server_id: uuid.UUID) -> McpServer:
@@ -126,7 +126,7 @@ class McpService:
         return tools[:MAX_TOOLS_PER_SERVER]
 
     def _token(self, server: McpServer) -> str | None:
-        return decrypt(server.token_enc, scope=self.org_id) if server.token_enc else None
+        return decrypt(server.token_enc, scope=self.owner_id) if server.token_enc else None
 
     # --- what a run sees ------------------------------------------
 

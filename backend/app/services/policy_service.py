@@ -113,9 +113,9 @@ class PolicyResolver:
 
 
 class PolicyService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     async def resolver(self) -> PolicyResolver:
         defaults = {
@@ -125,7 +125,7 @@ class PolicyService:
         org_rules = {
             (p.scope, p.scope_value, p.side_effect): p.setting
             for p in (
-                await self.session.scalars(select(Policy).where(Policy.org_id == self.org_id))
+                await self.session.scalars(select(Policy).where(Policy.owner_id == self.owner_id))
             ).all()
         }
         from app.services.mcp_service import McpService
@@ -133,7 +133,7 @@ class PolicyService:
         return PolicyResolver(
             org_rules=org_rules,
             defaults=defaults,
-            extra_tools=await McpService(self.session, self.org_id).tools(),
+            extra_tools=await McpService(self.session, self.owner_id).tools(),
         )
 
     async def effective(self) -> list[PolicyRow]:
@@ -143,7 +143,7 @@ class PolicyService:
         overrides = {
             (p.scope, p.scope_value, p.side_effect): p
             for p in (
-                await self.session.scalars(select(Policy).where(Policy.org_id == self.org_id))
+                await self.session.scalars(select(Policy).where(Policy.owner_id == self.owner_id))
             ).all()
         }
 
@@ -197,7 +197,7 @@ class PolicyService:
 
         existing = await self.session.scalar(
             select(Policy).where(
-                Policy.org_id == self.org_id,
+                Policy.owner_id == self.owner_id,
                 Policy.scope == scope,
                 Policy.scope_value == scope_value,
                 Policy.side_effect == side_effect,
@@ -209,7 +209,7 @@ class PolicyService:
             return existing
 
         policy = Policy(
-            org_id=self.org_id,
+            owner_id=self.owner_id,
             scope=scope,
             scope_value=scope_value,
             side_effect=side_effect,
@@ -223,6 +223,6 @@ class PolicyService:
     async def reset(self) -> None:
         """Drop every override, returning the company to the defaults."""
         for policy in (
-            await self.session.scalars(select(Policy).where(Policy.org_id == self.org_id))
+            await self.session.scalars(select(Policy).where(Policy.owner_id == self.owner_id))
         ).all():
             await self.session.delete(policy)

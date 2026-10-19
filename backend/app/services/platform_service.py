@@ -23,11 +23,10 @@ from app.core.errors import ConflictError, InvalidCredentialsError, NotFoundErro
 from app.core.observability import get_logger
 from app.core.security import create_access_token, hash_password, hash_token, verify_password
 from app.db.models.ai_employee import COUNTS_TOWARD_LIMIT, AIEmployee
-from app.db.models.identity import Invitation, Membership, PlatformAdmin, Role
-from app.db.models.organization import Organization, OrgStatus
+from app.db.models.identity import PlatformAdmin, SetupToken, User
 from app.db.models.policy import ConnectionKind
 from app.db.models.provider import OrgConnectionAccess, PlatformOAuthApp
-from app.db.repositories.identity_repo import OrganizationRepository, PlatformAdminRepository
+from app.db.repositories.identity_repo import PlatformAdminRepository, UserRepository
 from app.services.oauth_providers import get_oauth_provider, resolve_client
 
 log = get_logger(__name__)
@@ -72,17 +71,24 @@ class ConnectionAccessView:
 
 
 @dataclass(slots=True)
-class CompanyStats:
-    org: Organization
-    member_count: int
-    employee_count: int = 0  # populated from phase 2 onward
+class PersonStats:
+    """One account, as the control room sees it.
+
+    Counts and health only: how many AI Employees they have running
+    against their limit, and whether the account is active. Nothing
+    here reaches their tasks, memory or mail, because no endpoint
+    returns those.
+    """
+
+    user: User
+    employee_count: int = 0
 
 
 class PlatformService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.admins = PlatformAdminRepository(session)
-        self.orgs = OrganizationRepository(session)
+        self.users = UserRepository(session)
         self.settings = get_settings()
 
     # ------------------------------------------------------------- admins
@@ -131,37 +137,41 @@ class PlatformService:
 
     # ------------------------------------------------------------- companies
 
-    async def create_company(
+    async def create_person(
         self,
         *,
         admin_id: uuid.UUID,
-        name: str,
-        slug: str,
-        first_admin_email: str,
+        email: str,
+        full_name: str | None,
         max_employees: int,
-    ) -> tuple[Organization, str]:
-        """Create a company and its first invite.
+    ) -> tuple[User, str]:
+        """Create an account and the link its owner signs in with.
 
-        There is no public sign-up, so this is how every company begins.
-        It is Active immediately — no approval queue, because the
-        Platform Admin creating it *is* the approval.
+        The password is set by the person themselves through that
+        link, so a Platform Admin never knows it and cannot sign in as
+        anybody. The account is usable immediately — the admin
+        creating it is the approval.
         """
-        slug = slug.lower().strip()
-        if await self.orgs.get_by_slug(slug):
-            raise ConflictError(f"A company with the slug '{slug}' already exists.")
-
-        org = Organization(
-            name=name, slug=slug, max_employees=max_employees, status=OrgStatus.ACTIVE
-        )
-        self.session.add(org)
-        await self.session.flush()
+        email = email.lower().strip()
+        if await self.users.get_by_email(email):
+            raise ConflictError(f"An account for {email} already exists.")
 
         raw_token = secrets.token_urlsafe(32)
+        user = User(
+            email=email,
+            full_name=full_name,
+            # A placeholder nobody can produce: the account is unusable
+            # until the setup link sets a real one.
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            max_employees=max_employees,
+            is_active=True,
+        )
+        self.session.add(user)
+        await self.session.flush()
+
         self.session.add(
-            Invitation(
-                org_id=org.id,
-                email=first_admin_email.lower(),
-                role=Role.ADMIN,
+            SetupToken(
+                user_id=user.id,
                 token_hash=hash_token(raw_token),
                 expires_at=datetime.now(UTC) + timedelta(hours=self.settings.invite_expiry_hours),
             )
@@ -169,82 +179,71 @@ class PlatformService:
 
         self.admins.record_audit(
             admin_id=admin_id,
-            action="company_created",
-            target_type="organization",
-            target_id=str(org.id),
-            detail=f"slug={slug} max_employees={max_employees}",
+            action="account_created",
+            target_type="user",
+            target_id=str(user.id),
+            detail=f"max_employees={max_employees}",
         )
-        log.info("company_created", org_id=str(org.id), slug=slug)
-        return org, raw_token
+        log.info("account_created", user_id=str(user.id))
+        return user, raw_token
 
-    async def list_companies(self) -> list[CompanyStats]:
-        """Counts and health only. No customer content.
-
-        Members and AI Employees are counted in separate subqueries
-        rather than two joins: joining both at once multiplies the rows
-        together, so a company with 2 members and 3 employees would
-        report 6 of each.
-        """
-        member_counts = (
-            select(Membership.org_id, func.count().label("members"))
-            .group_by(Membership.org_id)
-            .subquery()
-        )
+    async def list_people(self) -> list[PersonStats]:
+        """Counts and health only. No customer content."""
         employee_counts = (
-            select(AIEmployee.org_id, func.count().label("employees"))
+            select(AIEmployee.owner_id, func.count().label("employees"))
             .where(AIEmployee.status.in_(COUNTS_TOWARD_LIMIT))
-            .group_by(AIEmployee.org_id)
+            .group_by(AIEmployee.owner_id)
             .subquery()
         )
 
         rows = await self.session.execute(
-            select(
-                Organization,
-                func.coalesce(member_counts.c.members, 0),
-                func.coalesce(employee_counts.c.employees, 0),
-            )
-            .outerjoin(member_counts, member_counts.c.org_id == Organization.id)
-            .outerjoin(employee_counts, employee_counts.c.org_id == Organization.id)
-            .order_by(Organization.created_at)
+            select(User, func.coalesce(employee_counts.c.employees, 0))
+            .outerjoin(employee_counts, employee_counts.c.owner_id == User.id)
+            .order_by(User.created_at)
         )
         return [
-            CompanyStats(org=org, member_count=members, employee_count=employees)
-            for org, members, employees in rows.all()
+            PersonStats(user=user, employee_count=employees) for user, employees in rows.all()
         ]
 
-    async def set_status(
-        self, *, admin_id: uuid.UUID, org_id: uuid.UUID, status: OrgStatus
-    ) -> Organization:
-        org = await self.orgs.get(org_id)
-        if org is None:
-            raise NotFoundError("No such company.")
+    async def set_active(
+        self, *, admin_id: uuid.UUID, owner_id: uuid.UUID, active: bool
+    ) -> User:
+        """Suspend or restore an account.
 
-        org.status = status
+        Their work is untouched: a suspended person cannot sign in,
+        and nothing of theirs is read or deleted here.
+        """
+        user = await self._person(owner_id)
+        user.is_active = active
         self.admins.record_audit(
             admin_id=admin_id,
-            action=f"company_{status.value}",
-            target_type="organization",
-            target_id=str(org_id),
+            action="account_restored" if active else "account_suspended",
+            target_type="user",
+            target_id=str(owner_id),
         )
-        return org
+        return user
 
     async def set_employee_limit(
-        self, *, admin_id: uuid.UUID, org_id: uuid.UUID, max_employees: int
-    ) -> Organization:
-        org = await self.orgs.get(org_id)
-        if org is None:
-            raise NotFoundError("No such company.")
+        self, *, admin_id: uuid.UUID, owner_id: uuid.UUID, max_employees: int
+    ) -> User:
+        user = await self._person(owner_id)
 
-        previous = org.max_employees
-        org.max_employees = max_employees
+        previous = user.max_employees
+        user.max_employees = max_employees
         self.admins.record_audit(
             admin_id=admin_id,
             action="employee_limit_changed",
-            target_type="organization",
-            target_id=str(org_id),
+            target_type="user",
+            target_id=str(owner_id),
             detail=f"{previous} -> {max_employees}",
         )
-        return org
+        return user
+
+    async def _person(self, owner_id: uuid.UUID) -> User:
+        user = await self.users.get(owner_id)
+        if user is None:
+            raise NotFoundError("No such account.")
+        return user
 
     # --- the one-click OAuth apps -------------------------------------
 
@@ -380,14 +379,14 @@ class PlatformService:
 
     # --- which connections a company may use --------------------------
 
-    async def connection_access(self, org_id: uuid.UUID) -> list[ConnectionAccessView]:
+    async def connection_access(self, owner_id: uuid.UUID) -> list[ConnectionAccessView]:
         from app.services.connection_service import CATALOGUE
 
         rows = {
             row.kind: row
             for row in (
                 await self.session.scalars(
-                    select(OrgConnectionAccess).where(OrgConnectionAccess.org_id == org_id)
+                    select(OrgConnectionAccess).where(OrgConnectionAccess.owner_id == owner_id)
                 )
             ).all()
         }
@@ -417,7 +416,7 @@ class PlatformService:
         self,
         *,
         admin_id: uuid.UUID,
-        org_id: uuid.UUID,
+        owner_id: uuid.UUID,
         kind: str,
         allowed: bool | None,
         note: str | None = None,
@@ -438,12 +437,11 @@ class PlatformService:
         if kind_enum not in CATALOGUE:
             raise NotFoundError(f"'{kind}' is not a connection type.")
 
-        if await self.orgs.get(org_id) is None:
-            raise NotFoundError("No such company.")
+        await self._person(owner_id)
 
         existing = await self.session.scalar(
             select(OrgConnectionAccess).where(
-                OrgConnectionAccess.org_id == org_id,
+                OrgConnectionAccess.owner_id == owner_id,
                 OrgConnectionAccess.kind == kind_enum,
             )
         )
@@ -455,7 +453,7 @@ class PlatformService:
         elif existing is None:
             self.session.add(
                 OrgConnectionAccess(
-                    org_id=org_id,
+                    owner_id=owner_id,
                     kind=kind_enum,
                     allowed=allowed,
                     note=note,
@@ -473,6 +471,6 @@ class PlatformService:
             admin_id=admin_id,
             action=action,
             target_type="organization",
-            target_id=str(org_id),
+            target_id=str(owner_id),
             detail=kind,
         )

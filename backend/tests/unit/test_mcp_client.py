@@ -78,7 +78,7 @@ async def test_a_built_tool_runs_with_the_grant_and_reports_server_errors(
     assert find.json_schema()["required"] == ["query"]
 
     ctx = ToolContext(
-        org_id=__import__("uuid").uuid4(), grants={"mcp:crm": Grant("", {"url": URL})}
+        owner_id=__import__("uuid").uuid4(), grants={"mcp:crm": Grant("", {"url": URL})}
     )
     found = await find().execute(ctx, {"query": "Asha"})
     assert found.ok and "Asha Rao" in found.data
@@ -93,7 +93,7 @@ async def test_a_dry_run_never_calls_a_tool_that_changes_things(server: FakeMcpS
 
     tools = {t.name: t for t in build_tools("crm", "CRM", [d for d in map(describe, TOOLS) if d])}
     ctx = ToolContext(
-        org_id=__import__("uuid").uuid4(),
+        owner_id=__import__("uuid").uuid4(),
         dry_run=True,
         grants={"mcp:crm": Grant("", {"url": URL})},
     )
@@ -109,5 +109,5 @@ async def test_without_the_server_connected_the_tool_says_so(server: FakeMcpServ
     from tests.fake_mcp import TOOLS
 
     find = build_tools("crm", "CRM", [describe(TOOLS[0])])[0]  # type: ignore[list-item]
-    result = await find().execute(ToolContext(org_id=__import__("uuid").uuid4()), {"query": "x"})
+    result = await find().execute(ToolContext(owner_id=__import__("uuid").uuid4()), {"query": "x"})
     assert result.error_class == "not_connected"

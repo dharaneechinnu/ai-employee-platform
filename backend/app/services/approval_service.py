@@ -34,9 +34,9 @@ class PendingApproval:
 
 
 class ApprovalService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     async def create(
         self,
@@ -49,7 +49,7 @@ class ApprovalService:
         pending_tool_call: dict[str, Any],
     ) -> Approval:
         approval = Approval(
-            org_id=self.org_id,
+            owner_id=self.owner_id,
             run_id=run_id,
             tool_name=tool_name,
             side_effect=side_effect,
@@ -68,7 +68,7 @@ class ApprovalService:
             self.session.add(
                 RunCheckpoint(
                     run_id=run_id,
-                    org_id=self.org_id,
+                    owner_id=self.owner_id,
                     state=state,
                     pending_tool_call=pending_tool_call,
                 )
@@ -90,7 +90,7 @@ class ApprovalService:
             select(Approval, Task)
             .join(Run, Run.id == Approval.run_id)
             .join(Task, Task.id == Run.task_id)
-            .where(Approval.org_id == self.org_id, Approval.status == ApprovalStatus.PENDING)
+            .where(Approval.owner_id == self.owner_id, Approval.status == ApprovalStatus.PENDING)
             .order_by(Approval.created_at)
         )
         return [
@@ -100,7 +100,7 @@ class ApprovalService:
 
     async def get(self, approval_id: uuid.UUID) -> Approval:
         approval = await self.session.scalar(
-            select(Approval).where(Approval.id == approval_id, Approval.org_id == self.org_id)
+            select(Approval).where(Approval.id == approval_id, Approval.owner_id == self.owner_id)
         )
         if approval is None:
             raise NotFoundError("No such approval.")

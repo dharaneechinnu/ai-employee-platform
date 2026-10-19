@@ -90,7 +90,7 @@ class DelegateToSpecialist(Tool):
 
         specialist = await session.scalar(
             select(AIEmployee).where(
-                AIEmployee.org_id == ctx.org_id,
+                AIEmployee.owner_id == ctx.owner_id,
                 AIEmployee.name == args.specialist_name,
                 AIEmployee.status.in_((EmployeeStatus.ACTIVE, EmployeeStatus.DRAFT)),
             )
@@ -99,7 +99,7 @@ class DelegateToSpecialist(Tool):
             available = (
                 await session.scalars(
                     select(AIEmployee.name).where(
-                        AIEmployee.org_id == ctx.org_id,
+                        AIEmployee.owner_id == ctx.owner_id,
                         AIEmployee.status == EmployeeStatus.ACTIVE,
                     )
                 )
@@ -163,7 +163,7 @@ async def _run_specialist(
     from app.services.provider_service import ProviderService
 
     config = EmployeeConfig.model_validate(version.config)  # type: ignore[attr-defined]
-    providers = ProviderService(session, ctx.org_id)  # type: ignore[arg-type]
+    providers = ProviderService(session, ctx.owner_id)  # type: ignore[arg-type]
 
     try:
         provider_key, model = await providers.resolve_model(config.model)
@@ -176,7 +176,7 @@ async def _run_specialist(
         )
 
     nested_context = ToolContext(
-        org_id=ctx.org_id,
+        owner_id=ctx.owner_id,
         run_id=ctx.run_id,
         dry_run=ctx.dry_run,
         # The specialist works for the same company, so it uses the
@@ -191,7 +191,7 @@ async def _run_specialist(
         },
     )
 
-    resolver = await PolicyService(session, ctx.org_id).resolver()  # type: ignore[arg-type]
+    resolver = await PolicyService(session, ctx.owner_id).resolver()  # type: ignore[arg-type]
     loop = AgentLoop(
         provider=build_provider(provider_key, api_key, base_url=base_url),
         model=model,

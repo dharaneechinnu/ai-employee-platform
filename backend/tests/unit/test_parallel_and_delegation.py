@@ -94,7 +94,7 @@ async def test_independent_tool_calls_run_together() -> None:
         provider=provider,
         model="scripted",
         tools=[SleepyTool],
-        tool_context=ToolContext(org_id=uuid.uuid4()),
+        tool_context=ToolContext(owner_id=uuid.uuid4()),
     )
 
     started = time.perf_counter()
@@ -113,7 +113,7 @@ async def test_a_single_tool_call_is_not_reported_as_parallel() -> None:
         provider=provider,
         model="scripted",
         tools=[SleepyTool],
-        tool_context=ToolContext(org_id=uuid.uuid4()),
+        tool_context=ToolContext(owner_id=uuid.uuid4()),
     )
 
     outcome = await loop.run(system_prompt="sys", task="go")
@@ -129,7 +129,7 @@ async def test_parallelism_is_capped() -> None:
         provider=provider,
         model="scripted",
         tools=[SleepyTool],
-        tool_context=ToolContext(org_id=uuid.uuid4()),
+        tool_context=ToolContext(owner_id=uuid.uuid4()),
     )
 
     outcome = await loop.run(system_prompt="sys", task="go")
@@ -149,7 +149,7 @@ async def test_all_parallel_results_reach_the_model() -> None:
         provider=provider,
         model="scripted",
         tools=[SleepyTool],
-        tool_context=ToolContext(org_id=uuid.uuid4()),
+        tool_context=ToolContext(owner_id=uuid.uuid4()),
     )
 
     outcome = await loop.run(system_prompt="sys", task="go")
@@ -168,7 +168,7 @@ async def test_a_specialist_cannot_delegate_onward() -> None:
     first becomes the second's input."""
     tool = DelegateToSpecialist()
     ctx = ToolContext(
-        org_id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
         config={"_session": object(), "_depth": MAX_DELEGATION_DEPTH},
     )
 
@@ -181,7 +181,7 @@ async def test_a_specialist_cannot_delegate_onward() -> None:
 async def test_delegation_needs_a_session() -> None:
     tool = DelegateToSpecialist()
     result = await tool.execute(
-        ToolContext(org_id=uuid.uuid4()), {"specialist_name": "A", "task": "t"}
+        ToolContext(owner_id=uuid.uuid4()), {"specialist_name": "A", "task": "t"}
     )
 
     assert not result.ok
@@ -191,7 +191,7 @@ async def test_delegation_needs_a_session() -> None:
 async def test_too_many_specialists_is_refused() -> None:
     tool = DelegateToSpecialist()
     ctx = ToolContext(
-        org_id=uuid.uuid4(),
+        owner_id=uuid.uuid4(),
         config={
             "_session": object(),
             "_depth": 0,

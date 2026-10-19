@@ -26,15 +26,12 @@ from pydantic import BaseModel
 
 from app.api.v1.deps import SessionDep
 from app.core.errors import AuthError, NotFoundError, PermissionDeniedError
-from app.core.permissions import Permission, role_has
 from app.core.security import decode_access_token
 from app.core.signed import InvalidSignedTokenError, verify
 from app.db.models.ai_employee import AIEmployee
 from app.db.models.identity import User
-from app.db.models.organization import Organization
 from app.db.models.policy import ApprovalStatus
 from app.db.models.task import Run, Task
-from app.db.repositories.identity_repo import MembershipRepository
 from app.services.approval_service import ApprovalService
 from app.workers.queue import enqueue_task
 
@@ -43,7 +40,7 @@ router = APIRouter(prefix="/approval-links", tags=["approval links (public)"])
 
 class ApprovalLinkView(BaseModel):
     approval_id: uuid.UUID
-    org_name: str
+    owner_name: str
     task_title: str | None
     task_id: uuid.UUID | None
     employee_name: str | None
@@ -68,27 +65,26 @@ def _claims(token: str) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID | None]:
     try:
         claims = verify(token, "approval_link")
         approval_id = uuid.UUID(claims["apr"])
-        org_id = uuid.UUID(claims["org"])
+        owner_id = uuid.UUID(claims["org"])
         user_id = uuid.UUID(claims["sub"]) if claims.get("sub") else None
     except InvalidSignedTokenError as exc:
         raise NotFoundError(str(exc)) from exc
     except (KeyError, ValueError) as exc:
         raise NotFoundError("This link is not valid.") from exc
-    return approval_id, org_id, user_id
+    return approval_id, owner_id, user_id
 
 
 async def _view(
-    session: SessionDep, approval_id: uuid.UUID, org_id: uuid.UUID, user_id: uuid.UUID | None
+    session: SessionDep, approval_id: uuid.UUID, owner_id: uuid.UUID, user_id: uuid.UUID | None
 ) -> ApprovalLinkView:
-    approval = await ApprovalService(session, org_id).get(approval_id)
-    org = await session.get(Organization, org_id)
+    approval = await ApprovalService(session, owner_id).get(approval_id)
     run = await session.get(Run, approval.run_id)
     task = await session.get(Task, run.task_id) if run else None
     employee = await session.get(AIEmployee, task.employee_id) if task else None
     user = await session.get(User, user_id) if user_id else None
     return ApprovalLinkView(
         approval_id=approval.id,
-        org_name=org.name if org else "",
+        owner_name=(user.full_name or user.email) if user else "",
         task_title=(task.title or task.input[:120]) if task else None,
         task_id=task.id if task else None,
         employee_name=employee.name if employee else None,
@@ -104,8 +100,8 @@ async def _view(
 
 @router.get("/{token}", response_model=ApprovalLinkView, summary="What this link would decide")
 async def read_link(token: str, session: SessionDep) -> ApprovalLinkView:
-    approval_id, org_id, user_id = _claims(token)
-    return await _view(session, approval_id, org_id, user_id)
+    approval_id, owner_id, user_id = _claims(token)
+    return await _view(session, approval_id, owner_id, user_id)
 
 
 @router.post("/{token}/decide", response_model=ApprovalLinkView, summary="Approve or reject")
@@ -115,7 +111,7 @@ async def decide(
     session: SessionDep,
     authorization: Annotated[str | None, Header()] = None,
 ) -> ApprovalLinkView:
-    approval_id, org_id, user_id = _claims(token)
+    approval_id, owner_id, user_id = _claims(token)
     link_user = user_id
 
     if user_id is None:
@@ -129,16 +125,11 @@ async def decide(
             raise AuthError("Your session is not valid. Please sign in again.") from exc
 
     user = await session.get(User, user_id)
-    membership = await MembershipRepository(session).get_for_user_and_org(user_id, org_id)
-    if (
-        user is None
-        or not user.is_active
-        or membership is None
-        or not role_has(membership.role, Permission.APPROVAL_DECIDE)
-    ):
-        raise PermissionDeniedError("You cannot decide approvals for this company.")
+    # The link names an owner; only that person may act on it.
+    if user is None or not user.is_active or user_id != owner_id:
+        raise PermissionDeniedError("This approval is not yours to decide.")
 
-    approval = await ApprovalService(session, org_id).decide(
+    approval = await ApprovalService(session, owner_id).decide(
         approval_id=approval_id, approve=body.approve, user_id=user_id
     )
     await session.commit()
@@ -150,4 +141,4 @@ async def decide(
         if run is not None:
             await enqueue_task(run.task_id, resume_after=approval.id)
 
-    return await _view(session, approval_id, org_id, link_user)
+    return await _view(session, approval_id, owner_id, link_user)

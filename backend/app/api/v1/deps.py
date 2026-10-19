@@ -17,14 +17,13 @@ from dataclasses import dataclass
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, Header, Path
+from fastapi import Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import AuthError, NotFoundError, PermissionDeniedError
-from app.core.permissions import Permission, role_has
+from app.core.errors import AuthError
 from app.core.security import decode_access_token
-from app.db.models.identity import Role, User
-from app.db.repositories.identity_repo import MembershipRepository, UserRepository
+from app.db.models.identity import User
+from app.db.repositories.identity_repo import UserRepository
 from app.db.session import get_session
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
@@ -41,19 +40,25 @@ class CurrentUser:
 
 @dataclass(slots=True)
 class RequestContext:
-    """Everything a route needs to act safely: the caller, the company
-    they are acting in, and their role there."""
+    """Everything a route needs to act safely: the caller, and the
+    scope their queries are confined to.
+
+    For a personal account those are the same person, so `owner_id` is
+    `user.id`. It stays a separate field rather than being read off
+    the user because every query filters on it, and a named scope is
+    what makes that filter reviewable — the day something is shared,
+    this is the one line that changes.
+    """
 
     user: User
-    org_id: uuid.UUID
-    role: Role
 
     @property
     def user_id(self) -> uuid.UUID:
         return self.user.id
 
-    def can(self, permission: Permission) -> bool:
-        return role_has(self.role, permission)
+    @property
+    def owner_id(self) -> uuid.UUID:
+        return self.user.id
 
 
 async def get_current_user(
@@ -84,36 +89,25 @@ async def get_current_user(
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 
 
-async def get_context(
-    session: SessionDep,
-    current: CurrentUserDep,
-    org_id: Annotated[uuid.UUID, Path(description="The company being acted in")],
-) -> RequestContext:
-    """Resolve the active company from the caller's own memberships.
+async def get_context(current: CurrentUserDep) -> RequestContext:
+    """The scope for this request.
 
-    If they are not a member, this raises 404 rather than 403, so the
-    response cannot be used to discover which company ids exist.
+    There is no id in the path any more: a person can only ever act as
+    themselves, so the scope is derived from the token rather than
+    accepted from the caller. That removes a whole class of mistake —
+    there is no longer an id an attacker could substitute.
     """
-    membership = await MembershipRepository(session).get_for_user_and_org(current.id, org_id)
-    if membership is None:
-        raise NotFoundError()
-
-    return RequestContext(user=current.user, org_id=org_id, role=membership.role)
+    return RequestContext(user=current.user)
 
 
 ContextDep = Annotated[RequestContext, Depends(get_context)]
+# Kept as a name so routes read the same, now that every signed-in
+# person is simply the owner of what they are asking about.
+CanRead = ContextDep
+CanWrite = ContextDep
+CanManage = ContextDep
 
 
-def require_permission(permission: Permission):  # type: ignore[no-untyped-def]
-    """Declare what a route needs. A test asserts every route uses this
-    or is explicitly marked public, so a forgotten guard fails CI."""
-
-    async def dependency(ctx: ContextDep) -> RequestContext:
-        if not ctx.can(permission):
-            raise PermissionDeniedError()
-        return ctx
-
-    return dependency
 
 
 async def get_refresh_token_cookie(

@@ -7,12 +7,10 @@ EMPLOYEE_WRITE, which only an admin holds.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 
-from app.api.v1.deps import RequestContext, SessionDep, require_permission
-from app.core.permissions import Permission
+from app.api.v1.deps import ContextDep, RequestContext, SessionDep
 from app.db.models.ai_employee import EmployeeStatus
 from app.schemas.ai_employee import (
     CreateEmployeeRequest,
@@ -28,14 +26,12 @@ from app.schemas.ai_employee import (
 )
 from app.services.employee_service import EmployeeService, build_system_prompt
 
-router = APIRouter(prefix="/orgs/{org_id}", tags=["ai employees"])
+router = APIRouter(prefix="/me", tags=["ai employees"])
 
-CanRead = Annotated[RequestContext, Depends(require_permission(Permission.EMPLOYEE_READ))]
-CanWrite = Annotated[RequestContext, Depends(require_permission(Permission.EMPLOYEE_WRITE))]
 
 
 def _service(ctx: RequestContext, session: SessionDep) -> EmployeeService:
-    return EmployeeService(session, ctx.org_id)
+    return EmployeeService(session, ctx.owner_id)
 
 
 def _to_response(employee, version) -> EmployeeResponse:  # type: ignore[no-untyped-def]
@@ -53,7 +49,7 @@ def _to_response(employee, version) -> EmployeeResponse:  # type: ignore[no-unty
 
 
 @router.get("/ai-employees", response_model=EmployeeListResponse, summary="List AI Employees")
-async def list_employees(ctx: CanRead, session: SessionDep) -> EmployeeListResponse:
+async def list_employees(ctx: ContextDep, session: SessionDep) -> EmployeeListResponse:
     service = _service(ctx, session)
     employees = await service.list_employees()
     return EmployeeListResponse(
@@ -70,7 +66,7 @@ async def list_employees(ctx: CanRead, session: SessionDep) -> EmployeeListRespo
     summary="Create an AI Employee",
 )
 async def create_employee(
-    body: CreateEmployeeRequest, ctx: CanWrite, session: SessionDep
+    body: CreateEmployeeRequest, ctx: ContextDep, session: SessionDep
 ) -> EmployeeResponse:
     service = _service(ctx, session)
 
@@ -94,7 +90,7 @@ async def create_employee(
 
 @router.get("/ai-employees/{employee_id}", response_model=EmployeeResponse, summary="Read one")
 async def get_employee(
-    employee_id: uuid.UUID, ctx: CanRead, session: SessionDep
+    employee_id: uuid.UUID, ctx: ContextDep, session: SessionDep
 ) -> EmployeeResponse:
     result = await _service(ctx, session).get(employee_id)
     return _to_response(result.employee, result.version)
@@ -108,7 +104,7 @@ async def get_employee(
 async def update_employee(
     employee_id: uuid.UUID,
     body: UpdateEmployeeRequest,
-    ctx: CanWrite,
+    ctx: ContextDep,
     session: SessionDep,
 ) -> EmployeeResponse:
     result = await _service(ctx, session).update(
@@ -129,7 +125,7 @@ async def update_employee(
     summary="Archive (frees a slot, keeps the history)",
 )
 async def archive_employee(
-    employee_id: uuid.UUID, ctx: CanWrite, session: SessionDep
+    employee_id: uuid.UUID, ctx: ContextDep, session: SessionDep
 ) -> EmployeeResponse:
     result = await _service(ctx, session).set_status(employee_id, EmployeeStatus.ARCHIVED)
     return _to_response(result.employee, result.version)
@@ -138,13 +134,17 @@ async def archive_employee(
 @router.post(
     "/ai-employees/{employee_id}/activate", response_model=EmployeeResponse, summary="Activate"
 )
-async def activate(employee_id: uuid.UUID, ctx: CanWrite, session: SessionDep) -> EmployeeResponse:
+async def activate(
+    employee_id: uuid.UUID,
+    ctx: ContextDep,
+    session: SessionDep,
+) -> EmployeeResponse:
     result = await _service(ctx, session).set_status(employee_id, EmployeeStatus.ACTIVE)
     return _to_response(result.employee, result.version)
 
 
 @router.post("/ai-employees/{employee_id}/pause", response_model=EmployeeResponse, summary="Pause")
-async def pause(employee_id: uuid.UUID, ctx: CanWrite, session: SessionDep) -> EmployeeResponse:
+async def pause(employee_id: uuid.UUID, ctx: ContextDep, session: SessionDep) -> EmployeeResponse:
     result = await _service(ctx, session).set_status(employee_id, EmployeeStatus.PAUSED)
     return _to_response(result.employee, result.version)
 
@@ -155,7 +155,7 @@ async def pause(employee_id: uuid.UUID, ctx: CanWrite, session: SessionDep) -> E
     summary="Version history",
 )
 async def list_versions(
-    employee_id: uuid.UUID, ctx: CanRead, session: SessionDep
+    employee_id: uuid.UUID, ctx: ContextDep, session: SessionDep
 ) -> list[VersionSummary]:
     versions = await _service(ctx, session).list_versions(employee_id)
     return [VersionSummary.model_validate(v) for v in versions]
@@ -167,7 +167,7 @@ async def list_versions(
     summary="See the exact text the model will receive",
 )
 async def preview_prompt(
-    employee_id: uuid.UUID, ctx: CanRead, session: SessionDep
+    employee_id: uuid.UUID, ctx: ContextDep, session: SessionDep
 ) -> PromptPreviewResponse:
     result = await _service(ctx, session).get(employee_id)
     prompt = build_system_prompt(
@@ -182,7 +182,7 @@ async def preview_prompt(
 
 
 @router.get("/templates", response_model=list[TemplateResponse], summary="List templates")
-async def list_templates(ctx: CanRead, session: SessionDep) -> list[TemplateResponse]:
+async def list_templates(ctx: ContextDep, session: SessionDep) -> list[TemplateResponse]:
     templates = await _service(ctx, session).list_templates()
     return [
         TemplateResponse(
@@ -191,7 +191,7 @@ async def list_templates(ctx: CanRead, session: SessionDep) -> list[TemplateResp
             description=t.description,
             department=t.department,
             config=t.config,
-            is_platform_template=t.org_id is None,
+            is_platform_template=t.owner_id is None,
         )
         for t in templates
     ]
@@ -204,7 +204,7 @@ async def list_templates(ctx: CanRead, session: SessionDep) -> list[TemplateResp
     summary="Save an AI Employee as a reusable template",
 )
 async def create_template(
-    body: CreateTemplateRequest, ctx: CanWrite, session: SessionDep
+    body: CreateTemplateRequest, ctx: ContextDep, session: SessionDep
 ) -> TemplateResponse:
     template = await _service(ctx, session).save_as_template(
         employee_id=body.employee_id, name=body.name, description=body.description

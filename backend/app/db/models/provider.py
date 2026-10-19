@@ -3,8 +3,8 @@
 Two layers:
 
 - `supported_providers` is the menu the Platform Admin curates.
-- `provider_configs` holds the keys. `org_id` set means that company's
-  own key (BYOK, the normal case); `org_id` NULL is reserved for an
+- `provider_configs` holds the keys. `owner_id` set means that company's
+  own key (BYOK, the normal case); `owner_id` NULL is reserved for an
   optional platform trial key later. Designing for both now costs a
   nullable column and means a trial is a feature, not a rewrite.
 
@@ -38,7 +38,7 @@ class ConnectionStatus(StrEnum):
 
 
 class SupportedProvider(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """The menu. Platform-wide, so no org_id."""
+    """The menu. Platform-wide, so no owner_id."""
 
     __tablename__ = "supported_providers"
 
@@ -68,8 +68,8 @@ class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "provider_configs"
 
-    org_id: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE")
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
     )
     provider_key: Mapped[str] = mapped_column(String(50), nullable=False)
     api_key_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
@@ -88,8 +88,8 @@ class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     label: Mapped[str | None] = mapped_column(String(100))
 
     __table_args__ = (
-        UniqueConstraint("org_id", "provider_key", name="uq_provider_config_org_provider"),
-        Index("ix_provider_configs_org_id", "org_id"),
+        UniqueConstraint("owner_id", "provider_key", name="uq_provider_config_org_provider"),
+        Index("ix_provider_configs_org_id", "owner_id"),
     )
 
 
@@ -145,16 +145,16 @@ class OrgConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     rows, and means adding this table changed nothing for anyone
     already connected.
 
-    `org_id` is here, so the tenancy guard is satisfied honestly — this
+    `owner_id` is here, so the tenancy guard is satisfied honestly — this
     really is per-company data, written by staff rather than by the
     customer.
     """
 
     __tablename__ = "org_connection_access"
-    __table_args__ = (UniqueConstraint("org_id", "kind", name="uq_org_connection_access"),)
+    __table_args__ = (UniqueConstraint("owner_id", "kind", name="uq_org_connection_access"),)
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     kind: Mapped[ConnectionKind] = mapped_column(StrEnumType(ConnectionKind, 30), nullable=False)
     allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -187,10 +187,10 @@ class OrgOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """
 
     __tablename__ = "org_oauth_apps"
-    __table_args__ = (UniqueConstraint("org_id", "provider", name="uq_org_oauth_app"),)
+    __table_args__ = (UniqueConstraint("owner_id", "provider", name="uq_org_oauth_app"),)
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     provider: Mapped[ConnectionKind] = mapped_column(
         StrEnumType(ConnectionKind, 30), nullable=False

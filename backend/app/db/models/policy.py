@@ -54,7 +54,7 @@ class ApprovalStatus(StrEnum):
 
 
 class PolicyDefault(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Platform-wide starting values. No org_id: this is the menu."""
+    """Platform-wide starting values. No owner_id: this is the menu."""
 
     __tablename__ = "policy_defaults"
 
@@ -73,8 +73,8 @@ class Policy(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "policies"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     scope: Mapped[PolicyScope] = mapped_column(StrEnumType(PolicyScope, 20), nullable=False)
     scope_value: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -85,8 +85,8 @@ class Policy(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     __table_args__ = (
-        UniqueConstraint("org_id", "scope", "scope_value", "side_effect", name="uq_policy_org"),
-        Index("ix_policies_org", "org_id"),
+        UniqueConstraint("owner_id", "scope", "scope_value", "side_effect", name="uq_policy_org"),
+        Index("ix_policies_owner", "owner_id"),
     )
 
 
@@ -100,8 +100,8 @@ class Approval(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "approvals"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     run_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
@@ -123,7 +123,7 @@ class Approval(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
-        Index("ix_approvals_org_status", "org_id", "status"),
+        Index("ix_approvals_org_status", "owner_id", "status"),
         Index("ix_approvals_expiry", "status", "expires_at"),
     )
 
@@ -145,7 +145,7 @@ class RunCheckpoint(Base, TimestampMixin):
     run_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     state: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     pending_tool_call: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
@@ -171,8 +171,8 @@ class Connection(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "connections"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     kind: Mapped[ConnectionKind] = mapped_column(StrEnumType(ConnectionKind, 30), nullable=False)
     label: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -187,6 +187,6 @@ class Connection(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     __table_args__ = (
-        UniqueConstraint("org_id", "kind", "label", name="uq_connection_org_kind_label"),
-        Index("ix_connections_org", "org_id"),
+        UniqueConstraint("owner_id", "kind", "label", name="uq_connection_org_kind_label"),
+        Index("ix_connections_owner", "owner_id"),
     )

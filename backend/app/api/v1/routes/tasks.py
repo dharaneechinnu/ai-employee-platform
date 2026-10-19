@@ -15,21 +15,17 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.v1.deps import RequestContext, SessionDep, require_permission
-from app.core.errors import PermissionDeniedError
-from app.core.permissions import Permission
+from app.api.v1.deps import ContextDep, SessionDep
 from app.db.models.task import TERMINAL_STATUSES, RunStatus, TaskStatus
 from app.services.task_service import TaskService
 from app.workers.queue import enqueue_task
 
-router = APIRouter(prefix="/orgs/{org_id}", tags=["tasks"])
+router = APIRouter(prefix="/me", tags=["tasks"])
 
-CanRead = Annotated[RequestContext, Depends(require_permission(Permission.TASK_READ))]
-CanCreate = Annotated[RequestContext, Depends(require_permission(Permission.TASK_CREATE))]
 
 # How often to send an SSE comment when nothing is happening. Without
 # it, proxies and load balancers quietly drop an idle connection.
@@ -108,8 +104,12 @@ def _run_summary(run: Any) -> RunSummary | None:
     status_code=status.HTTP_202_ACCEPTED,
     summary="Assign a task (returns immediately)",
 )
-async def create_task(body: CreateTaskRequest, ctx: CanCreate, session: SessionDep) -> TaskResponse:
-    task = await TaskService(session, ctx.org_id).create(
+async def create_task(
+    body: CreateTaskRequest,
+    ctx: ContextDep,
+    session: SessionDep,
+) -> TaskResponse:
+    task = await TaskService(session, ctx.owner_id).create(
         employee_id=body.employee_id,
         text=body.input,
         title=body.title,
@@ -126,28 +126,28 @@ async def create_task(body: CreateTaskRequest, ctx: CanCreate, session: SessionD
 
 @router.get("/tasks", response_model=list[TaskListItem], summary="List tasks")
 async def list_tasks(
-    ctx: CanRead, session: SessionDep, limit: Annotated[int, Query(le=200)] = 50
+    ctx: ContextDep, session: SessionDep, limit: Annotated[int, Query(le=200)] = 50
 ) -> list[TaskListItem]:
-    tasks = await TaskService(session, ctx.org_id).list_tasks(limit=limit)
+    tasks = await TaskService(session, ctx.owner_id).list_tasks(limit=limit)
     return [TaskListItem.model_validate(t) for t in tasks]
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse, summary="Read one task")
-async def get_task(task_id: uuid.UUID, ctx: CanRead, session: SessionDep) -> TaskResponse:
-    current = await TaskService(session, ctx.org_id).get(task_id)
+async def get_task(task_id: uuid.UUID, ctx: ContextDep, session: SessionDep) -> TaskResponse:
+    current = await TaskService(session, ctx.owner_id).get(task_id)
     response = TaskResponse.model_validate(current.task)
     response.run = _run_summary(current.run)
     return response
 
 
 @router.post("/tasks/{task_id}/cancel", response_model=TaskResponse, summary="Cancel a task")
-async def cancel_task(task_id: uuid.UUID, ctx: CanRead, session: SessionDep) -> TaskResponse:
-    service = TaskService(session, ctx.org_id)
-    current = await service.get(task_id)
-
-    # A Member may stop their own work, not someone else's.
-    if current.task.created_by != ctx.user_id and not ctx.can(Permission.TASK_CANCEL_ANY):
-        raise PermissionDeniedError("You can only cancel tasks you started.")
+async def cancel_task(task_id: uuid.UUID, ctx: ContextDep, session: SessionDep) -> TaskResponse:
+    service = TaskService(session, ctx.owner_id)
+    # `get` is what enforces ownership: it returns None, and so 404s,
+    # for a task belonging to anybody else. The role check that used
+    # to follow told a member from an admin, and there is no such
+    # distinction on a personal account.
+    await service.get(task_id)
 
     task = await service.request_cancel(task_id)
     await session.commit()
@@ -159,8 +159,8 @@ async def cancel_task(task_id: uuid.UUID, ctx: CanRead, session: SessionDep) -> 
 
 
 @router.get("/runs/{run_id}", response_model=RunSummary, summary="Read one run")
-async def get_run(run_id: uuid.UUID, ctx: CanRead, session: SessionDep) -> RunSummary:
-    run = await TaskService(session, ctx.org_id).get_run(run_id)
+async def get_run(run_id: uuid.UUID, ctx: ContextDep, session: SessionDep) -> RunSummary:
+    run = await TaskService(session, ctx.owner_id).get_run(run_id)
     summary = _run_summary(run)
     assert summary is not None
     return summary
@@ -168,9 +168,9 @@ async def get_run(run_id: uuid.UUID, ctx: CanRead, session: SessionDep) -> RunSu
 
 @router.get("/runs/{run_id}/trace", summary="The full history of a run")
 async def get_trace(
-    run_id: uuid.UUID, ctx: CanRead, session: SessionDep
+    run_id: uuid.UUID, ctx: ContextDep, session: SessionDep
 ) -> dict[str, list[dict[str, Any]]]:
-    service = TaskService(session, ctx.org_id)
+    service = TaskService(session, ctx.owner_id)
     events = await service.events_after(run_id, 0)
     tools = await service.invocations(run_id)
     calls = await service.llm_calls(run_id)
@@ -198,7 +198,7 @@ async def get_trace(
 @router.get("/runs/{run_id}/events", summary="Live stream of a run (SSE)")
 async def stream_events(
     run_id: uuid.UUID,
-    ctx: CanRead,
+    ctx: ContextDep,
     session: SessionDep,
     request: Request,
     last_event_id: Annotated[int, Query(alias="last_event_id")] = 0,
@@ -211,7 +211,7 @@ async def stream_events(
     A client reconnecting sends the last `seq` it saw and receives
     everything after it, so a dropped connection loses nothing.
     """
-    service = TaskService(session, ctx.org_id)
+    service = TaskService(session, ctx.owner_id)
     await service.get_run(run_id)  # 404s before the stream opens if not theirs
 
     async def generate() -> AsyncGenerator[str, None]:

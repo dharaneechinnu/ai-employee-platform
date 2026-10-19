@@ -56,7 +56,7 @@ os.environ["DATABASE_URL"] = DATABASE_URL
 
 # DELETE rather than TRUNCATE CASCADE. TRUNCATE CASCADE empties every
 # referencing table outright, which wipes the platform templates seeded
-# by migration 0003 (they are rows in `templates` with org_id NULL).
+# by migration 0003 (they are rows in `templates` with owner_id NULL).
 # DELETE follows the ON DELETE CASCADE foreign keys instead, so
 # company-scoped rows go and platform-wide rows stay.
 ROOT_TABLES_TO_CLEAR = [
@@ -66,8 +66,10 @@ ROOT_TABLES_TO_CLEAR = [
     # for the next, and "did this create or replace?" silently flips.
     "platform_oauth_apps",
     "platform_admins",
-    "organizations",  # cascades to memberships, employees, tasks, memory, org templates
-    "users",  # cascades to memberships, refresh_tokens, tasks
+    # One line now, because everything a person owns hangs off
+    # them: deleting the user cascades to their AI Employees,
+    # tasks, memory, connections and setup tokens.
+    "users",
 ]
 
 
@@ -128,66 +130,63 @@ async def api() -> AsyncGenerator[AsyncClient, None]:
 
 
 @dataclass(slots=True)
-class SeededCompany:
-    org_id: uuid.UUID
-    admin_email: str
-    admin_token: str
-    member_email: str
-    member_token: str
+class SeededPerson:
+    """One account, signed in.
 
-
-async def _create_org(session: AsyncSession, name: str, slug: str) -> uuid.UUID:
-    from app.db.models.organization import Organization
-
-    org = Organization(name=name, slug=slug, max_employees=3)
-    session.add(org)
-    await session.flush()
-    await session.commit()
-    return org.id
-
-
-async def seed_company(
-    session: AsyncSession, api: AsyncClient, *, name: str, slug: str
-) -> SeededCompany:
-    """Create a company with one admin and one member, both signed in.
-
-    Goes through the real invite-and-accept flow rather than inserting
-    rows, so the fixture exercises the same path a user would.
+    `owner_id` is the user's own id: on a personal product the person
+    and the scope are the same thing, which is the whole point of the
+    re-scope. Kept as a separate field so every test still reads the
+    way it did, and so the day anything is shared there is one name to
+    change rather than hundreds.
     """
+
+    owner_id: uuid.UUID
+    email: str
+    token: str
+
+    # The old fixture handed back an admin and a member of one
+    # company. There are no roles now, so a test that needs two
+    # parties seeds two people.
+    @property
+    def admin_token(self) -> str:
+        return self.token
+
+    @property
+    def admin_email(self) -> str:
+        return self.email
+
+
+async def seed_person(
+    session: AsyncSession, api: AsyncClient, *, email: str | None = None, name: str = "Person"
+) -> SeededPerson:
+    """Create an account and sign it in, through the real login route."""
     from app.core.security import hash_password
-    from app.db.models.identity import Membership, Role, User
+    from app.db.models.identity import User
 
-    org_id = await _create_org(session, name, slug)
-
-    admin_email = f"admin@{slug}.com"
-    admin = User(email=admin_email, password_hash=hash_password("correct-horse-battery"))
-    session.add(admin)
+    email = email or f"{uuid.uuid4().hex[:10]}@example.com"
+    user = User(
+        email=email,
+        full_name=name,
+        password_hash=hash_password("correct-horse-battery"),
+        max_employees=3,
+    )
+    session.add(user)
     await session.flush()
-    session.add(Membership(user_id=admin.id, org_id=org_id, role=Role.ADMIN))
     await session.commit()
 
     login = await api.post(
         "/api/v1/auth/login",
-        json={"email": admin_email, "password": "correct-horse-battery"},
+        json={"email": email, "password": "correct-horse-battery"},
     )
-    admin_token = login.json()["access_token"]
+    return SeededPerson(owner_id=user.id, email=email, token=login.json()["access_token"])
 
-    invite = await api.post(
-        f"/api/v1/orgs/{org_id}/invites",
-        json={"email": f"member@{slug}.com", "role": "member"},
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-    raw = invite.json()["invite_token"]
 
-    accepted = await api.post(
-        "/api/v1/auth/accept-invite",
-        json={"token": raw, "password": "correct-horse-battery", "full_name": "A Member"},
-    )
+async def seed_company(
+    session: AsyncSession, api: AsyncClient, *, name: str, slug: str
+) -> SeededPerson:
+    """Compatibility shim for tests written against companies.
 
-    return SeededCompany(
-        org_id=org_id,
-        admin_email=admin_email,
-        admin_token=admin_token,
-        member_email=f"member@{slug}.com",
-        member_token=accepted.json()["access_token"],
-    )
+    A company of one is now simply a person, so the old call site
+    still means something sensible.
+    """
+    return await seed_person(session, api, email=f"admin@{slug}.com", name=name)

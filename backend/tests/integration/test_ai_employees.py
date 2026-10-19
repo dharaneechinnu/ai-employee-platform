@@ -30,7 +30,7 @@ async def test_create_and_read_an_ai_employee(api: AsyncClient, session: AsyncSe
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload(), headers=headers
+        f"/api/v1/me/ai-employees", json=_payload(), headers=headers
     )
     assert created.status_code == 201, created.text
     body = created.json()
@@ -39,7 +39,7 @@ async def test_create_and_read_an_ai_employee(api: AsyncClient, session: AsyncSe
     assert body["status"] == "draft"
 
     fetched = await api.get(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees/{body['id']}", headers=headers
+        f"/api/v1/me/ai-employees/{body['id']}", headers=headers
     )
     assert fetched.status_code == 200
     assert fetched.json()["config"]["guided"]["what_it_does"] == GUIDED["what_it_does"]
@@ -52,12 +52,12 @@ async def test_editing_creates_a_new_version(api: AsyncClient, session: AsyncSes
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload(), headers=headers
+        f"/api/v1/me/ai-employees", json=_payload(), headers=headers
     )
     employee_id = created.json()["id"]
 
     updated = await api.patch(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees/{employee_id}",
+        f"/api/v1/me/ai-employees/{employee_id}",
         json={"config": {"guided": {**GUIDED, "tone": "Formal."}, "max_steps": 20}},
         headers=headers,
     )
@@ -65,7 +65,7 @@ async def test_editing_creates_a_new_version(api: AsyncClient, session: AsyncSes
     assert updated.json()["version_no"] == 2
 
     versions = await api.get(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees/{employee_id}/versions", headers=headers
+        f"/api/v1/me/ai-employees/{employee_id}/versions", headers=headers
     )
     assert [v["version_no"] for v in versions.json()] == [2, 1]
     # Version 1 still holds the original wording.
@@ -77,10 +77,10 @@ async def test_preview_shows_the_assembled_prompt(api: AsyncClient, session: Asy
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload(), headers=headers
+        f"/api/v1/me/ai-employees", json=_payload(), headers=headers
     )
     preview = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees/{created.json()['id']}/preview-prompt",
+        f"/api/v1/me/ai-employees/{created.json()['id']}/preview-prompt",
         headers=headers,
     )
 
@@ -98,12 +98,12 @@ async def test_employee_limit_is_enforced(api: AsyncClient, session: AsyncSessio
 
     for i in range(3):
         created = await api.post(
-            f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload(f"Bot {i}"), headers=headers
+            f"/api/v1/me/ai-employees", json=_payload(f"Bot {i}"), headers=headers
         )
         assert created.status_code == 201
 
     fourth = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload("Bot 4"), headers=headers
+        f"/api/v1/me/ai-employees", json=_payload("Bot 4"), headers=headers
     )
     assert fourth.status_code == 409
     assert "limit" in fourth.json()["detail"].lower()
@@ -116,14 +116,14 @@ async def test_archiving_frees_a_slot(api: AsyncClient, session: AsyncSession) -
     ids = []
     for i in range(3):
         created = await api.post(
-            f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload(f"Bot {i}"), headers=headers
+            f"/api/v1/me/ai-employees", json=_payload(f"Bot {i}"), headers=headers
         )
         ids.append(created.json()["id"])
 
-    await api.delete(f"/api/v1/orgs/{acme.org_id}/ai-employees/{ids[0]}", headers=headers)
+    await api.delete(f"/api/v1/me/ai-employees/{ids[0]}", headers=headers)
 
     allowed_again = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload("Bot 4"), headers=headers
+        f"/api/v1/me/ai-employees", json=_payload("Bot 4"), headers=headers
     )
     assert allowed_again.status_code == 201
 
@@ -134,9 +134,9 @@ async def test_list_reports_usage_against_the_limit(
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
-    await api.post(f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload(), headers=headers)
+    await api.post(f"/api/v1/me/ai-employees", json=_payload(), headers=headers)
 
-    listed = await api.get(f"/api/v1/orgs/{acme.org_id}/ai-employees", headers=headers)
+    listed = await api.get(f"/api/v1/me/ai-employees", headers=headers)
     body = listed.json()
     assert body["used"] == 1
     assert body["limit"] == 3
@@ -148,17 +148,17 @@ async def test_activate_and_pause(api: AsyncClient, session: AsyncSession) -> No
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload(), headers=headers
+        f"/api/v1/me/ai-employees", json=_payload(), headers=headers
     )
     employee_id = created.json()["id"]
 
     activated = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees/{employee_id}/activate", headers=headers
+        f"/api/v1/me/ai-employees/{employee_id}/activate", headers=headers
     )
     assert activated.json()["status"] == "active"
 
     paused = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees/{employee_id}/pause", headers=headers
+        f"/api/v1/me/ai-employees/{employee_id}/pause", headers=headers
     )
     assert paused.json()["status"] == "paused"
 
@@ -167,7 +167,7 @@ async def test_platform_templates_are_available(api: AsyncClient, session: Async
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
-    listed = await api.get(f"/api/v1/orgs/{acme.org_id}/templates", headers=headers)
+    listed = await api.get(f"/api/v1/me/templates", headers=headers)
     assert listed.status_code == 200
     names = {t["name"] for t in listed.json()}
     assert {"DevOps Helper", "Support Agent", "HR Helper"} <= names
@@ -178,11 +178,11 @@ async def test_create_from_a_template(api: AsyncClient, session: AsyncSession) -
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
-    templates = await api.get(f"/api/v1/orgs/{acme.org_id}/templates", headers=headers)
+    templates = await api.get(f"/api/v1/me/templates", headers=headers)
     devops = next(t for t in templates.json() if t["name"] == "DevOps Helper")
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees",
+        f"/api/v1/me/ai-employees",
         json={"name": "Ravi", "config": {}, "template_id": devops["id"]},
         headers=headers,
     )
@@ -201,11 +201,11 @@ async def test_save_an_employee_as_a_company_template(
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees", json=_payload(), headers=headers
+        f"/api/v1/me/ai-employees", json=_payload(), headers=headers
     )
 
     saved = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/templates",
+        f"/api/v1/me/templates",
         json={
             "name": "Our Bug Fixer",
             "description": "House style",
@@ -226,32 +226,20 @@ async def test_a_company_template_stays_inside_that_company(
     globex = await seed_company(session, api, name="Globex", slug="globex")
 
     created = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees",
+        f"/api/v1/me/ai-employees",
         json=_payload(),
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
     await api.post(
-        f"/api/v1/orgs/{acme.org_id}/templates",
+        f"/api/v1/me/templates",
         json={"name": "Acme Secret Sauce", "employee_id": created.json()["id"]},
         headers={"Authorization": f"Bearer {acme.admin_token}"},
     )
 
     globex_templates = await api.get(
-        f"/api/v1/orgs/{globex.org_id}/templates",
+        f"/api/v1/me/templates",
         headers={"Authorization": f"Bearer {globex.admin_token}"},
     )
     assert "Acme Secret Sauce" not in {t["name"] for t in globex_templates.json()}
 
 
-async def test_a_member_cannot_create_an_ai_employee(
-    api: AsyncClient, session: AsyncSession
-) -> None:
-    """Admin builds, Member uses."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-
-    response = await api.post(
-        f"/api/v1/orgs/{acme.org_id}/ai-employees",
-        json=_payload(),
-        headers={"Authorization": f"Bearer {acme.member_token}"},
-    )
-    assert response.status_code == 403

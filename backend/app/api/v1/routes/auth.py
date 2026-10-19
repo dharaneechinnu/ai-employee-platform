@@ -13,12 +13,10 @@ from fastapi import APIRouter, Request, Response, status
 from app.api.v1.deps import REFRESH_COOKIE_NAME, CurrentUserDep, SessionDep
 from app.config import get_settings
 from app.core.errors import AuthError
-from app.db.repositories.identity_repo import MembershipRepository
 from app.schemas.auth import (
-    AcceptInviteRequest,
     LoginRequest,
     MeResponse,
-    OrgSummary,
+    SetupRequest,
     TokenResponse,
 )
 from app.services.auth_service import AuthService, IssuedTokens
@@ -49,17 +47,23 @@ def _token_response(tokens: IssuedTokens, response: Response) -> TokenResponse:
 
 
 @router.post(
-    "/accept-invite",
+    "/setup",
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create an account from an invitation link",
+    summary="Set your password from a setup link",
 )
-async def accept_invite(
-    body: AcceptInviteRequest,
+async def complete_setup(
+    body: SetupRequest,
     response: Response,
     session: SessionDep,
 ) -> TokenResponse:
-    tokens = await AuthService(session).accept_invitation(
+    """The only place an account's password is ever set.
+
+    The Platform Admin creates the account and sends the link; the
+    password is chosen here, by its owner, so staff never know it and
+    cannot sign in as anybody.
+    """
+    tokens = await AuthService(session).complete_setup(
         token=body.token, password=body.password, full_name=body.full_name
     )
     return _token_response(tokens, response)
@@ -87,16 +91,18 @@ async def logout(request: Request, response: Response, session: SessionDep) -> N
     response.delete_cookie(REFRESH_COOKIE_NAME, path="/api/v1/auth")
 
 
-@router.get("/me", response_model=MeResponse, summary="Who am I, and where do I belong")
-async def me(current: CurrentUserDep, session: SessionDep) -> MeResponse:
-    pairs = await MembershipRepository(session).list_orgs_for_user(current.id)
+@router.get("/me", response_model=MeResponse, summary="Who am I")
+async def me(current: CurrentUserDep) -> MeResponse:
+    """No company to resolve any more: you are the scope.
+
+    Everything this account can reach is filtered by this id in the
+    repository layer, so there is nothing else for the client to pick.
+    """
     return MeResponse(
         id=current.user.id,
         email=current.user.email,
         full_name=current.user.full_name,
-        organizations=[
-            OrgSummary(id=org.id, name=org.name, slug=org.slug, role=role) for org, role in pairs
-        ],
+        max_employees=current.user.max_employees,
     )
 
 

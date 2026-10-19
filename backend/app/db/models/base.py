@@ -14,7 +14,7 @@ class Base(DeclarativeBase):
     """All models inherit from this.
 
     The tenant-isolation test (tests/isolation/) walks every mapper
-    registered here and fails if a table is missing ``org_id`` and is not
+    registered here and fails if a table is missing ``owner_id`` and is not
     on the explicit global-table whitelist.
     """
 

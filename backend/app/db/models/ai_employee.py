@@ -36,8 +36,8 @@ COUNTS_TOWARD_LIMIT = (EmployeeStatus.DRAFT, EmployeeStatus.ACTIVE, EmployeeStat
 class AIEmployee(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "ai_employees"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     job_title: Mapped[str | None] = mapped_column(String(100))
@@ -51,7 +51,7 @@ class AIEmployee(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
     )
 
-    __table_args__ = (Index("ix_ai_employees_org_status", "org_id", "status"),)
+    __table_args__ = (Index("ix_ai_employees_org_status", "owner_id", "status"),)
 
     def __repr__(self) -> str:
         return f"<AIEmployee {self.name} ({self.status})>"
@@ -67,8 +67,8 @@ class AIEmployeeVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "ai_employee_versions"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     employee_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("ai_employees.id", ondelete="CASCADE"), nullable=False
@@ -88,20 +88,20 @@ class AIEmployeeVersion(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 class Template(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """A ready-made starting point.
 
-    `org_id` NULL means a platform template, visible to everyone.
-    `org_id` set means that company's own template, visible only inside
+    `owner_id` NULL means a platform template, visible to everyone.
+    `owner_id` set means that company's own template, visible only inside
     it — a company template may encode private business rules, so it
     must never become visible to other customers.
     """
 
     __tablename__ = "templates"
 
-    org_id: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE")
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE")
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500))
     department: Mapped[str | None] = mapped_column(String(100))
     config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
-    __table_args__ = (Index("ix_templates_org_id", "org_id"),)
+    __table_args__ = (Index("ix_templates_org_id", "owner_id"),)

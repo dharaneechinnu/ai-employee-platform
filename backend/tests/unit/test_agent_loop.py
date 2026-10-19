@@ -99,7 +99,7 @@ def _loop(provider: LLMProvider, tools: list[type[Tool]], **kw: object) -> Agent
         provider=provider,
         model="scripted",
         tools=tools,
-        tool_context=ToolContext(org_id=uuid.uuid4()),
+        tool_context=ToolContext(owner_id=uuid.uuid4()),
         **kw,  # type: ignore[arg-type]
     )
 

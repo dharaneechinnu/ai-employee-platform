@@ -6,7 +6,7 @@ Two separations matter here and are deliberate:
    role-checking logic can then never escalate a customer to platform
    staff, because they are not in the same table to begin with.
 
-2. `users` has no `org_id`. A person may belong to several companies;
+2. `users` has no `owner_id`. A person may belong to several companies;
    the link lives in `memberships`. This is why `users` is on the
    tenant-isolation whitelist.
 """
@@ -15,25 +15,19 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.models.base import Base, StrEnumType, TimestampMixin, UUIDPrimaryKeyMixin
-
-
-class Role(StrEnum):
-    """Roles inside one company. Deliberately only two.
-
-    Admin builds the AI Employees; Member uses them. A read-only Viewer
-    is a plausible third role later, which is why permissions are
-    resolved through a matrix rather than scattered `if role ==` checks.
-    """
-
-    ADMIN = "admin"
-    MEMBER = "member"
+from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -45,54 +39,17 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Moved here from the organisation when accounts became personal.
+    # A cap per person is what stops one account standing up fifty AI
+    # Employees.
+    max_employees: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=5, server_default="5"
+    )
+
     def __repr__(self) -> str:
         return f"<User {self.email}>"
 
 
-class Membership(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    __tablename__ = "memberships"
-
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
-    )
-    role: Mapped[Role] = mapped_column(StrEnumType(Role, 20), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "org_id", name="uq_memberships_user_org"),
-        Index("ix_memberships_org_id", "org_id"),
-        Index("ix_memberships_user_id", "user_id"),
-    )
-
-
-class Invitation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """An invite link. There is no public registration endpoint, so this
-    is the only way a user account comes into existence."""
-
-    __tablename__ = "invitations"
-
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
-    )
-    email: Mapped[str] = mapped_column(String(320), nullable=False)
-    role: Mapped[Role] = mapped_column(StrEnumType(Role, 20), nullable=False)
-
-    # Only the hash is stored. A database leak must not yield usable
-    # invite links.
-    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
-
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    invited_by: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
-    )
-
-    __table_args__ = (Index("ix_invitations_org_id", "org_id"),)
-
-    def is_usable(self, now: datetime) -> bool:
-        return self.used_at is None and self.expires_at > now
 
 
 class RefreshToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -158,3 +115,23 @@ class PlatformAdminAudit(Base, UUIDPrimaryKeyMixin):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+
+
+class SetupToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """The one-time link a new account uses to set its own password.
+
+    Replaces the old company invitation. The Platform Admin creates
+    the account but never sets a password for it, so there is no point
+    at which staff know a customer's credentials or could sign in as
+    them. Only the hash is stored: a lost link means issuing another,
+    never looking one up.
+    """
+
+    __tablename__ = "setup_tokens"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -74,8 +74,8 @@ class EventType(StrEnum):
 class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "tasks"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     employee_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("ai_employees.id", ondelete="CASCADE"), nullable=False
@@ -98,7 +98,7 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     __table_args__ = (
-        Index("ix_tasks_org_status_created", "org_id", "status", "created_at"),
+        Index("ix_tasks_org_status_created", "owner_id", "status", "created_at"),
         Index("ix_tasks_employee", "employee_id"),
     )
 
@@ -108,8 +108,8 @@ class Run(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "runs"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     task_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
@@ -139,7 +139,7 @@ class Run(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __table_args__ = (
         Index("ix_runs_task", "task_id"),
-        Index("ix_runs_org_status", "org_id", "status"),
+        Index("ix_runs_org_status", "owner_id", "status"),
     )
 
 
@@ -156,7 +156,7 @@ class RunEvent(Base):
     run_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     seq: Mapped[int] = mapped_column(Integer, nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
@@ -177,7 +177,7 @@ class LLMCall(Base):
     run_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     provider_key: Mapped[str] = mapped_column(String(50), nullable=False)
     model: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -186,7 +186,7 @@ class LLMCall(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    __table_args__ = (Index("ix_llm_calls_org_created", "org_id", "created_at"),)
+    __table_args__ = (Index("ix_llm_calls_org_created", "owner_id", "created_at"),)
 
 
 class ToolInvocation(Base):
@@ -196,7 +196,7 @@ class ToolInvocation(Base):
     run_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
     side_effect: Mapped[str] = mapped_column(String(20), nullable=False)
     arguments: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)

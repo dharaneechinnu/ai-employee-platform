@@ -58,8 +58,8 @@ class MemoryScope(StrEnum):
 class Memory(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "memories"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     # NULL means company-wide. Set means only that AI Employee.
     employee_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -90,7 +90,7 @@ class Memory(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     __table_args__ = (
-        Index("ix_memories_org_employee", "org_id", "employee_id"),
+        Index("ix_memories_org_employee", "owner_id", "employee_id"),
         Index("ix_memories_tsv", "content_tsv", postgresql_using="gin"),
     )
 
@@ -102,7 +102,7 @@ class MemoryVector384(Base):
     memory_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("memories.id", ondelete="CASCADE"), primary_key=True
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     embedding: Mapped[Any] = mapped_column(Vector(384), nullable=False)
 
 
@@ -111,7 +111,7 @@ class MemoryVector768(Base):
     memory_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("memories.id", ondelete="CASCADE"), primary_key=True
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     embedding: Mapped[Any] = mapped_column(Vector(768), nullable=False)
 
 
@@ -120,7 +120,7 @@ class MemoryVector1024(Base):
     memory_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("memories.id", ondelete="CASCADE"), primary_key=True
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     embedding: Mapped[Any] = mapped_column(Vector(1024), nullable=False)
 
 
@@ -129,7 +129,7 @@ class MemoryVector1536(Base):
     memory_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("memories.id", ondelete="CASCADE"), primary_key=True
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     embedding: Mapped[Any] = mapped_column(Vector(1536), nullable=False)
 
 
@@ -150,8 +150,8 @@ class EmbeddingConfig(Base, TimestampMixin):
 
     __tablename__ = "embedding_configs"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
     )
     provider_key: Mapped[str] = mapped_column(String(50), nullable=False, default="local")
     model: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -172,13 +172,13 @@ class RunSummary(Base, TimestampMixin):
     run_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True
     )
-    org_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     employee_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     goal: Mapped[str | None] = mapped_column(Text)
     outcome: Mapped[str | None] = mapped_column(Text)
     lesson: Mapped[str | None] = mapped_column(Text)
 
-    __table_args__ = (Index("ix_run_summaries_org", "org_id"),)
+    __table_args__ = (Index("ix_run_summaries_owner", "owner_id"),)
 
 
 class ReembedJob(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -191,8 +191,8 @@ class ReembedJob(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __tablename__ = "reembed_jobs"
 
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     from_model: Mapped[str | None] = mapped_column(String(100))
     to_model: Mapped[str] = mapped_column(String(100), nullable=False)

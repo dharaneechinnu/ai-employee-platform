@@ -42,9 +42,8 @@ from app.core.errors import ValidationError
 from app.core.observability import get_logger
 from app.core.signed import sign
 from app.db.models.ai_employee import AIEmployee
-from app.db.models.identity import Membership, Role, User
+from app.db.models.identity import User
 from app.db.models.notification import NotificationSettings
-from app.db.models.organization import Organization
 from app.db.models.policy import Approval
 from app.db.models.task import Run, RunStatus, Task
 
@@ -171,7 +170,7 @@ def approval_link_token(approval: Approval, user_id: uuid.UUID | None) -> str:
     With a user id (email), opening it is enough to decide as that
     person. Without one (Slack), the page asks the clicker to sign in.
     """
-    claims: dict[str, Any] = {"apr": str(approval.id), "org": str(approval.org_id)}
+    claims: dict[str, Any] = {"apr": str(approval.id), "org": str(approval.owner_id)}
     if user_id is not None:
         claims["sub"] = str(user_id)
     return sign("approval_link", claims, expires_at=approval.expires_at)
@@ -181,21 +180,21 @@ def approval_link_token(approval: Approval, user_id: uuid.UUID | None) -> str:
 
 
 class NotificationService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
         self.session = session
-        self.org_id = org_id
+        self.owner_id = owner_id
 
     # --- settings ------------------------------------------------------
 
     async def settings(self) -> NotificationSettings:
         row = await self.session.scalar(
-            select(NotificationSettings).where(NotificationSettings.org_id == self.org_id)
+            select(NotificationSettings).where(NotificationSettings.owner_id == self.owner_id)
         )
         if row is None:
             # Defaults, not yet saved: email on for every event, Slack
             # off until a webhook is added.
             row = NotificationSettings(
-                org_id=self.org_id,
+                owner_id=self.owner_id,
                 email_enabled=True,
                 slack_enabled=False,
                 on_approval_requested=True,
@@ -230,7 +229,7 @@ class NotificationService:
             # make the worker POST to any address, internal ones included.
             if not url.startswith(SLACK_PREFIX):
                 raise ValidationError(f"A Slack webhook URL starts with {SLACK_PREFIX}")
-            row.slack_webhook_enc = encrypt(url, scope=self.org_id)
+            row.slack_webhook_enc = encrypt(url, scope=self.owner_id)
             row.slack_webhook_last4 = url[-4:]
 
         row.slack_enabled = slack_enabled and row.slack_webhook_enc is not None
@@ -242,7 +241,7 @@ class NotificationService:
     def _webhook(self, row: NotificationSettings) -> str | None:
         if not row.slack_enabled or row.slack_webhook_enc is None:
             return None
-        return decrypt(row.slack_webhook_enc, scope=self.org_id)
+        return decrypt(row.slack_webhook_enc, scope=self.owner_id)
 
     # --- sending -------------------------------------------------------
 
@@ -283,14 +282,12 @@ class NotificationService:
         if not row.on_approval_requested:
             return
         task, employee = await self._task_and_employee(approval.run_id)
-        org = await self.session.get(Organization, self.org_id)
 
         who = employee.name if employee else "An AI Employee"
         subject = f"Approval needed: {who} wants to {_humanise(approval.tool_name)}"
         lines = [
             f"Task: {task.title or task.input[:120]}" if task else "",
             f"Action: {approval.tool_name} ({approval.side_effect})",
-            f"Company: {org.name}" if org else "",
             f"The run is paused until someone decides. "
             f"This request expires {approval.expires_at:%d %b %Y, %H:%M} UTC.",
         ]
@@ -367,28 +364,22 @@ class NotificationService:
         return task, employee
 
     async def _admins(self) -> list[User]:
-        rows = await self.session.scalars(
-            select(User)
-            .join(Membership, Membership.user_id == User.id)
-            .where(
-                Membership.org_id == self.org_id,
-                Membership.role == Role.ADMIN,
-                User.is_active.is_(True),
-            )
-        )
-        return list(rows.all())
+        """Who to tell. On a personal account that is one person: the
+        owner of the work, provided their account is still active."""
+        user = await self.session.get(User, self.owner_id)
+        return [user] if user is not None and user.is_active else []
 
     async def _try_email(self, to: str, message: Message) -> None:
         try:
             await send_email(to, message.subject, message.text(), message.html())
         except Exception as exc:  # noqa: BLE001 - a notification must never fail a run
-            log.warning("notify_email_failed", org_id=str(self.org_id), error=str(exc)[:200])
+            log.warning("notify_email_failed", owner_id=str(self.owner_id), error=str(exc)[:200])
 
     async def _try_slack(self, webhook: str, message: Message) -> None:
         try:
             await post_slack(webhook, message.slack())
         except Exception as exc:  # noqa: BLE001 - a notification must never fail a run
-            log.warning("notify_slack_failed", org_id=str(self.org_id), error=str(exc)[:200])
+            log.warning("notify_slack_failed", owner_id=str(self.owner_id), error=str(exc)[:200])
 
 
 async def notify_safely(coro: Any) -> None:

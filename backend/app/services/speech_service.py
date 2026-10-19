@@ -60,9 +60,9 @@ def audio_extension(content_type: str | None) -> str:
 
 
 class SpeechService:
-    def __init__(self, session: AsyncSession, org_id: uuid.UUID) -> None:
-        self.providers = ProviderService(session, org_id)
-        self.org_id = org_id
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:
+        self.providers = ProviderService(session, owner_id)
+        self.owner_id = owner_id
 
     async def engine(self) -> str:
         """``whisper`` when the company has a Groq key, else ``browser``."""
@@ -106,10 +106,15 @@ class SpeechService:
             raise RateLimitError("Groq's speech limit was reached. Wait a moment and try again.")
         if not response.is_success:
             log.warning(
-                "transcription_failed", org_id=str(self.org_id), status=response.status_code
+                "transcription_failed", owner_id=str(self.owner_id), status=response.status_code
             )
             raise UpstreamError("Groq could not transcribe that recording.")
 
         text = str(response.json().get("text", "")).strip()
-        log.info("transcribed", org_id=str(self.org_id), audio_bytes=len(audio), chars=len(text))
+        log.info(
+            "transcribed",
+            owner_id=str(self.owner_id),
+            audio_bytes=len(audio),
+            chars=len(text),
+        )
         return text

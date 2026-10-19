@@ -50,7 +50,7 @@ async def test_a_wrong_password_is_refused(api: AsyncClient, session: AsyncSessi
     assert response.status_code == 401
 
 
-async def test_create_company_and_onboard_its_first_admin(
+async def test_create_an_account_and_let_its_owner_set_a_password(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     email, password = await _make_admin(session)
@@ -58,23 +58,19 @@ async def test_create_company_and_onboard_its_first_admin(
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
-        "/api/v1/platform/companies",
-        json={
-            "name": "Victopia Labs",
-            "slug": "victopia",
-            "first_admin_email": "owner@victopia.com",
-            "max_employees": 5,
-        },
+        "/api/v1/platform/people",
+        json={"email": "owner@victopia.com", "max_employees": 5},
         headers=headers,
     )
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["max_employees"] == 5
 
-    # The invite token is returned once; the new admin uses it to join.
+    # The setup link is returned once. The owner sets their own
+    # password through it, so the Platform Admin never knows one.
     accepted = await api.post(
-        "/api/v1/auth/accept-invite",
-        json={"token": body["invite_token"], "password": "owner-password-123"},
+        "/api/v1/auth/setup",
+        json={"token": body["setup_token"], "password": "owner-password-123"},
     )
     assert accepted.status_code == 201
 
@@ -82,31 +78,27 @@ async def test_create_company_and_onboard_its_first_admin(
         "/api/v1/auth/me",
         headers={"Authorization": f"Bearer {accepted.json()['access_token']}"},
     )
-    assert me.json()["organizations"][0]["role"] == "admin"
+    assert me.json()["email"] == "owner@victopia.com"
+    assert me.json()["max_employees"] == 5
 
 
-async def test_list_companies_shows_counts(api: AsyncClient, session: AsyncSession) -> None:
+async def test_list_people_shows_counts(api: AsyncClient, session: AsyncSession) -> None:
     email, password = await _make_admin(session)
     token = await _sign_in(api, email, password)
     headers = {"Authorization": f"Bearer {token}"}
 
     await api.post(
-        "/api/v1/platform/companies",
-        json={
-            "name": "Acme",
-            "slug": "acme",
-            "first_admin_email": "owner@acme.com",
-            "max_employees": 3,
-        },
+        "/api/v1/platform/people",
+        json={"email": "owner@acme.com", "max_employees": 3},
         headers=headers,
     )
 
-    listed = await api.get("/api/v1/platform/companies", headers=headers)
+    listed = await api.get("/api/v1/platform/people", headers=headers)
     assert listed.status_code == 200
-    row = listed.json()[0]
-    assert row["slug"] == "acme"
+    row = next(r for r in listed.json() if r["email"] == "owner@acme.com")
     assert row["max_employees"] == 3
-    assert "member_count" in row
+    assert row["employees_used"] == 0
+    assert row["active"] is True
 
 
 async def test_change_employee_limit(api: AsyncClient, session: AsyncSession) -> None:
@@ -115,19 +107,14 @@ async def test_change_employee_limit(api: AsyncClient, session: AsyncSession) ->
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
-        "/api/v1/platform/companies",
-        json={
-            "name": "Acme",
-            "slug": "acme",
-            "first_admin_email": "owner@acme.com",
-            "max_employees": 3,
-        },
+        "/api/v1/platform/people",
+        json={"email": "owner@acme.com", "max_employees": 3},
         headers=headers,
     )
-    org_id = created.json()["id"]
+    owner_id = created.json()["id"]
 
     updated = await api.patch(
-        f"/api/v1/platform/companies/{org_id}/limits",
+        f"/api/v1/platform/people/{owner_id}/limits",
         json={"max_employees": 10},
         headers=headers,
     )
@@ -135,28 +122,23 @@ async def test_change_employee_limit(api: AsyncClient, session: AsyncSession) ->
     assert updated.json()["max_employees"] == 10
 
 
-async def test_suspend_a_company(api: AsyncClient, session: AsyncSession) -> None:
+async def test_suspend_and_restore_an_account(api: AsyncClient, session: AsyncSession) -> None:
     email, password = await _make_admin(session)
     token = await _sign_in(api, email, password)
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
-        "/api/v1/platform/companies",
-        json={
-            "name": "Acme",
-            "slug": "acme",
-            "first_admin_email": "owner@acme.com",
-            "max_employees": 3,
-        },
+        "/api/v1/platform/people",
+        json={"email": "owner@acme.com", "max_employees": 3},
         headers=headers,
     )
-    org_id = created.json()["id"]
+    owner_id = created.json()["id"]
 
-    suspended = await api.post(f"/api/v1/platform/companies/{org_id}/suspend", headers=headers)
-    assert suspended.json()["status"] == "suspended"
+    suspended = await api.post(f"/api/v1/platform/people/{owner_id}/suspend", headers=headers)
+    assert suspended.json()["active"] is False
 
-    reactivated = await api.post(f"/api/v1/platform/companies/{org_id}/reactivate", headers=headers)
-    assert reactivated.json()["status"] == "active"
+    restored = await api.post(f"/api/v1/platform/people/{owner_id}/restore", headers=headers)
+    assert restored.json()["active"] is True
 
 
 async def test_a_customer_token_cannot_reach_platform_routes(
@@ -170,13 +152,13 @@ async def test_a_customer_token_cannot_reach_platform_routes(
     company = await seed_company(session, api, name="Acme", slug="acme")
 
     response = await api.get(
-        "/api/v1/platform/companies",
+        "/api/v1/platform/people",
         headers={"Authorization": f"Bearer {company.admin_token}"},
     )
     assert response.status_code == 401
 
 
-async def test_company_list_counts_members_and_employees_independently(
+async def test_the_list_counts_each_persons_employees(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     """Counting both in one query multiplies the rows together.
@@ -192,7 +174,7 @@ async def test_company_list_counts_members_and_employees_independently(
 
     for i in range(3):
         created = await api.post(
-            f"/api/v1/orgs/{acme.org_id}/ai-employees",
+            f"/api/v1/me/ai-employees",
             json={"name": f"Bot {i}", "config": {"guided": {"what_it_does": "work"}}},
             headers=headers,
         )
@@ -202,9 +184,8 @@ async def test_company_list_counts_members_and_employees_independently(
     token = await _sign_in(api, email, password)
 
     listed = await api.get(
-        "/api/v1/platform/companies", headers={"Authorization": f"Bearer {token}"}
+        "/api/v1/platform/people", headers={"Authorization": f"Bearer {token}"}
     )
-    row = next(r for r in listed.json() if r["slug"] == "acme")
+    row = next(r for r in listed.json() if r["email"] == acme.email)
 
-    assert row["member_count"] == 2
     assert row["employees_used"] == 3

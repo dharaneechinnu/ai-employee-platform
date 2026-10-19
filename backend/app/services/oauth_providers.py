@@ -122,7 +122,7 @@ def get_oauth_provider(kind: str) -> OAuthProvider | None:
 async def resolve_client(
     session: AsyncSession,
     provider: OAuthProvider,
-    org_id: uuid.UUID | None = None,
+    owner_id: uuid.UUID | None = None,
 ) -> tuple[str, str] | None:
     """The credentials in force for this provider, or None if unset.
 
@@ -144,14 +144,14 @@ async def resolve_client(
         PlatformOAuthApp,
     )
 
-    if org_id is not None:
+    if owner_id is not None:
         own = await session.scalar(
             select(OrgOAuthApp).where(
-                OrgOAuthApp.org_id == org_id, OrgOAuthApp.provider == provider.kind
+                OrgOAuthApp.owner_id == owner_id, OrgOAuthApp.provider == provider.kind
             )
         )
         if own is not None:
-            return own.client_id, decrypt(own.client_secret_enc, scope=org_id)
+            return own.client_id, decrypt(own.client_secret_enc, scope=owner_id)
 
     app = await session.scalar(
         select(PlatformOAuthApp).where(PlatformOAuthApp.provider == provider.kind)
