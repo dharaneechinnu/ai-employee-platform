@@ -27,9 +27,9 @@ from app.db.models.ai_employee import COUNTS_TOWARD_LIMIT, AIEmployee
 from app.db.models.identity import Invitation, Membership, PlatformAdmin, Role
 from app.db.models.organization import Organization, OrgStatus
 from app.db.models.policy import ConnectionKind
-from app.db.models.provider import PlatformOAuthApp
+from app.db.models.provider import OrgConnectionAccess, PlatformOAuthApp
 from app.db.repositories.identity_repo import OrganizationRepository, PlatformAdminRepository
-from app.services.oauth_providers import get_oauth_provider
+from app.services.oauth_providers import get_oauth_provider, resolve_client
 
 log = get_logger(__name__)
 
@@ -55,6 +55,21 @@ class OAuthAppView:
     redirect_uri: str
     docs_url: str
     from_environment: bool
+
+
+@dataclass(slots=True)
+class ConnectionAccessView:
+    """One connection, as it stands for one company."""
+
+    kind: str
+    display_name: str
+    # True when the platform has this connection working at all. A
+    # company cannot be granted something nobody has registered.
+    platform_ready: bool
+    allowed: bool
+    # False when no ruling exists and the company simply inherits.
+    overridden: bool
+    note: str | None
 
 
 @dataclass(slots=True)
@@ -371,3 +386,102 @@ class PlatformService:
         if app is None:
             raise NotFoundError(f"No OAuth app is registered for '{provider_key}'.")
         return app
+
+    # --- which connections a company may use --------------------------
+
+    async def connection_access(self, org_id: uuid.UUID) -> list[ConnectionAccessView]:
+        from app.services.connection_service import CATALOGUE
+
+        rows = {
+            row.kind: row
+            for row in (
+                await self.session.scalars(
+                    select(OrgConnectionAccess).where(OrgConnectionAccess.org_id == org_id)
+                )
+            ).all()
+        }
+
+        out: list[ConnectionAccessView] = []
+        for kind, meta in CATALOGUE.items():
+            provider = get_oauth_provider(kind.value)
+            ready = (
+                await resolve_client(self.session, provider) is not None
+                if provider is not None
+                else True
+            )
+            ruling = rows.get(kind)
+            out.append(
+                ConnectionAccessView(
+                    kind=kind.value,
+                    display_name=str(meta["display_name"]),
+                    platform_ready=ready,
+                    allowed=ruling.allowed if ruling else True,
+                    overridden=ruling is not None,
+                    note=ruling.note if ruling else None,
+                )
+            )
+        return out
+
+    async def set_connection_access(
+        self,
+        *,
+        admin_id: uuid.UUID,
+        org_id: uuid.UUID,
+        kind: str,
+        allowed: bool | None,
+        note: str | None = None,
+    ) -> None:
+        """Open or close one connection for one company.
+
+        `allowed=None` removes the ruling and returns the company to
+        inheriting the platform default, which is a different state
+        from "allowed" and worth being able to get back to.
+        """
+        from app.db.models.policy import ConnectionKind
+        from app.services.connection_service import CATALOGUE
+
+        try:
+            kind_enum = ConnectionKind(kind)
+        except ValueError as exc:
+            raise NotFoundError(f"'{kind}' is not a connection type.") from exc
+        if kind_enum not in CATALOGUE:
+            raise NotFoundError(f"'{kind}' is not a connection type.")
+
+        if await self.orgs.get(org_id) is None:
+            raise NotFoundError("No such company.")
+
+        existing = await self.session.scalar(
+            select(OrgConnectionAccess).where(
+                OrgConnectionAccess.org_id == org_id,
+                OrgConnectionAccess.kind == kind_enum,
+            )
+        )
+
+        if allowed is None:
+            if existing is not None:
+                await self.session.delete(existing)
+            action = "connection_access_inherited"
+        elif existing is None:
+            self.session.add(
+                OrgConnectionAccess(
+                    org_id=org_id,
+                    kind=kind_enum,
+                    allowed=allowed,
+                    note=note,
+                    updated_by=admin_id,
+                )
+            )
+            action = "connection_allowed" if allowed else "connection_blocked"
+        else:
+            existing.allowed = allowed
+            existing.note = note
+            existing.updated_by = admin_id
+            action = "connection_allowed" if allowed else "connection_blocked"
+
+        self.admins.record_audit(
+            admin_id=admin_id,
+            action=action,
+            target_type="organization",
+            target_id=str(org_id),
+            detail=kind,
+        )

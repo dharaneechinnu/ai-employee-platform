@@ -66,6 +66,16 @@ interface OAuthApp {
   from_environment: boolean;
 }
 
+/** One connection, as it stands for one company. */
+interface ConnectionAccess {
+  kind: string;
+  display_name: string;
+  platform_ready: boolean;
+  allowed: boolean;
+  overridden: boolean;
+  note: string | null;
+}
+
 interface CompanyDetail extends Company {
   created_at: string;
   task_count: number;
@@ -233,6 +243,7 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
+  const [access, setAccess] = useState<ConnectionAccess[] | null>(null);
 
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -273,8 +284,10 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
     }
     setOpenId(company.id);
     setDetail(null);
+    setAccess(null);
     try {
       setDetail(await call<CompanyDetail>(`/companies/${company.id}`));
+      setAccess(await call<ConnectionAccess[]>(`/companies/${company.id}/connections`));
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Could not load that company.", "bad");
       setOpenId(null);
@@ -575,7 +588,12 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
                           )}
                           {openId === company.id && (
                             <div className="rise col-span-full">
-                              <CompanyPanel detail={detail} />
+                              <CompanyPanel
+                                detail={detail}
+                                access={access}
+                                onAccess={setAccess}
+                                orgId={company.id}
+                              />
                             </div>
                           )}
                         </div>
@@ -625,7 +643,51 @@ function Stat({
  * how healthy. There is no tab here for tasks, memory or keys, because
  * there is no endpoint that would fill one.
  */
-function CompanyPanel({ detail }: { detail: CompanyDetail | null }) {
+function CompanyPanel({
+  detail,
+  access,
+  onAccess,
+  orgId,
+}: {
+  detail: CompanyDetail | null;
+  access: ConnectionAccess[] | null;
+  onAccess: (rows: ConnectionAccess[]) => void;
+  orgId: string;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  async function setAllowed(row: ConnectionAccess, allowed: boolean | null) {
+    setBusy(row.kind);
+    try {
+      onAccess(
+        await call<ConnectionAccess[]>(
+          `/companies/${orgId}/connections/${row.kind}`,
+          {
+            allowed,
+            note:
+              allowed === false
+                ? `${row.display_name} is not available on your plan.`
+                : null,
+          },
+          "PUT",
+        ),
+      );
+      toast(
+        allowed === null
+          ? `${row.display_name} follows the platform default again.`
+          : allowed
+            ? `${row.display_name} opened for this company.`
+            : `${row.display_name} closed for this company.`,
+        allowed === false ? "info" : "ok",
+      );
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not change that.", "bad");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (!detail) return <Spinner rows={1} />;
 
   return (
@@ -653,9 +715,74 @@ function CompanyPanel({ detail }: { detail: CompanyDetail | null }) {
         )}
       </div>
 
+      <div className="flex flex-col gap-2 border-t border-line pt-3">
+        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
+          Connections this company may use
+        </span>
+        {!access ? (
+          <Spinner rows={1} />
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {access.map((row) => (
+              <div key={row.kind} className="flex flex-wrap items-center gap-2.5 text-[13px]">
+                <span className="min-w-[150px] font-medium">{row.display_name}</span>
+
+                {!row.platform_ready && (
+                  <Chip tone="mute" dot={false}>
+                    not set up on the platform
+                  </Chip>
+                )}
+
+                <Chip tone={row.allowed ? "ok" : "bad"}>{row.allowed ? "open" : "closed"}</Chip>
+
+                {/* Three states, not two. "Follows the default" is
+                    different from "explicitly opened", and an operator
+                    who cannot get back to it ends up with rulings they
+                    never meant to make permanent. */}
+                {row.overridden ? (
+                  <span className="text-xs text-dim">set for this company</span>
+                ) : (
+                  <span className="text-xs text-dim">follows the platform default</span>
+                )}
+
+                <span className="ml-auto flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant={row.allowed ? "ghost" : "ok"}
+                    disabled={busy === row.kind || (row.allowed && !row.overridden)}
+                    onClick={() => void setAllowed(row, true)}
+                  >
+                    Open
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger-ghost"
+                    disabled={busy === row.kind || !row.allowed}
+                    onClick={() => void setAllowed(row, false)}
+                  >
+                    Close
+                  </Button>
+                  {row.overridden && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy === row.kind}
+                      onClick={() => void setAllowed(row, null)}
+                    >
+                      Use default
+                    </Button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <p className="flex items-center gap-2 border-t border-line pt-3 text-[13px] text-dim">
         <Icon name="lock" size={14} className="text-accent-text" />
-        Counts and health only. Their tasks, memory and API keys are not readable from here.
+        Counts, health and settings only. Their tasks, memory and API keys are not readable from
+        here.
       </p>
     </div>
   );

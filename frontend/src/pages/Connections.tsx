@@ -236,17 +236,30 @@ export default function Connections() {
                         size="sm"
                         variant={items.length ? "ghost" : "brand"}
                         icon="link"
-                        disabled={!option.configured || busy === option.kind}
+                        disabled={!option.configured || !option.allowed || busy === option.kind}
                         onClick={() => void startOAuth(option)}
                       >
                         {busy === option.kind ? "Opening sign-in…" : items.length ? "Connect another account" : `Connect ${option.display_name}`}
                       </Button>
                     ) : (
-                      <Button size="sm" variant={items.length ? "ghost" : "brand"} icon="plus" onClick={() => setManual(option)}>
+                      <Button
+                        size="sm"
+                        variant={items.length ? "ghost" : "brand"}
+                        icon="plus"
+                        disabled={!option.allowed}
+                        onClick={() => setManual(option)}
+                      >
                         {items.length ? "Add another" : "Connect"}
                       </Button>
                     )}
-                    {oauth && !option.configured && (
+                    {!option.allowed ? (
+                      <span className="flex items-start gap-2 text-xs text-ask-text">
+                        <Icon name="lock" size={14} className="mt-px shrink-0" />
+                        {option.blocked_note ??
+                          `${option.display_name} is not available on your plan.`}
+                      </span>
+                    ) : null}
+                    {option.allowed && oauth && !option.configured && (
                       <span className="text-xs text-dim">
                         {/* It is the platform operator who registers the
                             app, not anyone inside this company. The old

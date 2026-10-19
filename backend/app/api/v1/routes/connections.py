@@ -50,6 +50,12 @@ class AvailableConnectionResponse(BaseModel):
     tools: list[str]
     fields: list[dict[str, str]]
     secret_label: str | None
+    # Whether a Platform Admin has closed this one for us, kept apart
+    # from `configured` so the page can say which it is: "nobody set
+    # this up" and "your provider turned this off" lead somewhere
+    # different.
+    allowed: bool
+    blocked_note: str | None
 
 
 class ConnectionResponse(BaseModel):

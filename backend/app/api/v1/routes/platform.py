@@ -30,7 +30,10 @@ from app.db.models.organization import Organization, OrgStatus
 from app.db.models.provider import ProviderConfig
 from app.db.models.task import Task
 from app.db.repositories.identity_repo import PlatformAdminRepository
-from app.services.platform_service import OAuthAppView, PlatformService
+from app.services.platform_service import (
+    OAuthAppView,
+    PlatformService,
+)
 
 router = APIRouter(prefix="/platform", tags=["platform admin"])
 
@@ -108,6 +111,22 @@ class OAuthAppRow(BaseModel):
     redirect_uri: str
     docs_url: str
     from_environment: bool
+
+
+class ConnectionAccessRow(BaseModel):
+    kind: str
+    display_name: str
+    platform_ready: bool
+    allowed: bool
+    overridden: bool
+    note: str | None
+
+
+class SetConnectionAccessRequest(BaseModel):
+    # None clears the ruling and returns the company to the platform
+    # default, which is not the same as allowing it outright.
+    allowed: bool | None = None
+    note: str | None = Field(default=None, max_length=300)
 
 
 class SaveOAuthAppRequest(BaseModel):
@@ -452,3 +471,51 @@ def _one(apps: list[OAuthAppView], provider_key: str) -> OAuthAppRow:
         if app.provider == provider_key:
             return OAuthAppRow(**asdict(app))
     raise NotFoundError(f"No such provider: '{provider_key}'.")
+
+
+@router.get(
+    "/companies/{org_id}/connections",
+    response_model=list[ConnectionAccessRow],
+    summary="Which connections this company may use",
+)
+async def company_connection_access(
+    org_id: uuid.UUID, admin: AdminDep, session: SessionDep
+) -> list[ConnectionAccessRow]:
+    """Still counts and settings, never content.
+
+    This says whether Gmail is available to this company. It says
+    nothing about what is in anyone's inbox, and there is no endpoint
+    here that would.
+    """
+    if await session.get(Organization, org_id) is None:
+        raise NotFoundError("No such company.")
+    return [
+        ConnectionAccessRow(**asdict(row))
+        for row in await PlatformService(session).connection_access(org_id)
+    ]
+
+
+@router.put(
+    "/companies/{org_id}/connections/{kind}",
+    response_model=list[ConnectionAccessRow],
+    summary="Open or close one connection for one company",
+)
+async def set_company_connection_access(
+    org_id: uuid.UUID,
+    kind: str,
+    body: SetConnectionAccessRequest,
+    admin: AdminDep,
+    session: SessionDep,
+) -> list[ConnectionAccessRow]:
+    service = PlatformService(session)
+    await service.set_connection_access(
+        admin_id=admin.id,
+        org_id=org_id,
+        kind=kind,
+        allowed=body.allowed,
+        note=body.note,
+    )
+    await session.commit()
+    return [
+        ConnectionAccessRow(**asdict(row)) for row in await service.connection_access(org_id)
+    ]

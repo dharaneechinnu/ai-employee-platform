@@ -33,10 +33,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.tools.base import Grant
 from app.config import get_settings
 from app.core.crypto import decrypt, encrypt
-from app.core.errors import NotFoundError, ValidationError
+from app.core.errors import NotFoundError, PermissionDeniedError, ValidationError
 from app.core.observability import get_logger
 from app.core.signed import InvalidSignedTokenError, sign_for, verify
 from app.db.models.policy import Connection, ConnectionKind
+from app.db.models.provider import OrgConnectionAccess
 from app.services.oauth_providers import OAuthProvider, get_oauth_provider, resolve_client
 
 log = get_logger(__name__)
@@ -142,6 +143,12 @@ class AvailableConnection:
     tools: list[str]
     fields: list[dict[str, str]] = field(default_factory=list)
     secret_label: str | None = None
+    # False when a Platform Admin has closed this connection for this
+    # company specifically. Separate from `configured` so the UI can
+    # say which of the two it is — "nobody has set this up" and "your
+    # provider turned this off for you" need different next steps.
+    allowed: bool = True
+    blocked_note: str | None = None
 
 
 @dataclass(slots=True)
@@ -178,9 +185,18 @@ class ConnectionService:
 
     # --- reading -------------------------------------------------------
 
+    async def _access(self) -> dict[ConnectionKind, OrgConnectionAccess]:
+        """This company's rulings, keyed by kind. Absent means inherit."""
+        rows = await self.session.scalars(
+            select(OrgConnectionAccess).where(OrgConnectionAccess.org_id == self.org_id)
+        )
+        return {row.kind: row for row in rows.all()}
+
     async def available(self) -> list[AvailableConnection]:
+        access = await self._access()
         out: list[AvailableConnection] = []
         for kind, meta in CATALOGUE.items():
+            ruling = access.get(kind)
             oauth = get_oauth_provider(kind.value)
             configured = (
                 await resolve_client(self.session, oauth) is not None if oauth else True
@@ -196,6 +212,8 @@ class ConnectionService:
                     tools=tools_for(kind.value),
                     fields=meta.get("fields", []),
                     secret_label=meta.get("secret_label"),
+                    allowed=ruling.allowed if ruling else True,
+                    blocked_note=None if ruling is None or ruling.allowed else ruling.note,
                 )
             )
         return out
@@ -242,6 +260,24 @@ class ConnectionService:
 
     # --- one click (OAuth) --------------------------------------------
 
+    async def _require_allowed(self, kind: ConnectionKind) -> None:
+        """Refuse a connection a Platform Admin has closed for us.
+
+        Checked on the way in as well as in the listing: a greyed-out
+        button is a courtesy, not a control, and the request can be
+        made without ever loading the page.
+        """
+        ruling = (await self._access()).get(kind)
+        if ruling is not None and not ruling.allowed:
+            # Forbidden, not unprocessable: the request is well formed
+            # and the company simply may not do this. A client that
+            # retries on 422 would retry this forever.
+            raise PermissionDeniedError(
+                ruling.note
+                or f"{CATALOGUE[kind]['display_name']} is not available on your plan. "
+                "Ask whoever runs AI Employees for your organisation."
+            )
+
     async def _provider(self, kind: str) -> tuple[OAuthProvider, tuple[str, str]]:
         provider = get_oauth_provider(kind)
         if provider is None:
@@ -256,6 +292,7 @@ class ConnectionService:
 
     async def start_oauth(self, kind: str, *, user_id: uuid.UUID) -> str:
         provider, (client_id, _) = await self._provider(kind)
+        await self._require_allowed(provider.kind)
         # The state is signed, so the callback can trust which company
         # and person started this without a table of pending sign-ins.
         state = sign_for(
@@ -278,6 +315,10 @@ class ConnectionService:
 
     async def complete_oauth(self, kind: str, *, code: str, user_id: uuid.UUID) -> Connection:
         provider, (client_id, client_secret) = await self._provider(kind)
+        # Checked again here: a sign-in started before the block, or a
+        # callback replayed by hand, would otherwise land a connection
+        # the company is not entitled to.
+        await self._require_allowed(provider.kind)
 
         async with _client() as http:
             token_resp = await http.post(
@@ -409,6 +450,7 @@ class ConnectionService:
         model = MANUAL_CONFIGS.get(kind_enum)
         if model is None:
             raise ValidationError(f"{kind} is connected with one click, not by hand.")
+        await self._require_allowed(kind_enum)
         try:
             clean = model.model_validate(config).model_dump()
         except PydanticValidationError as exc:

@@ -129,3 +129,40 @@ class PlatformOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="SET NULL")
     )
+
+
+class OrgConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """A Platform Admin's ruling on one company and one connection.
+
+    The platform decides whether a connection exists at all (by
+    registering its OAuth app); this decides whether a *particular*
+    company may use it. A customer on a plan that excludes email, or
+    one who asked for Drive to stay out of reach, is handled here
+    rather than by taking the app away from everyone.
+
+    No row means inherit: if the platform has the connection switched
+    on, the company may use it. That keeps the common case free of
+    rows, and means adding this table changed nothing for anyone
+    already connected.
+
+    `org_id` is here, so the tenancy guard is satisfied honestly — this
+    really is per-company data, written by staff rather than by the
+    customer.
+    """
+
+    __tablename__ = "org_connection_access"
+    __table_args__ = (UniqueConstraint("org_id", "kind", name="uq_org_connection_access"),)
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[ConnectionKind] = mapped_column(StrEnumType(ConnectionKind, 30), nullable=False)
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    # Why it was blocked, shown to the company instead of a bare
+    # "unavailable" that leaves them with nobody to ask.
+    note: Mapped[str | None] = mapped_column(String(300))
+
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="SET NULL")
+    )

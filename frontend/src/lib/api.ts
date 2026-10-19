@@ -356,6 +356,9 @@ export interface AvailableConnection {
   tools: string[];
   fields: ConnectionField[];
   secret_label: string | null;
+  /** False when a Platform Admin closed this one for us specifically. */
+  allowed: boolean;
+  blocked_note: string | null;
 }
 
 export interface ConnectionItem {
