@@ -23,6 +23,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.models.base import Base, StrEnumType, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.models.policy import ConnectionKind
 
 
 class ProviderKind(StrEnum):
@@ -89,4 +90,42 @@ class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("org_id", "provider_key", name="uq_provider_config_org_provider"),
         Index("ix_provider_configs_org_id", "org_id"),
+    )
+
+
+class PlatformOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """The one OAuth app per provider that every company signs in through.
+
+    Google and Microsoft issue these per *application*, not per
+    customer: one app registration, and each company then grants it
+    access to their own mailbox. So this is platform-wide, like
+    `supported_providers`, and only a Platform Admin can set it.
+
+    Without a row here (and without the matching environment variables)
+    the one-click buttons on a company's Connections page are dead, and
+    nothing in the product can turn them on. That was the gap this
+    table closes.
+
+    The secret is encrypted under the "platform" scope rather than a
+    company's, because it belongs to the platform, and there is no read
+    path: the UI only ever sees the last four characters.
+    """
+
+    __tablename__ = "platform_oauth_apps"
+
+    provider: Mapped[ConnectionKind] = mapped_column(
+        StrEnumType(ConnectionKind, 30), nullable=False, unique=True
+    )
+    client_id: Mapped[str] = mapped_column(String(300), nullable=False)
+    client_secret_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    secret_last4: Mapped[str] = mapped_column(String(4), nullable=False)
+
+    # Set up but paused: the credentials stay, the buttons go quiet.
+    # Deleting is the other option, and it loses the client id too.
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="SET NULL")
     )

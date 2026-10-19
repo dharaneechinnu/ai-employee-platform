@@ -247,7 +247,15 @@ export default function Connections() {
                       </Button>
                     )}
                     {oauth && !option.configured && (
-                      <span className="text-xs text-dim">One-click sign-in isn't switched on yet. Whoever set up AI Employees for your company can turn it on.</span>
+                      <span className="text-xs text-dim">
+                        {/* It is the platform operator who registers the
+                            app, not anyone inside this company. The old
+                            wording sent admins looking through their own
+                            settings for a switch that was never there. */}
+                        One-click sign-in isn't switched on for this platform yet. Ask whoever runs
+                        AI Employees to register its {option.display_name} app — or use a method
+                        below in the meantime.
+                      </span>
                     )}
                   </div>
                 )}

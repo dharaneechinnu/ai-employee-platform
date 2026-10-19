@@ -53,6 +53,19 @@ interface ProviderStatus {
   last_tested_at: string | null;
 }
 
+/** One one-click provider, as the control room sees it. */
+interface OAuthApp {
+  provider: string;
+  display_name: string;
+  client_id: string | null;
+  secret_last4: string | null;
+  enabled: boolean;
+  configured: boolean;
+  redirect_uri: string;
+  docs_url: string;
+  from_environment: boolean;
+}
+
 interface CompanyDetail extends Company {
   created_at: string;
   task_count: number;
@@ -215,7 +228,8 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
   const [search, setSearch] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [view, setView] = useState<"companies" | "audit">("companies");
+  const [view, setView] = useState<"companies" | "connections" | "audit">("companies");
+  const [apps, setApps] = useState<OAuthApp[] | null>(null);
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
@@ -235,6 +249,14 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
 
   // The diary is fetched the first time it is opened, not on sign in:
   // most visits never look at it.
+  useEffect(() => {
+    if (view !== "connections") return;
+    void call<OAuthApp[]>("/oauth-apps")
+      .then(setApps)
+      .catch(() => toast("Could not load the sign-in apps.", "bad"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
   useEffect(() => {
     if (view !== "audit" || audit) return;
     void call<AuditEntry[]>("/audit")
@@ -363,7 +385,7 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
       <main className="mx-auto flex max-w-[1280px] flex-col gap-5 px-4 pb-16 pt-7 sm:px-6 lg:px-10" style={{ background: "var(--hero)" }}>
         <div className="rise flex flex-wrap items-center gap-4">
           <h1 className="font-display text-[30px] font-semibold tracking-[-0.025em]">
-            {view === "audit" ? "Audit log" : "Companies"}
+            {view === "audit" ? "Audit log" : view === "connections" ? "One-click sign-in" : "Companies"}
           </h1>
           <Tabs
             label="View"
@@ -371,6 +393,7 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
             onChange={setView}
             items={[
               { key: "companies", label: "Companies" },
+              { key: "connections", label: "One-click sign-in" },
               { key: "audit", label: "Audit log" },
             ]}
           />
@@ -387,6 +410,8 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
 
         {view === "audit" ? (
           <AuditLog entries={audit} />
+        ) : view === "connections" ? (
+          <OAuthApps apps={apps} onSaved={setApps} />
         ) : !companies ? (
           error ? <ErrorNote message={error} /> : <Spinner />
         ) : (
@@ -691,5 +716,230 @@ function AuditLog({ entries }: { entries: AuditEntry[] | null }) {
         </div>
       </div>
     </section>
+  );
+}
+
+// ----------------------------------------------------- one-click sign-in
+
+/**
+ * Where the Google and Microsoft apps are registered.
+ *
+ * Both issue one app per *application*, not per customer, so this is
+ * a platform setting: every company signs in through the same app and
+ * grants it access to their own mailbox. Until it is set here, the
+ * one-click buttons on every company's Connections page are disabled —
+ * and before this screen existed, the only way to set it was an
+ * environment variable and a redeploy, which no Platform Admin can do.
+ */
+function OAuthApps({
+  apps,
+  onSaved,
+}: {
+  apps: OAuthApp[] | null;
+  onSaved: (apps: OAuthApp[]) => void;
+}) {
+  const toast = useToast();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [secret, setSecret] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!apps) return <Spinner />;
+
+  async function reload() {
+    onSaved(await call<OAuthApp[]>("/oauth-apps"));
+  }
+
+  function open(app: OAuthApp) {
+    setEditing(app.provider);
+    setClientId(app.client_id ?? "");
+    setSecret("");
+    setError(null);
+  }
+
+  async function save(e: React.FormEvent, app: OAuthApp) {
+    e.preventDefault();
+    setError(null);
+    setBusy(app.provider);
+    try {
+      await call(`/oauth-apps/${app.provider}`, { client_id: clientId, client_secret: secret }, "PUT");
+      setEditing(null);
+      setSecret("");
+      toast(`${app.display_name} sign-in is on. Every company can connect it now.`);
+      await reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save that.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggle(app: OAuthApp) {
+    setBusy(app.provider);
+    try {
+      await call(`/oauth-apps/${app.provider}`, { enabled: !app.enabled }, "PATCH");
+      toast(
+        app.enabled
+          ? `${app.display_name} paused. Companies already connected keep working.`
+          : `${app.display_name} is on again.`,
+        app.enabled ? "info" : "ok",
+      );
+      await reload();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not change that.", "bad");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove(app: OAuthApp) {
+    setBusy(app.provider);
+    try {
+      await call(`/oauth-apps/${app.provider}`, undefined, "DELETE");
+      toast(`${app.display_name} removed.`, "info");
+      await reload();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not remove that.", "bad");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Copied.");
+    } catch {
+      toast("Copy failed. Select the address and copy it by hand.", "bad");
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="flex items-start gap-2.5 text-[13px] leading-normal text-muted">
+        <Icon name="info" size={16} className="mt-0.5 shrink-0 text-accent-text" />
+        <span>
+          One app per provider covers the whole platform. Each company then signs in with their own
+          account and grants it access to their own mailbox — you never see their mail, only that
+          they connected.
+        </span>
+      </p>
+
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr))]">
+        {apps.map((app, i) => (
+          <article key={app.provider} className="card rise flex flex-col gap-4 p-5" style={{ animationDelay: `${i * 0.06}s` }}>
+            <div className="flex items-center gap-3.5">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] border border-line2 bg-raised font-display text-lg font-bold text-accent-text">
+                {app.display_name.charAt(0)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-display text-lg font-semibold">{app.display_name}</div>
+                <div className="font-mono text-[13px] text-muted">
+                  {app.client_id ? `${app.client_id.slice(0, 22)}…` : "not registered"}
+                </div>
+              </div>
+              <Chip tone={app.configured ? "ok" : "mute"}>{app.configured ? "on" : "off"}</Chip>
+            </div>
+
+            {!app.configured && (
+              <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px] leading-normal">
+                <Icon name="warn" className="shrink-0 text-ask-text" />
+                <span>
+                  The <b>Connect {app.display_name}</b> button is greyed out on every company's
+                  Connections page until this is set.
+                </span>
+              </div>
+            )}
+
+            {app.from_environment && (
+              <div className="flex gap-2.5 rounded-xl bg-raised px-3.5 py-3 text-[13px] leading-normal text-muted">
+                <Icon name="terminal" className="shrink-0" />
+                <span>
+                  Currently coming from this server's environment variables. Saving here replaces
+                  that and can be changed again without a redeploy.
+                </span>
+              </div>
+            )}
+
+            {/* The single most common reason a one-click sign-in fails
+                is a redirect address that does not match to the
+                character, so it is shown rather than documented. */}
+            <div className="flex flex-col gap-1.5">
+              <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
+                Paste this as the redirect URI
+              </span>
+              <div className="flex items-center gap-2 rounded-xl border border-line bg-sunken px-3 py-2">
+                <code className="min-w-0 flex-1 truncate font-mono text-[13px]">{app.redirect_uri}</code>
+                <Button size="sm" variant="ghost" onClick={() => void copy(app.redirect_uri)}>
+                  <Icon name="copy" size={15} />
+                  Copy
+                </Button>
+              </div>
+              <span className="text-[13px] text-dim">
+                It must match to the character, including http vs https.
+              </span>
+            </div>
+
+            {editing === app.provider ? (
+              <form onSubmit={(e) => void save(e, app)} className="flex flex-col gap-3">
+                <Input label="Client ID" value={clientId} onChange={setClientId} required mono autoComplete="off" />
+                <Input
+                  label="Client secret"
+                  type="password"
+                  value={secret}
+                  onChange={setSecret}
+                  required
+                  mono
+                  autoComplete="off"
+                  placeholder={app.secret_last4 ? `replaces ••••${app.secret_last4}` : "Paste secret"}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={!clientId || !secret || busy === app.provider}>
+                    {busy === app.provider ? "Saving…" : "Save and switch on"}
+                  </Button>
+                  <Button variant="ghost" onClick={() => setEditing(null)}>
+                    Cancel
+                  </Button>
+                </div>
+                <ErrorNote message={error} />
+                <p className="text-[13px] text-dim">
+                  The secret is encrypted and never shown again, to you or anyone else. Only its last
+                  four characters come back.
+                </p>
+              </form>
+            ) : (
+              <div className="mt-auto flex flex-wrap items-center gap-2">
+                <Button size="sm" variant={app.configured ? "ghost" : "brand"} onClick={() => open(app)}>
+                  {app.client_id ? "Replace credentials" : "Register app"}
+                </Button>
+                {app.client_id && !app.from_environment && (
+                  <>
+                    <Button size="sm" variant="ghost" disabled={busy === app.provider} onClick={() => void toggle(app)}>
+                      {app.enabled ? "Pause" : "Switch on"}
+                    </Button>
+                    <Button size="sm" variant="danger-ghost" disabled={busy === app.provider} onClick={() => void remove(app)}>
+                      Remove
+                    </Button>
+                  </>
+                )}
+                <a
+                  href={app.docs_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-auto text-[13px] text-accent-text hover:underline"
+                >
+                  Where do I get these?
+                </a>
+              </div>
+            )}
+
+            {app.secret_last4 && editing !== app.provider && (
+              <div className="font-mono text-[13px] text-dim">secret ••••••••{app.secret_last4}</div>
+            )}
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }

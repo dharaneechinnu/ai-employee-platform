@@ -61,6 +61,10 @@ os.environ["DATABASE_URL"] = DATABASE_URL
 # company-scoped rows go and platform-wide rows stay.
 ROOT_TABLES_TO_CLEAR = [
     "platform_admin_audit",  # FK to platform_admins is SET NULL, so clear it first
+    # Platform-wide and reached by no cascade: nothing owns it, so
+    # without this line one test's registered OAuth app is still there
+    # for the next, and "did this create or replace?" silently flips.
+    "platform_oauth_apps",
     "platform_admins",
     "organizations",  # cascades to memberships, employees, tasks, memory, org templates
     "users",  # cascades to memberships, refresh_tokens, tasks

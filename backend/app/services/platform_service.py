@@ -12,6 +12,7 @@ import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import ClassVar
 
 import pyotp
 from sqlalchemy import func, select
@@ -25,9 +26,35 @@ from app.core.security import create_access_token, hash_password, hash_token, ve
 from app.db.models.ai_employee import COUNTS_TOWARD_LIMIT, AIEmployee
 from app.db.models.identity import Invitation, Membership, PlatformAdmin, Role
 from app.db.models.organization import Organization, OrgStatus
+from app.db.models.policy import ConnectionKind
+from app.db.models.provider import PlatformOAuthApp
 from app.db.repositories.identity_repo import OrganizationRepository, PlatformAdminRepository
+from app.services.oauth_providers import get_oauth_provider
 
 log = get_logger(__name__)
+
+
+@dataclass(slots=True)
+class OAuthAppView:
+    """What a Platform Admin may see of a registered OAuth app.
+
+    The secret is write-only, like every other credential here: the
+    last four characters are enough to tell two keys apart, and there
+    is no endpoint that returns more.
+    """
+
+    provider: str
+    display_name: str
+    client_id: str | None
+    secret_last4: str | None
+    enabled: bool
+    configured: bool
+    # Where the operator must point the app in Google's or Microsoft's
+    # console. Getting this wrong is the single most common reason a
+    # one-click sign-in fails, so it is shown rather than documented.
+    redirect_uri: str
+    docs_url: str
+    from_environment: bool
 
 
 @dataclass(slots=True)
@@ -212,3 +239,135 @@ class PlatformService:
             detail=f"{previous} -> {max_employees}",
         )
         return org
+
+    # --- the one-click OAuth apps -------------------------------------
+
+    OAUTH_DOCS: ClassVar[dict[str, str]] = {
+        "google": "https://console.cloud.google.com/apis/credentials",
+        "microsoft": "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps",
+    }
+
+    async def oauth_apps(self) -> list[OAuthAppView]:
+        """Every provider that supports one-click, set up or not.
+
+        Providers with nothing registered are still listed: the point
+        of this screen is to show an operator what is *missing*, and a
+        provider that vanishes when unset cannot be turned on.
+        """
+        rows = {
+            app.provider: app
+            for app in (await self.session.scalars(select(PlatformOAuthApp))).all()
+        }
+
+        out: list[OAuthAppView] = []
+        for kind in (ConnectionKind.GOOGLE, ConnectionKind.MICROSOFT):
+            provider = get_oauth_provider(kind.value)
+            if provider is None:
+                continue
+
+            app = rows.get(kind)
+            env = provider.client_from_env() if app is None else None
+            from_env = env is not None
+            out.append(
+                OAuthAppView(
+                    provider=kind.value,
+                    display_name=provider.display_name,
+                    client_id=app.client_id if app else (env[0] if env else None),
+                    secret_last4=app.secret_last4 if app else None,
+                    enabled=app.enabled if app else from_env,
+                    configured=(app.enabled if app else False) or from_env,
+                    redirect_uri=provider.redirect_uri(),
+                    docs_url=self.OAUTH_DOCS[kind.value],
+                    from_environment=from_env,
+                )
+            )
+        return out
+
+    async def save_oauth_app(
+        self,
+        *,
+        admin_id: uuid.UUID,
+        provider_key: str,
+        client_id: str,
+        client_secret: str,
+    ) -> PlatformOAuthApp:
+        provider = get_oauth_provider(provider_key)
+        if provider is None:
+            raise NotFoundError(f"'{provider_key}' does not support one-click connection.")
+
+        kind = provider.kind
+        app = await self.session.scalar(
+            select(PlatformOAuthApp).where(PlatformOAuthApp.provider == kind)
+        )
+
+        # Encrypted under the platform scope, not a company's: the app
+        # belongs to the platform, and every company signs in through it.
+        ciphertext = encrypt(client_secret, scope="platform")
+        last4 = client_secret[-4:] if len(client_secret) >= 4 else "????"
+
+        if app is None:
+            app = PlatformOAuthApp(
+                provider=kind,
+                client_id=client_id,
+                client_secret_enc=ciphertext,
+                secret_last4=last4,
+                enabled=True,
+                updated_by=admin_id,
+            )
+            self.session.add(app)
+            action = "oauth_app_registered"
+        else:
+            app.client_id = client_id
+            app.client_secret_enc = ciphertext
+            app.secret_last4 = last4
+            app.enabled = True
+            app.updated_by = admin_id
+            action = "oauth_app_updated"
+
+        self.admins.record_audit(
+            admin_id=admin_id,
+            action=action,
+            target_type="oauth_app",
+            target_id=kind.value,
+            # The id, never the secret. This log is readable by every
+            # Platform Admin and is deliberately append-only.
+            detail=f"client_id {client_id[:12]}…",
+        )
+        return app
+
+    async def set_oauth_app_enabled(
+        self, *, admin_id: uuid.UUID, provider_key: str, enabled: bool
+    ) -> PlatformOAuthApp:
+        app = await self._oauth_app(provider_key)
+        app.enabled = enabled
+        app.updated_by = admin_id
+        self.admins.record_audit(
+            admin_id=admin_id,
+            action="oauth_app_enabled" if enabled else "oauth_app_disabled",
+            target_type="oauth_app",
+            target_id=provider_key,
+        )
+        return app
+
+    async def delete_oauth_app(self, *, admin_id: uuid.UUID, provider_key: str) -> None:
+        app = await self._oauth_app(provider_key)
+        await self.session.delete(app)
+        self.admins.record_audit(
+            admin_id=admin_id,
+            action="oauth_app_removed",
+            target_type="oauth_app",
+            target_id=provider_key,
+        )
+
+    async def _oauth_app(self, provider_key: str) -> PlatformOAuthApp:
+        provider = get_oauth_provider(provider_key)
+        app = (
+            await self.session.scalar(
+                select(PlatformOAuthApp).where(PlatformOAuthApp.provider == provider.kind)
+            )
+            if provider
+            else None
+        )
+        if app is None:
+            raise NotFoundError(f"No OAuth app is registered for '{provider_key}'.")
+        return app

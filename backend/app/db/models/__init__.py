@@ -49,6 +49,7 @@ from app.db.models.policy import (
 )
 from app.db.models.provider import (
     ConnectionStatus,
+    PlatformOAuthApp,
     ProviderConfig,
     ProviderKind,
     SupportedProvider,
@@ -93,6 +94,7 @@ __all__ = [
     "Organization",
     "PlatformAdmin",
     "PlatformAdminAudit",
+    "PlatformOAuthApp",
     "Policy",
     "PolicyDefault",
     "PolicyScope",

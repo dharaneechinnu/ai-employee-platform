@@ -37,7 +37,7 @@ from app.core.errors import NotFoundError, ValidationError
 from app.core.observability import get_logger
 from app.core.signed import InvalidSignedTokenError, sign_for, verify
 from app.db.models.policy import Connection, ConnectionKind
-from app.services.oauth_providers import OAuthProvider, get_oauth_provider
+from app.services.oauth_providers import OAuthProvider, get_oauth_provider, resolve_client
 
 log = get_logger(__name__)
 
@@ -178,10 +178,13 @@ class ConnectionService:
 
     # --- reading -------------------------------------------------------
 
-    def available(self) -> list[AvailableConnection]:
+    async def available(self) -> list[AvailableConnection]:
         out: list[AvailableConnection] = []
         for kind, meta in CATALOGUE.items():
             oauth = get_oauth_provider(kind.value)
+            configured = (
+                await resolve_client(self.session, oauth) is not None if oauth else True
+            )
             out.append(
                 AvailableConnection(
                     kind=kind.value,
@@ -189,7 +192,7 @@ class ConnectionService:
                     description=meta["description"],
                     auth=meta["auth"],
                     apps=meta["apps"],
-                    configured=oauth.client() is not None if oauth else True,
+                    configured=configured,
                     tools=tools_for(kind.value),
                     fields=meta.get("fields", []),
                     secret_label=meta.get("secret_label"),
@@ -239,11 +242,11 @@ class ConnectionService:
 
     # --- one click (OAuth) --------------------------------------------
 
-    def _provider(self, kind: str) -> tuple[OAuthProvider, tuple[str, str]]:
+    async def _provider(self, kind: str) -> tuple[OAuthProvider, tuple[str, str]]:
         provider = get_oauth_provider(kind)
         if provider is None:
             raise ValidationError(f"'{kind}' does not support one-click connection.")
-        client = provider.client()
+        client = await resolve_client(self.session, provider)
         if client is None:
             raise ValidationError(
                 f"{provider.display_name} sign-in is not set up on this platform yet. "
@@ -251,8 +254,8 @@ class ConnectionService:
             )
         return provider, client
 
-    def start_oauth(self, kind: str, *, user_id: uuid.UUID) -> str:
-        provider, (client_id, _) = self._provider(kind)
+    async def start_oauth(self, kind: str, *, user_id: uuid.UUID) -> str:
+        provider, (client_id, _) = await self._provider(kind)
         # The state is signed, so the callback can trust which company
         # and person started this without a table of pending sign-ins.
         state = sign_for(
@@ -274,7 +277,7 @@ class ConnectionService:
             raise InvalidSignedTokenError("This sign-in link is not valid.") from exc
 
     async def complete_oauth(self, kind: str, *, code: str, user_id: uuid.UUID) -> Connection:
-        provider, (client_id, client_secret) = self._provider(kind)
+        provider, (client_id, client_secret) = await self._provider(kind)
 
         async with _client() as http:
             token_resp = await http.post(
@@ -364,7 +367,7 @@ class ConnectionService:
         if not force and secret.get("expires_at", 0) - time.time() > REFRESH_MARGIN_S:
             return str(secret["access_token"])
 
-        provider, (client_id, client_secret) = self._provider(conn.kind.value)
+        provider, (client_id, client_secret) = await self._provider(conn.kind.value)
         async with _client() as http:
             resp = await http.post(
                 provider.token_url,
@@ -439,7 +442,7 @@ class ConnectionService:
         conn = await self.get(connection_id)
         try:
             if conn.kind in (ConnectionKind.GOOGLE, ConnectionKind.MICROSOFT):
-                provider, _ = self._provider(conn.kind.value)
+                provider, _ = await self._provider(conn.kind.value)
                 token = await self._fresh_access_token(conn)
                 async with _client() as http:
                     resp = await http.get(

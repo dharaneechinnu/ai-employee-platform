@@ -15,7 +15,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.config import Settings, get_settings
+from app.core.crypto import decrypt
 from app.db.models.policy import ConnectionKind
 
 
@@ -31,9 +35,14 @@ class OAuthProvider:
     # refresh token with offline access *and* a forced consent prompt.
     extra_params: tuple[tuple[str, str], ...] = ()
 
-    def client(self, settings: Settings | None = None) -> tuple[str, str] | None:
-        """(client_id, client_secret), or None if the platform has not
-        registered an app for this provider yet."""
+    def client_from_env(self, settings: Settings | None = None) -> tuple[str, str] | None:
+        """(client_id, client_secret) from the environment, or None.
+
+        The fallback, kept for local development and for an operator
+        who would rather keep the secret out of the database. A row in
+        `platform_oauth_apps` wins over this, so a Platform Admin can
+        change it without a redeploy.
+        """
         s = settings or get_settings()
         if self.kind is ConnectionKind.GOOGLE:
             pair = (s.google_client_id, s.google_client_secret)
@@ -107,3 +116,26 @@ def get_oauth_provider(kind: str) -> OAuthProvider | None:
             extra_params=(("prompt", "select_account"),),
         )
     return None
+
+
+async def resolve_client(
+    session: AsyncSession, provider: OAuthProvider
+) -> tuple[str, str] | None:
+    """The credentials in force for this provider, or None if unset.
+
+    A row the Platform Admin saved wins; the environment is the
+    fallback. Disabling a row is deliberate and beats the environment
+    too — otherwise "turn it off" would quietly fail on a deployment
+    that still had the variables set.
+    """
+    from app.db.models.provider import PlatformOAuthApp  # circular at import time
+
+    app = await session.scalar(
+        select(PlatformOAuthApp).where(PlatformOAuthApp.provider == provider.kind)
+    )
+    if app is not None:
+        if not app.enabled:
+            return None
+        return app.client_id, decrypt(app.client_secret_enc)
+
+    return provider.client_from_env()

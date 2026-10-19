@@ -12,6 +12,7 @@ check that could be misconfigured, but an endpoint that does not exist.
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated
 
@@ -29,7 +30,7 @@ from app.db.models.organization import Organization, OrgStatus
 from app.db.models.provider import ProviderConfig
 from app.db.models.task import Task
 from app.db.repositories.identity_repo import PlatformAdminRepository
-from app.services.platform_service import PlatformService
+from app.services.platform_service import OAuthAppView, PlatformService
 
 router = APIRouter(prefix="/platform", tags=["platform admin"])
 
@@ -93,6 +94,31 @@ class AuditEntry(BaseModel):
     target_id: str | None
     detail: str | None
     created_at: datetime
+
+
+class OAuthAppRow(BaseModel):
+    """One one-click provider, registered or not."""
+
+    provider: str
+    display_name: str
+    client_id: str | None
+    secret_last4: str | None
+    enabled: bool
+    configured: bool
+    redirect_uri: str
+    docs_url: str
+    from_environment: bool
+
+
+class SaveOAuthAppRequest(BaseModel):
+    client_id: str = Field(min_length=5, max_length=300)
+    # Write-only. No endpoint returns it, here or anywhere, so a
+    # mistyped secret is replaced rather than corrected.
+    client_secret: str = Field(min_length=5, max_length=500)
+
+
+class SetOAuthAppEnabledRequest(BaseModel):
+    enabled: bool
 
 
 class ProviderStatusRow(BaseModel):
@@ -344,3 +370,85 @@ async def company_detail(org_id: uuid.UUID, admin: AdminDep, session: SessionDep
             for c in configs
         ],
     )
+
+
+# ------------------------------------------------- one-click sign-in
+
+
+@router.get(
+    "/oauth-apps",
+    response_model=list[OAuthAppRow],
+    summary="The Google and Microsoft apps behind one-click",
+)
+async def list_oauth_apps(admin: AdminDep, session: SessionDep) -> list[OAuthAppRow]:
+    """What a company's Connections page depends on.
+
+    Google and Microsoft issue one app registration per application,
+    not per customer, so this is a platform-level setting: every
+    company signs in through the same app and grants it access to
+    their own mailbox. Until it is set here, the one-click buttons on
+    every company's Connections page are disabled, and nothing inside
+    the product could previously turn them on.
+    """
+    return [
+        OAuthAppRow(**asdict(app)) for app in await PlatformService(session).oauth_apps()
+    ]
+
+
+@router.put(
+    "/oauth-apps/{provider_key}",
+    response_model=OAuthAppRow,
+    summary="Register or replace an app",
+)
+async def save_oauth_app(
+    provider_key: str,
+    body: SaveOAuthAppRequest,
+    admin: AdminDep,
+    session: SessionDep,
+) -> OAuthAppRow:
+    service = PlatformService(session)
+    await service.save_oauth_app(
+        admin_id=admin.id,
+        provider_key=provider_key,
+        client_id=body.client_id,
+        client_secret=body.client_secret,
+    )
+    await session.commit()
+    return _one(await service.oauth_apps(), provider_key)
+
+
+@router.patch(
+    "/oauth-apps/{provider_key}",
+    response_model=OAuthAppRow,
+    summary="Pause or resume an app",
+)
+async def set_oauth_app_enabled(
+    provider_key: str,
+    body: SetOAuthAppEnabledRequest,
+    admin: AdminDep,
+    session: SessionDep,
+) -> OAuthAppRow:
+    service = PlatformService(session)
+    await service.set_oauth_app_enabled(
+        admin_id=admin.id, provider_key=provider_key, enabled=body.enabled
+    )
+    await session.commit()
+    return _one(await service.oauth_apps(), provider_key)
+
+
+@router.delete(
+    "/oauth-apps/{provider_key}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove an app",
+)
+async def delete_oauth_app(provider_key: str, admin: AdminDep, session: SessionDep) -> None:
+    service = PlatformService(session)
+    await service.delete_oauth_app(admin_id=admin.id, provider_key=provider_key)
+    await session.commit()
+
+
+def _one(apps: list[OAuthAppView], provider_key: str) -> OAuthAppRow:
+    for app in apps:
+        if app.provider == provider_key:
+            return OAuthAppRow(**asdict(app))
+    raise NotFoundError(f"No such provider: '{provider_key}'.")

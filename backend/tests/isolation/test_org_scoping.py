@@ -22,6 +22,10 @@ GLOBAL_TABLES: dict[str, str] = {
     "platform_admins": "platform staff, deliberately separate from users",
     "platform_admin_audit": "platform-level audit trail, not customer data",
     "supported_providers": "the provider menu, curated platform-wide",
+    "platform_oauth_apps": (
+        "one Google/Microsoft app registration serves every company; "
+        "the per-company half is the refresh token in connections, which is scoped"
+    ),
     "policy_defaults": "platform-wide starting values, overridden per company",
 }
 

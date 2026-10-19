@@ -90,7 +90,7 @@ class ToggleRequest(BaseModel):
 async def available(ctx: CanRead, session: SessionDep) -> list[AvailableConnectionResponse]:
     return [
         AvailableConnectionResponse(**asdict(a))
-        for a in ConnectionService(session, ctx.org_id).available()
+        for a in await ConnectionService(session, ctx.org_id).available()
     ]
 
 
@@ -110,7 +110,7 @@ async def list_connections(ctx: CanRead, session: SessionDep) -> list[Connection
     summary="Begin a one-click connection",
 )
 async def oauth_start(kind: str, ctx: CanManage, session: SessionDep) -> OAuthStartResponse:
-    url = ConnectionService(session, ctx.org_id).start_oauth(kind, user_id=ctx.user_id)
+    url = await ConnectionService(session, ctx.org_id).start_oauth(kind, user_id=ctx.user_id)
     return OAuthStartResponse(authorize_url=url)
 
 
