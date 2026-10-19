@@ -100,7 +100,6 @@ export async function refresh(): Promise<boolean> {
 
 /** Subscribe to a run's live events. Resumes from the last seq seen. */
 export function streamRun(
-  orgId: string,
   runId: string,
   onEvent: (event: RunEvent) => void,
   lastSeq = 0,
@@ -108,7 +107,7 @@ export function streamRun(
   // EventSource cannot set an Authorization header, so the token goes
   // in the query string. Acceptable only because it is short-lived;
   // a long-lived credential must never travel in a URL.
-  const url = `${BASE}/orgs/${orgId}/runs/${runId}/events?last_event_id=${lastSeq}`;
+  const url = `${BASE}/me/runs/${runId}/events?last_event_id=${lastSeq}`;
   const source = new EventSource(url, { withCredentials: true });
 
   source.onmessage = (message) => {
@@ -126,25 +125,12 @@ export function streamRun(
 
 // ---------------------------------------------------------------- types
 
-export interface Org {
-  id: string;
-  name: string;
-  slug: string;
-  role: "admin" | "member";
-}
-
 export interface Me {
   id: string;
   email: string;
   full_name: string | null;
-  organizations: Org[];
-}
-
-export interface Member {
-  id: string;
-  email: string;
-  full_name: string | null;
-  role: "admin" | "member";
+  /** The cap on AI Employees for this account, set by the platform. */
+  max_employees: number;
 }
 
 export type EmployeeStatus = "draft" | "active" | "paused" | "archived";
@@ -330,14 +316,13 @@ export interface EmbeddingConfig {
   memories_needing_reembedding: number;
 }
 
-export interface Company {
+export interface Person {
   id: string;
-  name: string;
-  slug: string;
-  status: string;
+  email: string;
+  full_name: string | null;
+  active: boolean;
   max_employees: number;
   employees_used: number;
-  member_count: number;
 }
 
 export interface ConnectionField {

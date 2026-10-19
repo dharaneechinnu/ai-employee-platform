@@ -15,7 +15,6 @@ import {
   useToast,
 } from "../components/ui";
 import { ApiError, api, type PolicyRow, type ToolEntry } from "../lib/api";
-import { useAuth } from "../lib/auth";
 import { effectLabel, learnToolLabels, packLabel, plainReason, toolLabel } from "../lib/labels";
 
 /**
@@ -74,7 +73,6 @@ function Segmented({
 }
 
 export default function Policies() {
-  const { org } = useAuth();
   const toast = useToast();
   const [rows, setRows] = useState<PolicyRow[] | null>(null);
   const [tools, setTools] = useState<ToolEntry[]>([]);
@@ -84,9 +82,8 @@ export default function Policies() {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    if (!org) return;
-    setRows(await api.get<PolicyRow[]>(`/orgs/${org.id}/policies`));
-    const catalogue = await api.get<ToolEntry[]>(`/orgs/${org.id}/tools`);
+    setRows(await api.get<PolicyRow[]>(`/me/policies`));
+    const catalogue = await api.get<ToolEntry[]>(`/me/tools`);
     learnToolLabels(catalogue);
     setTools(catalogue);
   }
@@ -94,17 +91,16 @@ export default function Policies() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org?.id]);
+  }, ["me"]);
 
   async function save(
     rule: { scope: "pack" | "tool"; scope_value: string; side_effect: string | null },
     setting: Setting,
     label: string,
   ) {
-    if (!org) return;
     setError(null);
     try {
-      await api.put(`/orgs/${org.id}/policies`, { ...rule, setting });
+      await api.put(`/me/policies`, { ...rule, setting });
       setFlash(label);
       window.setTimeout(() => setFlash((current) => (current === label ? null : current)), 1200);
       toast(`${label}: ${SETTING_LABEL[setting]}.`);
@@ -115,8 +111,7 @@ export default function Policies() {
   }
 
   async function reset() {
-    if (!org) return;
-    await api.post(`/orgs/${org.id}/policies/reset`);
+    await api.post(`/me/policies/reset`);
     toast("Permissions reset to the platform defaults.", "info");
     await load();
   }
@@ -216,10 +211,9 @@ export default function Policies() {
                       </span>
                     )}
                   </div>
-                  {org && (
+                  {(
                     <PermissionChoice
                       key={`${tool.name}-${tool.effective_setting}`}
-                      orgId={org.id}
                       tool={tool}
                       onSaved={() => void load()}
                     />

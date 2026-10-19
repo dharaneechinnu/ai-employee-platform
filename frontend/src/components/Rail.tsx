@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { DOCKS, DOCK_LABEL, type Dock, dockForPoint } from "../lib/dock";
-import { useAuth, useIsAdmin } from "../lib/auth";
+import { useAuth } from "../lib/auth";
 import { BrandMark, type BrandState } from "./BrandMark";
 import { Icon, type IconName } from "./icons";
 import InboxBell from "./InboxBell";
@@ -48,7 +48,6 @@ const ITEMS: RailItem[] = [
   { to: "/approvals", label: "Approvals", icon: "approvals", adminOnly: true },
 
   { to: "/memory", label: "Memory", icon: "memory", adminOnly: false, startsGroup: true },
-  { to: "/members", label: "Members", icon: "members", adminOnly: false },
 
   { to: "/connections", label: "Connections", icon: "link", adminOnly: true, startsGroup: true },
   { to: "/providers", label: "AI Providers", icon: "providers", adminOnly: true },
@@ -67,8 +66,7 @@ export default function Rail({
   running: number;
   waiting: number;
 }) {
-  const { me, org, logout, switchOrg } = useAuth();
-  const isAdmin = useIsAdmin();
+  const { me, logout } = useAuth();
   const navigate = useNavigate();
 
   const [dragging, setDragging] = useState(false);
@@ -77,7 +75,7 @@ export default function Rail({
   const moved = useRef(false);
 
   const horizontal = dock === "bottom";
-  const items = ITEMS.filter((item) => isAdmin || !item.adminOnly);
+  const items = ITEMS.filter((item) => true || !item.adminOnly);
 
   const state: BrandState = waiting > 0 ? "waiting" : running > 0 ? "running" : "idle";
 
@@ -201,7 +199,7 @@ export default function Rail({
         <div className="rail-end" data-rail-menu>
           {/* Before the account button, because it is the thing people
               come back to the screen to check. */}
-          <InboxBell orgId={org?.id} isAdmin={isAdmin} dock={dock} />
+          <InboxBell dock={dock} />
 
           <button
             type="button"
@@ -217,30 +215,21 @@ export default function Rail({
 
           {menuOpen && (
             <div role="menu" className={`rail-menu ${MENU_SIDE[dock]}`}>
-              {me && org && (
-                <label className="rail-menu-org">
-                  <Avatar name={org.name} size={28} rounded="rounded-[9px]" />
+              {/* No company to switch between: the account is the
+                  scope. What used to be a switcher is simply who you
+                  are signed in as. */}
+              {me && (
+                <div className="rail-menu-org">
+                  <Avatar name={me.full_name || me.email} size={28} rounded="rounded-[9px]" />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm font-medium">{org.name}</span>
-                    <span className="text-xs capitalize text-accent-text">{org.role}</span>
+                    <span className="truncate text-sm font-medium">
+                      {me.full_name || me.email}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {me.max_employees} AI Employee{me.max_employees === 1 ? "" : "s"} included
+                    </span>
                   </span>
-                  {me.organizations.length > 1 && (
-                    <Icon name="chevrons" size={15} className="text-muted" />
-                  )}
-                  <select
-                    aria-label="Switch company"
-                    value={org.id}
-                    onChange={(e) => switchOrg(e.target.value)}
-                    disabled={me.organizations.length < 2}
-                    className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-default"
-                  >
-                    {me.organizations.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                </div>
               )}
 
               {/* Dragging is the quick way; this is the one that works

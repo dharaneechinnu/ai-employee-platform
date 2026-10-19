@@ -51,11 +51,9 @@ function recordingType(): string | undefined {
 }
 
 export default function VoiceInput({
-  orgId,
   onText,
   onError,
 }: {
-  orgId: string;
   onText: (text: string) => void;
   onError: (message: string | null) => void;
 }) {
@@ -67,7 +65,7 @@ export default function VoiceInput({
   useEffect(() => {
     let live = true;
     api
-      .get<{ engine: Engine }>(`/orgs/${orgId}/speech`)
+      .get<{ engine: Engine }>(`/me/speech`)
       .then((r) => {
         if (!live) return;
         // Whisper needs a recorder; without one, fall back to the browser.
@@ -80,7 +78,7 @@ export default function VoiceInput({
       live = false;
       stopRef.current?.();
     };
-  }, [orgId]);
+  }, ["me"]);
 
   // The timer, and the automatic stop at the limit.
   useEffect(() => {
@@ -119,7 +117,7 @@ export default function VoiceInput({
       }
       setPhase("transcribing");
       try {
-        const { text } = await api.upload<{ text: string }>(`/orgs/${orgId}/speech/transcribe`, blob);
+        const { text } = await api.upload<{ text: string }>(`/me/speech/transcribe`, blob);
         if (text) onText(text);
         else onError("No speech was heard. Try again a little closer to the microphone.");
       } catch (err) {

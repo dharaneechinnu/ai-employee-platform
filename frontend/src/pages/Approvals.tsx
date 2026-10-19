@@ -17,7 +17,6 @@ import {
 import { effectLabel, formatDateTime, toolAction, toolLabel } from "../lib/labels";
 import { notifyActivity } from "../lib/activity";
 import { ApiError, api, type Approval } from "../lib/api";
-import { useAuth } from "../lib/auth";
 
 /**
  * Phase 5. The reviewer sees the full proposed action, never only a
@@ -31,15 +30,13 @@ import { useAuth } from "../lib/auth";
 const REFRESH_MS = 20_000;
 
 export default function Approvals() {
-  const { org } = useAuth();
   const toast = useToast();
   const [items, setItems] = useState<Approval[] | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
   const [, setNow] = useState(Date.now());
 
   async function load() {
-    if (!org) return;
-    setItems(await api.get<Approval[]>(`/orgs/${org.id}/approvals`));
+    setItems(await api.get<Approval[]>(`/me/approvals`));
   }
 
   useEffect(() => {
@@ -52,13 +49,12 @@ export default function Approvals() {
       window.clearInterval(tick);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org?.id]);
+  }, ["me"]);
 
   async function decide(approval: Approval, approve: boolean) {
-    if (!org) return;
     setDeciding(approval.id);
     try {
-      await api.post(`/orgs/${org.id}/approvals/${approval.id}/${approve ? "approve" : "reject"}`);
+      await api.post(`/me/approvals/${approval.id}/${approve ? "approve" : "reject"}`);
       setItems((current) => current?.filter((a) => a.id !== approval.id) ?? null);
       toast(
         approve

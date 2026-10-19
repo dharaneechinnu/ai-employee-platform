@@ -27,11 +27,9 @@ const PACKS: Record<string, { label: string; icon: IconName }> = {
 
 
 export function ToolPicker({
-  orgId,
   value,
   onChange,
 }: {
-  orgId: string;
   value: string[];
   onChange: (next: string[]) => void;
 }) {
@@ -40,14 +38,14 @@ export function ToolPicker({
 
   useEffect(() => {
     void Promise.all([
-      api.get<ToolEntry[]>(`/orgs/${orgId}/tools`),
-      api.get<ConnectionItem[]>(`/orgs/${orgId}/connections`).catch(() => [] as ConnectionItem[]),
+      api.get<ToolEntry[]>(`/me/tools`),
+      api.get<ConnectionItem[]>(`/me/connections`).catch(() => [] as ConnectionItem[]),
     ]).then(([catalogue, connections]) => {
       learnToolLabels(catalogue);
       setTools(catalogue.filter((t) => !t.permanently_blocked));
       setConnected(new Set(connections.filter((c) => c.enabled && c.status !== "needs_reconnect").map((c) => c.kind)));
     });
-  }, [orgId]);
+  }, ["me"]);
 
   if (!tools) return <div className="skeleton h-24 rounded-xl" />;
 
@@ -121,7 +119,6 @@ export function ToolPicker({
                   {chosen.has(tool.name) && (
                     <div className="pl-[26px]">
                       <PermissionChoice
-                        orgId={orgId}
                         tool={tool}
                         size="sm"
                         onSaved={(setting) =>

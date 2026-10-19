@@ -17,7 +17,6 @@ import {
 } from "../components/ui";
 import { ApiError, api, type EmbeddingConfig, type MemoryItem } from "../lib/api";
 import { formatDateTime } from "../lib/labels";
-import { useAuth, useIsAdmin } from "../lib/auth";
 
 interface SearchHit {
   id: string;
@@ -38,8 +37,6 @@ type Scope = "all" | "org" | "employee";
 const KIND_TONE: Record<string, Tone> = { fact: "run", correction: "ask", summary: "ok", document: "brand" };
 
 export default function Memory() {
-  const { org } = useAuth();
-  const isAdmin = useIsAdmin();
   const toast = useToast();
 
   const [items, setItems] = useState<MemoryItem[] | null>(null);
@@ -54,19 +51,17 @@ export default function Memory() {
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    if (!org) return;
-    setItems(await api.get<MemoryItem[]>(`/orgs/${org.id}/memory`));
-    setConfig(await api.get<EmbeddingConfig>(`/orgs/${org.id}/embedding-config`));
+    setItems(await api.get<MemoryItem[]>(`/me/memory`));
+    setConfig(await api.get<EmbeddingConfig>(`/me/embedding-config`));
   }
 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org?.id]);
+  }, ["me"]);
 
   async function search(e: React.FormEvent) {
     e.preventDefault();
-    if (!org) return;
     if (!query.trim()) {
       setHits(null);
       setSearched("");
@@ -75,7 +70,7 @@ export default function Memory() {
     setError(null);
     setBusy(true);
     try {
-      setHits(await api.post<SearchHit[]>(`/orgs/${org.id}/memory/search`, { query, limit: 10 }));
+      setHits(await api.post<SearchHit[]>(`/me/memory/search`, { query, limit: 10 }));
       setSearched(query.trim());
     } catch (err) {
       // A mismatch between embedding models is surfaced, never papered
@@ -88,9 +83,9 @@ export default function Memory() {
   }
 
   async function add() {
-    if (!org || !draft.trim()) return;
+    if (!draft.trim()) return;
     try {
-      await api.post(`/orgs/${org.id}/memory`, { content: draft, kind });
+      await api.post(`/me/memory`, { content: draft, kind });
       setDraft("");
       toast("Remembered. Every AI Employee can recall it now.");
       await load();
@@ -100,9 +95,8 @@ export default function Memory() {
   }
 
   async function forget(item: MemoryItem) {
-    if (!org) return;
     try {
-      await api.del(`/orgs/${org.id}/memory/${item.id}`);
+      await api.del(`/me/memory/${item.id}`);
       setItems((current) => current?.filter((m) => m.id !== item.id) ?? null);
       setHits((current) => current?.filter((h) => h.id !== item.id) ?? null);
       toast("Forgotten.", "info");
@@ -112,8 +106,7 @@ export default function Memory() {
   }
 
   async function reembed() {
-    if (!org) return;
-    await api.post(`/orgs/${org.id}/embedding-config/reembed`);
+    await api.post(`/me/embedding-config/reembed`);
     setError(null);
     toast("Refreshing search. It finishes in the background.", "info");
     await load();
@@ -188,7 +181,7 @@ export default function Memory() {
                           matched by {hit.matched_by}
                         </Chip>
                       }
-                      onForget={isAdmin && byId.get(hit.id) ? () => void forget(byId.get(hit.id)!) : undefined}
+                      onForget={byId.get(hit.id) ? () => void forget(byId.get(hit.id)!) : undefined}
                     />
                   ))
                 )}
@@ -227,7 +220,7 @@ export default function Memory() {
                           </span>
                         </>
                       }
-                      onForget={isAdmin ? () => void forget(item) : undefined}
+                      onForget={true ? () => void forget(item) : undefined}
                     />
                   ))
                 )}
@@ -236,7 +229,7 @@ export default function Memory() {
           </section>
 
           <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-3.5">
-            {isAdmin && (
+            {(
               <form
                 data-coach="memory-teach"
                 className="card rise flex flex-col gap-3.5 p-5"
@@ -276,7 +269,7 @@ export default function Memory() {
                 <div className="flex flex-wrap items-center gap-2.5 text-[13px] text-ask-text">
                   <Icon name="warn" size={16} />
                   {config.memories_needing_reembedding} memories can't be found by meaning until they are refreshed.
-                  {isAdmin && (
+                  {(
                     <Button size="sm" variant="ghost" onClick={() => void reembed()}>
                       Refresh now
                     </Button>

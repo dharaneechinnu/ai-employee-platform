@@ -16,7 +16,6 @@ import {
 } from "../components/ui";
 import { ApiError, api, type ConnectedProvider, type ProviderOption } from "../lib/api";
 import { formatDateTime } from "../lib/labels";
-import { useAuth } from "../lib/auth";
 
 /**
  * Phase 3. Bring your own key: each company pays its own model costs.
@@ -32,7 +31,6 @@ const CUSTOM = "custom";
 const rank = (key: string) => (ORDER.includes(key) ? ORDER.indexOf(key) : ORDER.length);
 
 export default function Providers() {
-  const { org } = useAuth();
   const toast = useToast();
   const [available, setAvailable] = useState<ProviderOption[] | null>(null);
   const [connected, setConnected] = useState<ConnectedProvider[]>([]);
@@ -46,28 +44,26 @@ export default function Providers() {
   const [saving, setSaving] = useState(false);
 
   async function load() {
-    if (!org) return;
     // Free tiers first, so a new company's first choice costs nothing.
-    const options = (await api.get<ProviderOption[]>(`/orgs/${org.id}/providers/available`)).sort(
+    const options = (await api.get<ProviderOption[]>(`/me/providers/available`)).sort(
       (a, b) => rank(a.key) - rank(b.key),
     );
     setAvailable(options);
-    setConnected(await api.get<ConnectedProvider[]>(`/orgs/${org.id}/providers`));
+    setConnected(await api.get<ConnectedProvider[]>(`/me/providers`));
     setSelected((current) => current || options[0]?.key || "");
   }
 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org?.id]);
+  }, ["me"]);
 
   async function connect(e: React.FormEvent) {
     e.preventDefault();
-    if (!org) return;
     setError(null);
     setSaving(true);
     try {
-      await api.post(`/orgs/${org.id}/providers`, {
+      await api.post(`/me/providers`, {
         provider_key: selected,
         api_key: apiKey,
         model: model || null,
@@ -87,10 +83,9 @@ export default function Providers() {
   }
 
   async function test(provider: ConnectedProvider) {
-    if (!org) return;
     setTesting(provider.provider_key);
     try {
-      await api.post(`/orgs/${org.id}/providers/${provider.provider_key}/test`);
+      await api.post(`/me/providers/${provider.provider_key}/test`);
       await load();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "The test could not run.", "bad");
@@ -100,8 +95,7 @@ export default function Providers() {
   }
 
   async function disconnect(provider: ConnectedProvider) {
-    if (!org) return;
-    await api.del(`/orgs/${org.id}/providers/${provider.provider_key}`);
+    await api.del(`/me/providers/${provider.provider_key}`);
     toast(`${provider.display_name} removed.`, "info");
     await load();
   }
@@ -197,7 +191,7 @@ export default function Providers() {
                   )}
 
                   <div className="grid grid-cols-2 gap-2.5 text-[13px]">
-                    <ModelChoice orgId={org!.id} provider={provider} onSaved={() => void load()} />
+                    <ModelChoice provider={provider} onSaved={() => void load()} />
                     <div>
                       <div className="text-dim">Last tested</div>
                       <div className="font-mono" title={provider.last_tested_at ? formatDateTime(provider.last_tested_at) : undefined}>
@@ -293,7 +287,13 @@ export default function Providers() {
  * the key can use, so nobody has to know model ids by heart; typing a
  * name still works for a provider that cannot list.
  */
-function ModelChoice({ orgId, provider, onSaved }: { orgId: string; provider: ConnectedProvider; onSaved: () => void }) {
+function ModelChoice({
+  provider,
+  onSaved,
+}: {
+  provider: ConnectedProvider;
+  onSaved: () => void;
+}) {
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(provider.default_model ?? "");
@@ -304,7 +304,7 @@ function ModelChoice({ orgId, provider, onSaved }: { orgId: string; provider: Co
   async function loadOptions() {
     setLoading(true);
     try {
-      setOptions(await api.get<string[]>(`/orgs/${orgId}/providers/${provider.provider_key}/models`));
+      setOptions(await api.get<string[]>(`/me/providers/${provider.provider_key}/models`));
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Could not load the model list.", "bad");
     } finally {
@@ -315,7 +315,7 @@ function ModelChoice({ orgId, provider, onSaved }: { orgId: string; provider: Co
   async function save(model: string | null) {
     setSaving(true);
     try {
-      await api.put(`/orgs/${orgId}/providers/${provider.provider_key}/model`, { model });
+      await api.put(`/me/providers/${provider.provider_key}/model`, { model });
       toast("Model saved. Test the connection to check it works.");
       setEditing(false);
       onSaved();

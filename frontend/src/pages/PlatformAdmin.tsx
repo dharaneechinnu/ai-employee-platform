@@ -15,16 +15,16 @@ import {
   statusTone,
   useToast,
 } from "../components/ui";
-import { ApiError, type Company } from "../lib/api";
+import { ApiError, type Person } from "../lib/api";
 import { AuthStage } from "./Login";
 
 /**
  * The Platform Admin control room.
  *
  * Kept entirely separate from the customer app: a different token
- * type, its own sign-in, and no shared session. A Company Admin's
+ * type, its own sign-in, and no shared session. A Person Admin's
  * token is rejected here even though its holder is an admin of their
- * own company. It also looks different on purpose: the .staff class
+ * own person. It also looks different on purpose: the .staff class
  * turns the blue-violet accent jade, so staff always know where they are.
  *
  * Note what is absent. There is no way to read a customer's tasks,
@@ -34,7 +34,7 @@ import { AuthStage } from "./Login";
 
 const BASE = "/api/v1/platform";
 
-/** One line of the diary: who did what to which company, never content. */
+/** One line of the diary: who did what to which person, never content. */
 interface AuditEntry {
   id: string;
   admin_email: string | null;
@@ -66,7 +66,7 @@ interface OAuthApp {
   from_environment: boolean;
 }
 
-/** One connection, as it stands for one company. */
+/** One connection, as it stands for one person. */
 interface ConnectionAccess {
   kind: string;
   display_name: string;
@@ -76,7 +76,7 @@ interface ConnectionAccess {
   note: string | null;
 }
 
-interface CompanyDetail extends Company {
+interface PersonDetail extends Person {
   created_at: string;
   task_count: number;
   providers: ProviderStatus[];
@@ -108,7 +108,7 @@ export default function PlatformAdmin() {
     <div className="staff min-h-screen bg-bg text-ink">
       <div aria-hidden="true" className="h-1.5" style={{ background: "repeating-linear-gradient(-45deg,var(--accent) 0 14px,var(--bg) 14px 28px)", backgroundSize: "40px 40px" }} />
       {signedIn ? (
-        <Companies
+        <People
           onSignOut={() => {
             platformToken = null;
             setSignedIn(false);
@@ -149,9 +149,9 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
       <AuthStage
         badge="STAFF ONLY"
         headline="Platform control room."
-        ticker="Create, limit and suspend companies. Counts and health only."
+        ticker="Create, limit and suspend accounts. Counts and health only."
         points={[
-          "Create companies and send the first invite",
+          "Create accounts and send the setup link",
           "Set how many AI Employees each may run",
           "Suspend an account; customer data stays private",
         ]}
@@ -167,7 +167,7 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
               {busy ? "Checking…" : "Enter control room"}
             </button>
             <p className="border-t border-line pt-3.5 text-[13px] leading-normal text-dim">
-              This account can create and suspend every company. There is no second factor,
+              This account can create and suspend every person. There is no second factor,
               so the password is the whole key — keep it in a password manager and never reuse it.
             </p>
           </form>
@@ -177,38 +177,37 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
-// -------------------------------------------------------------- companies
+// ----------------------------------------------------------------- people
 
 type Filter = "all" | "active" | "suspended";
 
-function Companies({ onSignOut }: { onSignOut: () => void }) {
+function People({ onSignOut }: { onSignOut: () => void }) {
   const toast = useToast();
-  const [companies, setCompanies] = useState<Company[] | null>(null);
+  const [people, setPeople] = useState<Person[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [setupLink, setSetupLink] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [view, setView] = useState<"companies" | "connections" | "audit">("companies");
+  const [view, setView] = useState<"people" | "connections" | "audit">("people");
   const [apps, setApps] = useState<OAuthApp[] | null>(null);
   const [audit, setAudit] = useState<AuditEntry[] | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<CompanyDetail | null>(null);
+  const [detail, setDetail] = useState<PersonDetail | null>(null);
   const [access, setAccess] = useState<ConnectionAccess[] | null>(null);
 
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [limit, setLimit] = useState("5");
 
   async function load() {
-    setCompanies(await call<Company[]>("/companies"));
+    setPeople(await call<Person[]>("/people"));
   }
 
   useEffect(() => {
-    void load().catch(() => setError("Could not load companies."));
+    void load().catch(() => setError("Could not load people."));
   }, []);
 
   // The diary is fetched the first time it is opened, not on sign in:
@@ -229,20 +228,20 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, audit]);
 
-  /** Opens one company's counts. A second click closes it again. */
-  async function openDetail(company: Company) {
-    if (openId === company.id) {
+  /** Opens one person's counts. A second click closes it again. */
+  async function openDetail(person: Person) {
+    if (openId === person.id) {
       setOpenId(null);
       return;
     }
-    setOpenId(company.id);
+    setOpenId(person.id);
     setDetail(null);
     setAccess(null);
     try {
-      setDetail(await call<CompanyDetail>(`/companies/${company.id}`));
-      setAccess(await call<ConnectionAccess[]>(`/companies/${company.id}/connections`));
+      setDetail(await call<PersonDetail>(`/people/${person.id}`));
+      setAccess(await call<ConnectionAccess[]>(`/people/${person.id}/connections`));
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Could not load that company.", "bad");
+      toast(err instanceof ApiError ? err.message : "Could not load that person.", "bad");
       setOpenId(null);
     }
   }
@@ -252,18 +251,16 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
     setError(null);
     setBusy("create");
     try {
-      const created = await call<{ invite_token: string }>("/companies", {
+      const created = await call<{ setup_token: string }>("/people", {
         name,
-        slug,
         first_admin_email: adminEmail,
         max_employees: Number(limit),
       });
       // Shown once. Only the hash is stored, so a lost link means a
       // new invite rather than a lookup.
-      setInviteLink(`${window.location.origin}/login?token=${created.invite_token}`);
+      setSetupLink(`${window.location.origin}/login?token=${created.setup_token}`);
       toast(`${name} created.`);
       setName("");
-      setSlug("");
       setAdminEmail("");
       await load();
     } catch (err) {
@@ -273,12 +270,12 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
     }
   }
 
-  async function setStatus(company: Company, action: "suspend" | "reactivate") {
-    setBusy(company.id);
+  async function setStatus(person: Person, action: "suspend" | "restore") {
+    setBusy(person.id);
     try {
-      await call(`/companies/${company.id}/${action}`, {});
+      await call(`/people/${person.id}/${action}`, {});
       setConfirming(null);
-      toast(action === "suspend" ? `${company.name} suspended.` : `${company.name} reactivated.`, action === "suspend" ? "info" : "ok");
+      toast(action === "suspend" ? `${(person.full_name || person.email)} suspended.` : `${(person.full_name || person.email)} restored.`, action === "suspend" ? "info" : "ok");
       await load();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Could not change that.", "bad");
@@ -287,14 +284,14 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
     }
   }
 
-  async function setLimitFor(company: Company, value: number) {
-    const next = Math.max(company.employees_used, value);
-    if (next === company.max_employees) return;
+  async function setLimitFor(person: Person, value: number) {
+    const next = Math.max(person.employees_used, value);
+    if (next === person.max_employees) return;
     // Optimistic: the stepper should feel instant; a failure reloads.
-    setCompanies((current) => current?.map((c) => (c.id === company.id ? { ...c, max_employees: next } : c)) ?? null);
+    setPeople((current) => current?.map((c) => (c.id === person.id ? { ...c, max_employees: next } : c)) ?? null);
     try {
-      await call(`/companies/${company.id}/limits`, { max_employees: next }, "PATCH");
-      toast(`${company.name} limit set to ${next}.`);
+      await call(`/people/${person.id}/limits`, { max_employees: next }, "PATCH");
+      toast(`${(person.full_name || person.email)} limit set to ${next}.`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Could not change the limit.", "bad");
       await load();
@@ -302,29 +299,31 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
   }
 
   const stats = useMemo(() => {
-    const list = companies ?? [];
+    const list = people ?? [];
     return {
       total: list.length,
-      active: list.filter((c) => c.status === "active").length,
-      suspended: list.filter((c) => c.status === "suspended").length,
+      active: list.filter((c) => c.active).length,
+      suspended: list.filter((c) => !c.active).length,
       used: list.reduce((n, c) => n + c.employees_used, 0),
       seats: list.reduce((n, c) => n + c.max_employees, 0),
     };
-  }, [companies]);
+  }, [people]);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return (companies ?? []).filter(
+    return (people ?? []).filter(
       (c) =>
-        (filter === "all" || c.status === filter) &&
-        (!term || c.name.toLowerCase().includes(term) || c.slug.toLowerCase().includes(term)),
+        (filter === "all" || (filter === "active") === c.active) &&
+        (!term ||
+          c.email.toLowerCase().includes(term) ||
+          (c.full_name ?? "").toLowerCase().includes(term)),
     );
-  }, [companies, filter, search]);
+  }, [people, filter, search]);
 
   async function copyLink() {
-    if (!inviteLink) return;
+    if (!setupLink) return;
     try {
-      await navigator.clipboard.writeText(inviteLink);
+      await navigator.clipboard.writeText(setupLink);
       toast("Invite link copied.");
     } catch {
       toast("Copy failed. Select the link and copy it by hand.", "bad");
@@ -351,14 +350,14 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
       <main className="mx-auto flex max-w-[1280px] flex-col gap-5 px-4 pb-16 pt-7 sm:px-6 lg:px-10" style={{ background: "var(--hero)" }}>
         <div className="rise flex flex-wrap items-center gap-4">
           <h1 className="font-display text-[30px] font-semibold tracking-[-0.025em]">
-            {view === "audit" ? "Audit log" : view === "connections" ? "One-click sign-in" : "Companies"}
+            {view === "audit" ? "Audit log" : view === "connections" ? "One-click sign-in" : "People"}
           </h1>
           <Tabs
             label="View"
             value={view}
             onChange={setView}
             items={[
-              { key: "companies", label: "Companies" },
+              { key: "people", label: "People" },
               { key: "connections", label: "One-click sign-in" },
               { key: "audit", label: "Audit log" },
             ]}
@@ -367,9 +366,9 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
             <Icon name="lock" size={16} className="text-accent-text" />
             Counts and health only. Customer content is not readable here, by design.
           </span>
-          {view === "companies" && (
+          {view === "people" && (
             <Button icon={creating ? "x" : "plus"} className="ml-auto" onClick={() => setCreating((v) => !v)} aria-expanded={creating}>
-              {creating ? "Close" : "New company"}
+              {creating ? "Close" : "New account"}
             </Button>
           )}
         </div>
@@ -378,12 +377,12 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
           <AuditLog entries={audit} />
         ) : view === "connections" ? (
           <OAuthApps apps={apps} onSaved={setApps} />
-        ) : !companies ? (
+        ) : !people ? (
           error ? <ErrorNote message={error} /> : <Spinner />
         ) : (
           <>
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
-              <Stat label="Companies" value={stats.total} delay={0.04} />
+              <Stat label="People" value={stats.total} delay={0.04} />
               <Stat label="Active" value={stats.active} tone="text-ok-text" delay={0.08} />
               <Stat label="Suspended" value={stats.suspended} tone="text-bad-text" delay={0.12} />
               <Stat label="AI Employee seats used" value={stats.used} suffix={` / ${stats.seats}`} delay={0.16} />
@@ -391,11 +390,10 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
 
             {creating && (
               <form onSubmit={create} className="card rise flex flex-col gap-4 border-accent-line p-5">
-                <h2 className="font-display text-lg font-semibold">New company</h2>
+                <h2 className="font-display text-lg font-semibold">New account</h2>
                 <div className="grid items-end gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
-                  <Input label="Company name" value={name} onChange={setName} required />
-                  <Input label="Slug" value={slug} onChange={setSlug} placeholder="acme" required mono />
-                  <Input label="First admin email" type="email" value={adminEmail} onChange={setAdminEmail} required />
+                  <Input label="Person name" value={name} onChange={setName} required />
+                  <Input label="Email" type="email" value={adminEmail} onChange={setAdminEmail} required />
                   <Input label="AI Employee limit" type="number" value={limit} onChange={setLimit} mono />
                   <Button type="submit" disabled={busy === "create"}>
                     {busy === "create" ? "Creating…" : "Create and get invite"}
@@ -406,16 +404,16 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
               </form>
             )}
 
-            {inviteLink && (
+            {setupLink && (
               <div role="status" className="card rise flex flex-col gap-2 border-accent-line bg-accent-soft p-4">
                 <span className="text-xs text-accent-text">Send this to the first admin. It is shown only once.</span>
                 <div className="flex items-center gap-2.5">
-                  <code className="min-w-0 flex-1 truncate font-mono text-[13px]">{inviteLink}</code>
+                  <code className="min-w-0 flex-1 truncate font-mono text-[13px]">{setupLink}</code>
                   <Button size="sm" variant="ghost" onClick={() => void copyLink()}>
                     <Icon name="copy" size={15} />
                     Copy
                   </Button>
-                  <button type="button" className="icon-btn h-9 w-9" aria-label="Dismiss" onClick={() => setInviteLink(null)}>
+                  <button type="button" className="icon-btn h-9 w-9" aria-label="Dismiss" onClick={() => setSetupLink(null)}>
                     <Icon name="x" size={16} />
                   </button>
                 </div>
@@ -433,55 +431,53 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
                   { key: "suspended", label: "Suspended", count: stats.suspended },
                 ]}
               />
-              <SearchBox value={search} onChange={setSearch} placeholder="Search by name or slug" label="Search companies" />
+              <SearchBox value={search} onChange={setSearch} placeholder="Search by name or email" label="Search people" />
             </div>
 
             <section className="card rise overflow-hidden">
               <div className="overflow-x-auto">
                 <div className="min-w-[940px]">
-                  <div className="grid grid-cols-[minmax(220px,1.4fr)_120px_90px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3 font-mono text-xs uppercase tracking-[0.1em] text-dim">
-                    <span>Company</span>
+                  <div className="grid grid-cols-[minmax(240px,1.6fr)_120px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3 font-mono text-xs uppercase tracking-[0.1em] text-dim">
+                    <span>Account</span>
                     <span>Status</span>
-                    <span>Members</span>
                     <span>AI Employees</span>
                     <span>Limit</span>
                     <span className="text-right">Actions</span>
                   </div>
                   {visible.length === 0 ? (
                     <div className="p-6">
-                      <Empty message="No companies match" hint="Try another filter or search term." />
+                      <Empty message="No people match" hint="Try another filter or search term." />
                     </div>
                   ) : (
-                    visible.map((company, i) => {
-                      const active = company.status === "active";
-                      const pct = company.max_employees ? Math.round((company.employees_used / company.max_employees) * 100) : 0;
+                    visible.map((person, i) => {
+                      const active = person.active;
+                      const pct = person.max_employees ? Math.round((person.employees_used / person.max_employees) * 100) : 0;
                       return (
                         <div
-                          key={company.id}
-                          className="slide-in grid grid-cols-[minmax(220px,1.4fr)_120px_90px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3.5 text-sm transition-colors last:border-0 hover:bg-raised"
+                          key={person.id}
+                          className="slide-in grid grid-cols-[minmax(240px,1.6fr)_120px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3.5 text-sm transition-colors last:border-0 hover:bg-raised"
                           style={{ animationDelay: `${Math.min(i, 10) * 0.04}s` }}
                         >
                           <button
                             type="button"
-                            onClick={() => void openDetail(company)}
-                            aria-expanded={openId === company.id}
+                            onClick={() => void openDetail(person)}
+                            aria-expanded={openId === person.id}
                             className="flex min-w-0 items-center gap-3 rounded-[10px] text-left transition-opacity hover:opacity-80"
                           >
-                            <Avatar name={company.name} size={34} rounded="rounded-[10px]" muted={!active} />
+                            <Avatar name={(person.full_name || person.email)} size={34} rounded="rounded-[10px]" muted={!active} />
                             <span className="flex min-w-0 flex-col">
-                              <span className="truncate font-medium">{company.name}</span>
-                              <span className="truncate font-mono text-xs text-dim">{company.slug}</span>
+                              <span className="truncate font-medium">{(person.full_name || person.email)}</span>
+                              <span className="truncate font-mono text-xs text-dim">{person.email}</span>
                             </span>
                             <Icon
                               name="arrow"
                               size={15}
-                              className={`shrink-0 text-dim transition-transform ${openId === company.id ? "rotate-90" : ""}`}
+                              className={`shrink-0 text-dim transition-transform ${openId === person.id ? "rotate-90" : ""}`}
                             />
                           </button>
                           <span>
-                            <Chip tone={statusTone(company.status)}>{company.status}</Chip>
+                            <Chip tone={statusTone((person.active ? "active" : "suspended"))}>{(person.active ? "active" : "suspended")}</Chip>
                           </span>
-                          <span className="font-mono">{company.member_count}</span>
                           <span className="flex items-center gap-2.5">
                             <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
                               <span
@@ -490,24 +486,24 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
                               />
                             </span>
                             <span className="font-mono text-[13px] text-muted">
-                              {company.employees_used}/{company.max_employees}
+                              {person.employees_used}/{person.max_employees}
                             </span>
                           </span>
                           <span className="inline-flex w-fit items-center overflow-hidden rounded-[10px] border border-line2">
                             <button
                               type="button"
-                              aria-label={`Lower limit for ${company.name}`}
-                              disabled={company.max_employees <= company.employees_used}
-                              onClick={() => void setLimitFor(company, company.max_employees - 1)}
+                              aria-label={`Lower limit for ${(person.full_name || person.email)}`}
+                              disabled={person.max_employees <= person.employees_used}
+                              onClick={() => void setLimitFor(person, person.max_employees - 1)}
                               className="h-9 w-9 bg-sunken text-base font-semibold text-muted transition-colors hover:bg-raised hover:text-accent-text disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               −
                             </button>
-                            <span className="min-w-[40px] text-center font-mono">{company.max_employees}</span>
+                            <span className="min-w-[40px] text-center font-mono">{person.max_employees}</span>
                             <button
                               type="button"
-                              aria-label={`Raise limit for ${company.name}`}
-                              onClick={() => void setLimitFor(company, company.max_employees + 1)}
+                              aria-label={`Raise limit for ${(person.full_name || person.email)}`}
+                              onClick={() => void setLimitFor(person, person.max_employees + 1)}
                               className="h-9 w-9 bg-sunken text-base font-semibold text-muted transition-colors hover:bg-raised hover:text-accent-text"
                             >
                               +
@@ -515,23 +511,25 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
                           </span>
                           <span className="flex justify-end">
                             {active ? (
-                              <Button size="sm" variant="danger-ghost" onClick={() => setConfirming(company.id)}>
+                              <Button size="sm" variant="danger-ghost" onClick={() => setConfirming(person.id)}>
                                 Suspend
                               </Button>
-                            ) : company.status === "suspended" ? (
-                              <Button size="sm" variant="ok" disabled={busy === company.id} onClick={() => void setStatus(company, "reactivate")}>
-                                Reactivate
+                            ) : (person.active ? "active" : "suspended") === "suspended" ? (
+                              <Button size="sm" variant="ok" disabled={busy === person.id} onClick={() => void setStatus(person, "restore")}>
+                                Restore
                               </Button>
                             ) : null}
                           </span>
-                          {confirming === company.id && (
-                            <div role="alertdialog" aria-label={`Confirm suspending ${company.name}`} className="rise col-span-full flex flex-wrap items-center gap-3 rounded-xl bg-bad-soft px-3.5 py-3">
+                          {confirming === person.id && (
+                            <div role="alertdialog" aria-label={`Confirm suspending ${(person.full_name || person.email)}`} className="rise col-span-full flex flex-wrap items-center gap-3 rounded-xl bg-bad-soft px-3.5 py-3">
                               <Icon name="warn" size={20} className="text-bad-text" />
                               <span className="min-w-[240px] flex-1">
-                                Suspend <b>{company.name}</b>? Its {company.member_count} members lose access and its{" "}
-                                {company.employees_used} AI Employees can no longer run. You can reactivate later.
+                                Suspend <b>{person.full_name || person.email}</b>? They cannot sign
+                                in, and their {person.employees_used} AI Employees stop running.
+                                Nothing of theirs is read or deleted, and you can restore the
+                                account later.
                               </span>
-                              <Button size="sm" variant="danger" disabled={busy === company.id} onClick={() => void setStatus(company, "suspend")}>
+                              <Button size="sm" variant="danger" disabled={busy === person.id} onClick={() => void setStatus(person, "suspend")}>
                                 Suspend now
                               </Button>
                               <Button size="sm" variant="ghost" onClick={() => setConfirming(null)}>
@@ -539,14 +537,13 @@ function Companies({ onSignOut }: { onSignOut: () => void }) {
                               </Button>
                             </div>
                           )}
-                          {openId === company.id && (
+                          {openId === person.id && (
                             <div className="rise col-span-full">
-                              <CompanyPanel
+                              <PersonPanel
                                 detail={detail}
                                 access={access}
                                 onAccess={setAccess}
-                                orgId={company.id}
-                              />
+                                />
                             </div>
                           )}
                         </div>
@@ -592,20 +589,18 @@ function Stat({
 // ------------------------------------------------------------ detail panel
 
 /**
- * Everything a Platform Admin may see about one company: how many, and
+ * Everything a Platform Admin may see about one person: how many, and
  * how healthy. There is no tab here for tasks, memory or keys, because
  * there is no endpoint that would fill one.
  */
-function CompanyPanel({
+function PersonPanel({
   detail,
   access,
   onAccess,
-  orgId,
 }: {
-  detail: CompanyDetail | null;
+  detail: PersonDetail | null;
   access: ConnectionAccess[] | null;
   onAccess: (rows: ConnectionAccess[]) => void;
-  orgId: string;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -615,7 +610,7 @@ function CompanyPanel({
     try {
       onAccess(
         await call<ConnectionAccess[]>(
-          `/companies/${orgId}/connections/${row.kind}`,
+          `/people/${"me"}/connections/${row.kind}`,
           {
             allowed,
             note:
@@ -630,8 +625,8 @@ function CompanyPanel({
         allowed === null
           ? `${row.display_name} follows the platform default again.`
           : allowed
-            ? `${row.display_name} opened for this company.`
-            : `${row.display_name} closed for this company.`,
+            ? `${row.display_name} opened for this person.`
+            : `${row.display_name} closed for this person.`,
         allowed === false ? "info" : "ok",
       );
     } catch (err) {
@@ -646,7 +641,6 @@ function CompanyPanel({
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-sunken p-4">
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))]">
-        <Fact label="Members" value={String(detail.member_count)} />
         <Fact label="AI Employees" value={`${detail.employees_used} / ${detail.max_employees}`} />
         <Fact label="Tasks ever run" value={String(detail.task_count)} />
         <Fact label="Customer since" value={new Date(detail.created_at).toLocaleDateString()} />
@@ -670,7 +664,7 @@ function CompanyPanel({
 
       <div className="flex flex-col gap-2 border-t border-line pt-3">
         <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
-          Connections this company may use
+          Connections this person may use
         </span>
         {!access ? (
           <Spinner rows={1} />
@@ -693,7 +687,7 @@ function CompanyPanel({
                     who cannot get back to it ends up with rulings they
                     never meant to make permanent. */}
                 {row.overridden ? (
-                  <span className="text-xs text-dim">set for this company</span>
+                  <span className="text-xs text-dim">set for this person</span>
                 ) : (
                   <span className="text-xs text-dim">follows the platform default</span>
                 )}
@@ -760,7 +754,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 function AuditLog({ entries }: { entries: AuditEntry[] | null }) {
   if (!entries) return <Spinner />;
   if (entries.length === 0) {
-    return <Empty message="Nothing recorded yet" hint="Every sign in, company created, limit changed and suspension lands here." />;
+    return <Empty message="Nothing recorded yet" hint="Every sign in, person created, limit changed and suspension lands here." />;
   }
 
   return (
@@ -805,9 +799,9 @@ function AuditLog({ entries }: { entries: AuditEntry[] | null }) {
  * Where the Google and Microsoft apps are registered.
  *
  * Both issue one app per *application*, not per customer, so this is
- * a platform setting: every company signs in through the same app and
+ * a platform setting: every person signs in through the same app and
  * grants it access to their own mailbox. Until it is set here, the
- * one-click buttons on every company's Connections page are disabled —
+ * one-click buttons on every person's Connections page are disabled —
  * and before this screen existed, the only way to set it was an
  * environment variable and a redeploy, which no Platform Admin can do.
  */
@@ -846,7 +840,7 @@ function OAuthApps({
       await call(`/oauth-apps/${app.provider}`, { client_id: clientId, client_secret: secret }, "PUT");
       setEditing(null);
       setSecret("");
-      toast(`${app.display_name} sign-in is on. Every company can connect it now.`);
+      toast(`${app.display_name} sign-in is on. Every person can connect it now.`);
       await reload();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not save that.");
@@ -861,7 +855,7 @@ function OAuthApps({
       await call(`/oauth-apps/${app.provider}`, { enabled: !app.enabled }, "PATCH");
       toast(
         app.enabled
-          ? `${app.display_name} paused. Companies already connected keep working.`
+          ? `${app.display_name} paused. People already connected keep working.`
           : `${app.display_name} is on again.`,
         app.enabled ? "info" : "ok",
       );
@@ -900,7 +894,7 @@ function OAuthApps({
       <p className="flex items-start gap-2.5 text-[13px] leading-normal text-muted">
         <Icon name="info" size={16} className="mt-0.5 shrink-0 text-accent-text" />
         <span>
-          One app per provider covers the whole platform. Each company then signs in with their own
+          One app per provider covers the whole platform. Each person then signs in with their own
           account and grants it access to their own mailbox — you never see their mail, only that
           they connected.
         </span>
@@ -926,7 +920,7 @@ function OAuthApps({
               <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px] leading-normal">
                 <Icon name="warn" className="shrink-0 text-ask-text" />
                 <span>
-                  The <b>Connect {app.display_name}</b> button is greyed out on every company's
+                  The <b>Connect {app.display_name}</b> button is greyed out on every person's
                   Connections page until this is set.
                 </span>
               </div>

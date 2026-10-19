@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Icon } from "../components/icons";
 import { Button, Chip, ErrorNote, Input, PageBody, PageHeader, Spinner, Switch, useToast } from "../components/ui";
 import { ApiError, api, type NotificationSettings } from "../lib/api";
-import { useAuth } from "../lib/auth";
 
 /**
  * Where the company hears about its runs: an email to the people
@@ -20,7 +19,6 @@ const EVENTS: { key: EventKey; title: string; who: string }[] = [
 ];
 
 export default function Notifications() {
-  const { org } = useAuth();
   const toast = useToast();
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [webhook, setWebhook] = useState("");
@@ -29,17 +27,16 @@ export default function Notifications() {
   const [testing, setTesting] = useState(false);
 
   useEffect(() => {
-    if (!org) return;
-    void api.get<NotificationSettings>(`/orgs/${org.id}/notifications`).then(setSettings);
-  }, [org?.id]);
+    void api.get<NotificationSettings>(`/me/notifications`).then(setSettings);
+  }, ["me"]);
 
   async function save(next: Partial<NotificationSettings> & { slack_webhook_url?: string; clear_slack_webhook?: boolean }) {
-    if (!org || !settings) return;
+    if (!settings) return;
     setError(null);
     setSaving(true);
     try {
       const merged = { ...settings, ...next };
-      const saved = await api.put<NotificationSettings>(`/orgs/${org.id}/notifications`, {
+      const saved = await api.put<NotificationSettings>(`/me/notifications`, {
         email_enabled: merged.email_enabled,
         slack_enabled: merged.slack_enabled,
         on_approval_requested: merged.on_approval_requested,
@@ -68,10 +65,9 @@ export default function Notifications() {
   }
 
   async function sendTest() {
-    if (!org) return;
     setTesting(true);
     try {
-      const result = await api.post<{ email: string; slack: string }>(`/orgs/${org.id}/notifications/test`);
+      const result = await api.post<{ email: string; slack: string }>(`/me/notifications/test`);
       const failed = [result.email, result.slack].some((r) => r.startsWith("failed") || r.startsWith("unavailable"));
       toast(`Email: ${result.email}. Slack: ${result.slack}.`, failed ? "bad" : "ok");
     } finally {

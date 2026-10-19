@@ -29,51 +29,46 @@ const SEEN_KEY = "ai-employees.inbox.seen";
 const POLL_MS = 15_000;
 const EVENT = "activity-changed";
 
-function readSeen(orgId: string): Record<string, string> {
+function readSeen(key: string): Record<string, string> {
   try {
-    const raw = window.localStorage.getItem(`${SEEN_KEY}.${orgId}`);
+    const raw = window.localStorage.getItem(`${SEEN_KEY}.${key}`);
     return raw ? (JSON.parse(raw) as Record<string, string>) : {};
   } catch {
     return {};
   }
 }
 
-function writeSeen(orgId: string, seen: Record<string, string>): void {
+function writeSeen(key: string, seen: Record<string, string>): void {
   try {
     // Only the last 200 matter; without a cap this grows forever on a
     // busy workspace and eventually throws on write.
     const trimmed = Object.fromEntries(Object.entries(seen).slice(-200));
-    window.localStorage.setItem(`${SEEN_KEY}.${orgId}`, JSON.stringify(trimmed));
+    window.localStorage.setItem(`${SEEN_KEY}.${key}`, JSON.stringify(trimmed));
   } catch {
     // A workspace that cannot remember what you read is mildly
     // annoying; one that fails to render is not acceptable.
   }
 }
 
-export function useInbox(orgId: string | undefined, isAdmin: boolean) {
+export function useInbox() {
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [seen, setSeen] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (orgId) setSeen(readSeen(orgId));
-  }, [orgId]);
+    setSeen(readSeen("me"));
+  }, []);
 
   useEffect(() => {
-    if (!orgId) return;
     let cancelled = false;
 
     async function load() {
       try {
-        const list = await api.get<TaskListItem[]>(`/orgs/${orgId}/tasks`);
+        const list = await api.get<TaskListItem[]>(`/me/tasks`);
         if (cancelled) return;
         setTasks(list);
-        if (isAdmin) {
-          const waiting = await api.get<Approval[]>(`/orgs/${orgId}/approvals`);
-          if (!cancelled) setApprovals(waiting);
-        } else {
-          setApprovals([]);
-        }
+        const waiting = await api.get<Approval[]>(`/me/approvals`);
+        if (!cancelled) setApprovals(waiting);
       } catch {
         // Keep whatever we had. A bell that empties itself on one
         // failed poll is worse than a slightly stale one.
@@ -89,7 +84,7 @@ export function useInbox(orgId: string | undefined, isAdmin: boolean) {
       window.clearInterval(timer);
       window.removeEventListener(EVENT, onChange);
     };
-  }, [orgId, isAdmin]);
+  }, []);
 
   const items = useMemo<InboxItem[]>(() => {
     const out: InboxItem[] = [];
@@ -124,26 +119,24 @@ export function useInbox(orgId: string | undefined, isAdmin: boolean) {
 
   const markRead = useCallback(
     (id: string) => {
-      if (!orgId) return;
-      setSeen((current) => {
+        setSeen((current) => {
         const next = { ...current, [id]: new Date().toISOString() };
-        writeSeen(orgId, next);
+        writeSeen("me", next);
         return next;
       });
     },
-    [orgId],
+    [],
   );
 
   const markAllRead = useCallback(() => {
-    if (!orgId) return;
     setSeen((current) => {
       const next = { ...current };
       const now = new Date().toISOString();
       for (const item of items) next[item.id] = now;
-      writeSeen(orgId, next);
+      writeSeen("me", next);
       return next;
     });
-  }, [orgId, items]);
+  }, [items]);
 
   return { items, unread, markRead, markAllRead };
 }

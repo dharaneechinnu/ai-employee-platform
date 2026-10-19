@@ -24,15 +24,11 @@ const KIND = {
 } as const;
 
 export default function InboxBell({
-  orgId,
-  isAdmin,
   dock,
 }: {
-  orgId: string | undefined;
-  isAdmin: boolean;
   dock: Dock;
 }) {
-  const { items, unread, markRead, markAllRead } = useInbox(orgId, isAdmin);
+  const { items, unread, markRead, markAllRead } = useInbox();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 

@@ -1,6 +1,5 @@
 import { useActivity } from "../lib/activity";
 import { useDock } from "../lib/dock";
-import { useAuth, useIsAdmin } from "../lib/auth";
 import { CoachHelp, CoachProvider } from "./coach/Coach";
 import Rail from "./Rail";
 import { Outlet } from "react-router-dom";
@@ -20,9 +19,7 @@ export { BrandMark } from "./BrandMark";
  * drawer you had to open before you could go anywhere.
  */
 export default function Layout() {
-  const { org } = useAuth();
-  const isAdmin = useIsAdmin();
-  const { running, waiting } = useActivity(org?.id, isAdmin);
+  const { running, waiting } = useActivity();
   const [dock, setDock] = useDock();
 
   return (

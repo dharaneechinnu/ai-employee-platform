@@ -11,10 +11,11 @@ import { useAuth } from "../lib/auth";
  *
  * There is no sign-up form, because the backend has no registration
  * endpoint: an account exists only by accepting an invite. An invite
- * link carries ?token=..., which switches this page into accept mode.
+ * link carries ?token=..., which switches this page into setup mode:
+ * the account exists but has no password until its owner sets one.
  */
 export default function Login() {
-  const { login, acceptInvite } = useAuth();
+  const { login, completeSetup } = useAuth();
   const [params] = useSearchParams();
   const inviteToken = params.get("token");
 
@@ -31,7 +32,7 @@ export default function Login() {
     setBusy(true);
     try {
       if (inviteToken) {
-        await acceptInvite(inviteToken, password, fullName);
+        await completeSetup(inviteToken, password, fullName);
       } else {
         await login(email, password);
       }

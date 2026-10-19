@@ -25,7 +25,6 @@ import {
   type ToolEntry,
 } from "../lib/api";
 import { effectLabel, learnToolLabels, toolLabel } from "../lib/labels";
-import { useAuth, useIsAdmin } from "../lib/auth";
 
 /**
  * The outside apps AI Employees work in.
@@ -77,12 +76,10 @@ function BrandTile({ kind, size = 48 }: { kind: string; size?: number }) {
  */
 function OwnAppForm({
   option,
-  orgId,
   onDone,
   onClose,
 }: {
   option: AvailableConnection;
-  orgId: string;
   onDone: () => void;
   onClose: () => void;
 }) {
@@ -105,7 +102,7 @@ function OwnAppForm({
     setError(null);
     setSaving(true);
     try {
-      await api.put(`/orgs/${orgId}/connections/oauth-apps/${option.kind}`, {
+      await api.put(`/me/connections/oauth-apps/${option.kind}`, {
         client_id: clientId,
         client_secret: secret,
       });
@@ -190,8 +187,6 @@ function OwnAppForm({
 }
 
 export default function Connections() {
-  const { org } = useAuth();
-  const isAdmin = useIsAdmin();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const [available, setAvailable] = useState<AvailableConnection[] | null>(null);
@@ -203,16 +198,15 @@ export default function Connections() {
   const [servers, setServers] = useState<McpServer[]>([]);
 
   async function load() {
-    if (!org) return;
     const [options, items, mcp] = await Promise.all([
-      api.get<AvailableConnection[]>(`/orgs/${org.id}/connections/available`),
-      api.get<ConnectionItem[]>(`/orgs/${org.id}/connections`),
-      api.get<McpServer[]>(`/orgs/${org.id}/mcp-servers`).catch(() => [] as McpServer[]),
+      api.get<AvailableConnection[]>(`/me/connections/available`),
+      api.get<ConnectionItem[]>(`/me/connections`),
+      api.get<McpServer[]>(`/me/mcp-servers`).catch(() => [] as McpServer[]),
     ]);
     setAvailable(options);
     setConnected(items);
     setServers(mcp);
-    const catalogue = await api.get<ToolEntry[]>(`/orgs/${org.id}/tools`).catch(() => [] as ToolEntry[]);
+    const catalogue = await api.get<ToolEntry[]>(`/me/tools`).catch(() => [] as ToolEntry[]);
     learnToolLabels(catalogue);
     setTools(Object.fromEntries(catalogue.map((t) => [t.name, t])));
   }
@@ -220,7 +214,7 @@ export default function Connections() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org?.id]);
+  }, ["me"]);
 
   // Coming back from Google or Microsoft: say what happened, once.
   useEffect(() => {
@@ -234,11 +228,10 @@ export default function Connections() {
   }, []);
 
   async function startOAuth(option: AvailableConnection) {
-    if (!org) return;
     setBusy(option.kind);
     try {
       const { authorize_url } = await api.post<{ authorize_url: string }>(
-        `/orgs/${org.id}/connections/oauth/${option.kind}/start`,
+        `/me/connections/oauth/${option.kind}/start`,
       );
       window.location.assign(authorize_url);
     } catch (err) {
@@ -248,10 +241,9 @@ export default function Connections() {
   }
 
   async function test(item: ConnectionItem) {
-    if (!org) return;
     setBusy(item.id);
     try {
-      const result = await api.post<ConnectionItem>(`/orgs/${org.id}/connections/${item.id}/test`);
+      const result = await api.post<ConnectionItem>(`/me/connections/${item.id}/test`);
       toast(result.status === "connected" ? `${item.label} works.` : `${item.label}: ${result.last_error ?? "test failed"}`, result.status === "connected" ? "ok" : "bad");
       await load();
     } finally {
@@ -260,16 +252,14 @@ export default function Connections() {
   }
 
   async function toggle(item: ConnectionItem, enabled: boolean) {
-    if (!org) return;
-    await api.patch(`/orgs/${org.id}/connections/${item.id}`, { enabled });
+    await api.patch(`/me/connections/${item.id}`, { enabled });
     toast(enabled ? `${item.label} resumed.` : `${item.label} paused. Tools that need it will say so.`, "info");
     await load();
   }
 
   async function remove(item: ConnectionItem) {
-    if (!org) return;
     if (!window.confirm(`Disconnect ${item.label}? AI Employees will lose access to it straight away.`)) return;
-    await api.del(`/orgs/${org.id}/connections/${item.id}`);
+    await api.del(`/me/connections/${item.id}`);
     toast(`${item.label} disconnected.`, "info");
     await load();
   }
@@ -330,7 +320,6 @@ export default function Connections() {
                   <ConnectedRow
                     key={item.id}
                     item={item}
-                    isAdmin={isAdmin}
                     busy={busy === item.id}
                     onTest={() => void test(item)}
                     onToggle={(on) => void toggle(item, on)}
@@ -339,12 +328,10 @@ export default function Connections() {
                   />
                 ))}
 
-                {org && option.tools.some((name) => tools[name]) && (
+                {option.tools.some((name) => tools[name]) && (
                   <ToolPermissions
-                    orgId={org.id}
                     names={option.tools}
                     tools={tools}
-                    isAdmin={isAdmin}
                     open={items.length > 0}
                     onSaved={(name, setting) =>
                       setTools((current) => ({ ...current, [name]: { ...current[name], effective_setting: setting } }))
@@ -352,7 +339,7 @@ export default function Connections() {
                   />
                 )}
 
-                {isAdmin && (
+                {(
                   <div className="mt-auto flex flex-wrap items-center gap-2">
                     {oauth ? (
                       <Button
@@ -409,12 +396,10 @@ export default function Connections() {
           />
         )}
 
-        {org && (
+        {(
           <McpSection
-            orgId={org.id}
             servers={servers}
             tools={tools}
-            isAdmin={isAdmin}
             onChanged={() => void load()}
             onSaved={(name, setting) =>
               setTools((current) => ({ ...current, [name]: { ...current[name], effective_setting: setting } }))
@@ -423,10 +408,9 @@ export default function Connections() {
         )}
 
         {manual && <ManualForm option={manual} onClose={() => setManual(null)} onSaved={() => { setManual(null); void load(); }} />}
-        {ownApp && org && (
+        {ownApp && (
           <OwnAppForm
             option={ownApp}
-            orgId={org.id}
             onDone={() => void load()}
             onClose={() => setOwnApp(null)}
           />
@@ -442,17 +426,13 @@ export default function Connections() {
  * be done with it.
  */
 function ToolPermissions({
-  orgId,
   names,
   tools,
-  isAdmin,
   open,
   onSaved,
 }: {
-  orgId: string;
   names: string[];
   tools: Record<string, ToolEntry>;
-  isAdmin: boolean;
   open: boolean;
   onSaved: (name: string, setting: Setting) => void;
 }) {
@@ -481,9 +461,8 @@ function ToolPermissions({
                 </span>
               )}
             </span>
-            {isAdmin ? (
+            {true ? (
               <PermissionChoice
-                orgId={orgId}
                 tool={tool}
                 size="sm"
                 onSaved={(setting) => onSaved(tool.name, setting)}
@@ -502,7 +481,6 @@ function ToolPermissions({
 
 function ConnectedRow({
   item,
-  isAdmin,
   busy,
   onTest,
   onToggle,
@@ -510,7 +488,6 @@ function ConnectedRow({
   onReconnect,
 }: {
   item: ConnectionItem;
-  isAdmin: boolean;
   busy: boolean;
   onTest: () => void;
   onToggle: (on: boolean) => void;
@@ -536,10 +513,10 @@ function ConnectedRow({
           </div>
         </div>
         <StatusChip status={item.status} />
-        {isAdmin && <Switch checked={item.enabled} onChange={onToggle} label={item.enabled ? `Pause ${item.label}` : `Resume ${item.label}`} />}
+        {<Switch checked={item.enabled} onChange={onToggle} label={item.enabled ? `Pause ${item.label}` : `Resume ${item.label}`} />}
       </div>
       {item.last_error && <ErrorNote message={item.last_error} />}
-      {isAdmin && (
+      {(
         <div className="flex flex-wrap gap-2">
           {item.status === "needs_reconnect" && onReconnect ? (
             <Button size="sm" onClick={onReconnect} icon="link">
@@ -568,7 +545,6 @@ function ManualForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { org } = useAuth();
   const toast = useToast();
   const [label, setLabel] = useState("");
   const [secret, setSecret] = useState("");
@@ -578,7 +554,6 @@ function ManualForm({
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!org) return;
     setError(null);
     setSaving(true);
     const config: Record<string, string | number> = {};
@@ -588,7 +563,7 @@ function ManualForm({
       config[field.key] = field.key.endsWith("port") ? Number(value) : value;
     }
     try {
-      await api.post(`/orgs/${org.id}/connections`, {
+      await api.post(`/me/connections`, {
         kind: option.kind,
         label: label || String(config.username ?? config.database ?? option.display_name),
         secret,
@@ -642,17 +617,13 @@ function ManualForm({
  * those tools join the built-in ones, under the same Permissions.
  */
 function McpSection({
-  orgId,
   servers,
   tools,
-  isAdmin,
   onChanged,
   onSaved,
 }: {
-  orgId: string;
   servers: McpServer[];
   tools: Record<string, ToolEntry>;
-  isAdmin: boolean;
   onChanged: () => void;
   onSaved: (name: string, setting: Setting) => void;
 }) {
@@ -663,7 +634,7 @@ function McpSection({
   async function sync(server: McpServer) {
     setBusy(server.id);
     try {
-      const fresh = await api.post<McpServer>(`/orgs/${orgId}/mcp-servers/${server.id}/sync`);
+      const fresh = await api.post<McpServer>(`/me/mcp-servers/${server.id}/sync`);
       if (fresh.status === "connected") toast(`${server.name}: ${fresh.tools.length} tools.`);
       else toast(fresh.last_error ?? `${server.name} did not answer.`, "bad");
       onChanged();
@@ -673,7 +644,7 @@ function McpSection({
   }
 
   async function remove(server: McpServer) {
-    await api.del(`/orgs/${orgId}/mcp-servers/${server.id}`);
+    await api.del(`/me/mcp-servers/${server.id}`);
     toast(`${server.name} removed. Its tools are gone from every AI Employee.`, "info");
     onChanged();
   }
@@ -688,7 +659,7 @@ function McpSection({
             tools appear for your AI Employees, with the same Always allow, Ask me first and Blocked choices.
           </p>
         </div>
-        {isAdmin && !adding && (
+        {!adding && (
           <Button size="sm" variant={servers.length ? "ghost" : "brand"} icon="plus" onClick={() => setAdding(true)}>
             Add a tool server
           </Button>
@@ -697,7 +668,6 @@ function McpSection({
 
       {adding && (
         <McpForm
-          orgId={orgId}
           onClose={() => setAdding(false)}
           onSaved={(server) => {
             setAdding(false);
@@ -732,15 +702,13 @@ function McpSection({
               <ErrorNote message={server.last_error} />
 
               <ToolPermissions
-                orgId={orgId}
                 names={server.tools.map((t) => t.name)}
                 tools={tools}
-                isAdmin={isAdmin}
                 open
                 onSaved={onSaved}
               />
 
-              {isAdmin && (
+              {(
                 <div className="mt-auto flex gap-2">
                   <Button size="sm" variant="ghost" disabled={busy === server.id} onClick={() => void sync(server)}>
                     {busy === server.id ? "Checking…" : "Check for new tools"}
@@ -759,11 +727,9 @@ function McpSection({
 }
 
 function McpForm({
-  orgId,
   onClose,
   onSaved,
 }: {
-  orgId: string;
   onClose: () => void;
   onSaved: (server: McpServer) => void;
 }) {
@@ -778,7 +744,7 @@ function McpForm({
     setError(null);
     setSaving(true);
     try {
-      onSaved(await api.post<McpServer>(`/orgs/${orgId}/mcp-servers`, { name, url, token: token || null }));
+      onSaved(await api.post<McpServer>(`/me/mcp-servers`, { name, url, token: token || null }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not connect to that server.");
     } finally {

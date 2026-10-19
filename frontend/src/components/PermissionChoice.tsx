@@ -33,13 +33,11 @@ const SELECTED: Record<Setting, string> = {
 };
 
 export default function PermissionChoice({
-  orgId,
   tool,
   onSaved,
   disabled,
   size = "md",
 }: {
-  orgId: string;
   tool: Pick<ToolEntry, "name" | "side_effect" | "effective_setting" | "permanently_blocked">;
   onSaved?: (setting: Setting) => void;
   disabled?: boolean;
@@ -65,7 +63,7 @@ export default function PermissionChoice({
     setConfirming(false);
     setSaving(true);
     try {
-      await api.put(`/orgs/${orgId}/policies`, { scope: "tool", scope_value: tool.name, side_effect: null, setting: next });
+      await api.put(`/me/policies`, { scope: "tool", scope_value: tool.name, side_effect: null, setting: next });
       toast(
         next === "auto"
           ? `${label}: always allowed. No approval needed.`

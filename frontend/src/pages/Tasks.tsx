@@ -34,7 +34,6 @@ import {
   type Task,
   type TaskListItem,
 } from "../lib/api";
-import { useAuth, useIsAdmin } from "../lib/auth";
 import { formatDateTime, toolLabel } from "../lib/labels";
 
 /**
@@ -61,7 +60,6 @@ const FILTER_OF: Record<string, Filter> = {
 const POLL_MS = 15_000;
 
 export default function Tasks() {
-  const { org } = useAuth();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const selected = params.get("task");
@@ -77,19 +75,16 @@ export default function Tasks() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
-  const isAdmin = useIsAdmin();
   const [setup, setSetup] = useState<SetupStatus | null>(null);
 
   async function loadTasks() {
-    if (!org) return;
-    setTasks(await api.get<TaskListItem[]>(`/orgs/${org.id}/tasks`));
-    setSetup(await api.get<SetupStatus>(`/orgs/${org.id}/setup`).catch(() => null));
+    setTasks(await api.get<TaskListItem[]>(`/me/tasks`));
+    setSetup(await api.get<SetupStatus>(`/me/setup`).catch(() => null));
   }
 
   useEffect(() => {
-    if (!org) return;
     void (async () => {
-      const list = await api.get<EmployeeList>(`/orgs/${org.id}/ai-employees`);
+      const list = await api.get<EmployeeList>(`/me/ai-employees`);
       setEmployees(list);
       const firstActive = list.items.find((e) => e.status === "active");
       setEmployeeId((current) => current || firstActive?.id || "");
@@ -98,7 +93,7 @@ export default function Tasks() {
     const timer = window.setInterval(() => void loadTasks(), POLL_MS);
     return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org?.id]);
+  }, ["me"]);
 
   // The sidebar's "New task" button lands here with ?new=1.
   useEffect(() => {
@@ -152,11 +147,11 @@ export default function Tasks() {
 
   async function assign(e?: React.FormEvent) {
     e?.preventDefault();
-    if (!org || !employeeId || !input.trim()) return;
+    if (!employeeId || !input.trim()) return;
     setError(null);
     setBusy(true);
     try {
-      const task = await api.post<Task>(`/orgs/${org.id}/tasks`, {
+      const task = await api.post<Task>(`/me/tasks`, {
         employee_id: employeeId,
         input,
         dry_run: dryRun,
@@ -197,7 +192,7 @@ export default function Tasks() {
       </PageHeader>
 
       <PageBody>
-        {setup && <SetupGuide status={setup} isAdmin={isAdmin} />}
+        {setup && <SetupGuide status={setup} />}
         <form onSubmit={assign} className="card rise flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="flex-1 font-display text-[17px] font-semibold">Assign work</h2>
@@ -254,9 +249,8 @@ export default function Tasks() {
               </div>
               <ErrorNote message={error} />
               <div className="flex flex-wrap items-center gap-3.5">
-                {org && (
+                {(
                   <VoiceInput
-                    orgId={org.id}
                     onError={setError}
                     onText={(spoken) => {
                       // Added to what is already typed, so speaking can
@@ -378,7 +372,6 @@ function RunPanel({
   names: Map<string, EmployeeListItem>;
   onChanged: () => void;
 }) {
-  const { org } = useAuth();
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const view = (params.get("view") as View) || "timeline";
@@ -394,19 +387,18 @@ function RunPanel({
   }
 
   useEffect(() => {
-    if (!org) return;
     setEvents([]);
     let cancelled = false;
 
     void (async () => {
-      const loaded = await api.get<Task>(`/orgs/${org.id}/tasks/${taskId}`);
+      const loaded = await api.get<Task>(`/me/tasks/${taskId}`);
       if (cancelled) return;
       setTask(loaded);
       if (!loaded.run) return;
 
       // Always load the history first, then stream. A task that
       // finished before this page opened still shows its full trace.
-      const trace = await api.get<{ events: RunEvent[] }>(`/orgs/${org.id}/runs/${loaded.run.id}/trace`);
+      const trace = await api.get<{ events: RunEvent[] }>(`/me/runs/${loaded.run.id}/trace`);
       if (cancelled) return;
       // The saved trace nests each event's fields under `payload`; the
       // live stream sends them flat. Same shape for both, so a finished
@@ -421,13 +413,12 @@ function RunPanel({
       if (["running", "awaiting_approval", "queued"].includes(loaded.run.status)) {
         const lastSeq = trace.events.at(-1)?.seq ?? 0;
         closeStream.current = streamRun(
-          org.id,
           loaded.run.id,
           (event) => {
             setEvents((previous) => [...previous, event]);
             // A finishing event changes the totals and the result: refresh them.
             if (["run_finished", "run_stopped", "provider_error"].includes(event.type)) {
-              void api.get<Task>(`/orgs/${org.id}/tasks/${taskId}`).then((t) => {
+              void api.get<Task>(`/me/tasks/${taskId}`).then((t) => {
                 if (!cancelled) setTask(t);
               });
               onChanged();
@@ -444,12 +435,12 @@ function RunPanel({
       closeStream.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org, taskId]);
+  }, [taskId]);
 
   async function cancel() {
-    if (!org || !task) return;
-    await api.post(`/orgs/${org.id}/tasks/${task.id}/cancel`);
-    setTask(await api.get<Task>(`/orgs/${org.id}/tasks/${task.id}`));
+    if (!task) return;
+    await api.post(`/me/tasks/${task.id}/cancel`);
+    setTask(await api.get<Task>(`/me/tasks/${task.id}`));
     onChanged();
     toast("Run cancelled.", "info");
   }

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
-import { useAuth, useIsAdmin } from "../../lib/auth";
+import { useAuth } from "../../lib/auth";
 import { Icon, type IconName } from "../icons";
 import { TOURS, type CoachStep, type Tour } from "./tours";
 import Welcome from "./Welcome";
@@ -83,13 +83,12 @@ function automated(): boolean {
   }
 }
 
-function usable(steps: CoachStep[], isAdmin: boolean): CoachStep[] {
-  return steps.filter((s) => (!s.adminOnly || isAdmin) && (!s.target || findTarget(s.target)));
+function usable(steps: CoachStep[]): CoachStep[] {
+  return steps.filter((s) => true && (!s.target || findTarget(s.target)));
 }
 
 export function CoachProvider({ children }: { children: ReactNode }) {
   const { me } = useAuth();
-  const isAdmin = useIsAdmin();
   const location = useLocation();
   const key = `ai-employees.coach.v1.${me?.id ?? "anon"}`;
   const [store, setStore] = useState<Store>(() => load(key));
@@ -118,11 +117,11 @@ export function CoachProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(
     (tour: Tour) => {
-      const steps = usable(tour.steps, isAdmin);
+      const steps = usable(tour.steps);
       if (steps.length) setActive({ tour, steps });
       return steps.length > 0;
     },
-    [isAdmin],
+    [true],
   );
 
   const finish = useCallback(

@@ -19,7 +19,6 @@ import {
   useToast,
 } from "../components/ui";
 import { ApiError, api, type Employee, type EmployeeList, type Template } from "../lib/api";
-import { useAuth, useIsAdmin } from "../lib/auth";
 import { isAutoModel, modelLabel } from "../lib/labels";
 
 type ModelChoice = { provider_key: string; display_name: string; model: string };
@@ -34,8 +33,6 @@ type ModelChoice = { provider_key: string; display_name: string; model: string }
 const TEMPLATE_ICONS: IconName[] = ["terminal", "chat", "search", "sparkle"];
 
 export default function Employees() {
-  const { org } = useAuth();
-  const isAdmin = useIsAdmin();
   const toast = useToast();
 
   const [list, setList] = useState<EmployeeList | null>(null);
@@ -59,17 +56,16 @@ export default function Employees() {
   const firstField = useRef<HTMLDivElement>(null);
 
   async function load() {
-    if (!org) return;
-    const loaded = await api.get<EmployeeList>(`/orgs/${org.id}/ai-employees`);
+    const loaded = await api.get<EmployeeList>(`/me/ai-employees`);
     setList(loaded);
-    setTemplates(await api.get<Template[]>(`/orgs/${org.id}/templates`));
+    setTemplates(await api.get<Template[]>(`/me/templates`));
 
     // The list omits configuration; each card's one-line description
     // and tool count come from the detail record.
     const entries = await Promise.all(
       loaded.items.map((item) =>
         api
-          .get<Employee>(`/orgs/${org.id}/ai-employees/${item.id}`)
+          .get<Employee>(`/me/ai-employees/${item.id}`)
           .then((detail) => [item.id, detail] as const)
           .catch(() => null),
       ),
@@ -80,7 +76,7 @@ export default function Employees() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [org?.id]);
+  }, ["me"]);
 
   function openForm(template?: Template) {
     const guided = template?.config.guided;
@@ -98,11 +94,10 @@ export default function Employees() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    if (!org) return;
     setError(null);
     setBusy("create");
     try {
-      await api.post(`/orgs/${org.id}/ai-employees`, {
+      await api.post(`/me/ai-employees`, {
         name,
         job_title: jobTitle || null,
         config: {
@@ -130,22 +125,22 @@ export default function Employees() {
     setEditing(employee);
     setEditTools(employee.config.enabled_tools);
     setEditModel(isAutoModel(employee.config.model) ? "auto" : employee.config.model);
-    if (org) {
+    {
       void api
-        .get<ModelChoice[]>(`/orgs/${org.id}/models`)
+        .get<ModelChoice[]>(`/me/models`)
         .then(setModels)
         .catch(() => setModels([]));
     }
   }
 
   async function saveTools() {
-    if (!org || !editing) return;
+    if (!editing) return;
     setBusy("tools");
     setError(null);
     try {
       // PATCH replaces the whole configuration, so send it all back
       // with only the tool list changed.
-      await api.patch(`/orgs/${org.id}/ai-employees/${editing.id}`, {
+      await api.patch(`/me/ai-employees/${editing.id}`, {
         config: { ...editing.config, enabled_tools: editTools, model: editModel },
       });
       toast(`Saved. ${editing.name} has ${editTools.length} tools and uses ${modelLabel(editModel)}.`);
@@ -159,10 +154,9 @@ export default function Employees() {
   }
 
   async function setActive(id: string, displayName: string, on: boolean) {
-    if (!org) return;
     setBusy(id);
     try {
-      await api.post(`/orgs/${org.id}/ai-employees/${id}/${on ? "activate" : "pause"}`);
+      await api.post(`/me/ai-employees/${id}/${on ? "activate" : "pause"}`);
       toast(on ? `${displayName} is active.` : `${displayName} is paused.`, on ? "ok" : "info");
       await load();
     } catch (err) {
@@ -188,7 +182,7 @@ export default function Employees() {
     <>
       <PageHeader crumb="Work" title="AI Employees">
         <UsageMeter used={list.used} limit={list.limit} label="Seats" />
-        {isAdmin && !creating && (
+        {!creating && (
           <Button icon="plus" onClick={() => openForm()} disabled={atLimit} title={atLimit ? "Every seat is in use" : undefined} data-coach="new-employee">
             New AI Employee
           </Button>
@@ -196,7 +190,7 @@ export default function Employees() {
       </PageHeader>
 
       <PageBody>
-        {atLimit && isAdmin && (
+        {atLimit && (
           <div className="flex items-center gap-2.5 rounded-xl bg-ask-soft px-4 py-3 text-sm text-ask-text">
             <Icon name="warn" />
             Every seat is in use. Archive one, or ask support to raise your limit.
@@ -208,7 +202,7 @@ export default function Employees() {
             {visible.length === 0 ? (
               <Empty
                 message="No AI Employees yet"
-                hint={isAdmin ? "Start from a template below, or create one from scratch." : "An admin needs to create one."}
+                hint={true ? "Start from a template below, or create one from scratch." : "An admin needs to create one."}
               />
             ) : (
               <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr))]">
@@ -230,7 +224,7 @@ export default function Employees() {
                             {[employee.job_title, employee.department].filter(Boolean).join(" · ") || "No job title"}
                           </div>
                         </div>
-                        {isAdmin && (
+                        {(
                           <span data-coach="employee-switch" className="flex">
                           <Switch
                             checked={on}
@@ -251,7 +245,7 @@ export default function Employees() {
                             {modelLabel(detail.config.model)} · {detail.config.enabled_tools.length} tools
                           </span>
                         )}
-                        {detail && isAdmin && (
+                        {detail && (
                           <Button size="sm" variant="ghost" icon="sparkle" onClick={() => openTools(detail)} data-coach="employee-tools">
                             Tools &amp; AI
                           </Button>
@@ -263,7 +257,7 @@ export default function Employees() {
               </div>
             )}
 
-            {isAdmin && templates.length > 0 && (
+            {templates.length > 0 && (
               <section className="flex flex-col gap-3" data-coach="templates">
                 <h2 className="font-display text-[17px] font-semibold">Start from a template</h2>
                 <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr))]">
@@ -338,7 +332,7 @@ export default function Employees() {
                 />
                 <div className="flex flex-col gap-2">
                   <span className="label">What can it use?</span>
-                  {org && <ToolPicker orgId={org.id} value={tools} onChange={setTools} />}
+                  {<ToolPicker value={tools} onChange={setTools} />}
                 </div>
                 <ErrorNote message={error} />
                 <div className="flex gap-2.5">
@@ -389,7 +383,7 @@ export default function Employees() {
                 />
                 </div>
                 <div data-coach="tool-picker">
-                  {org && <ToolPicker orgId={org.id} value={editTools} onChange={setEditTools} />}
+                  {<ToolPicker value={editTools} onChange={setEditTools} />}
                 </div>
                 <ErrorNote message={error} />
                 <div className="flex gap-2.5">

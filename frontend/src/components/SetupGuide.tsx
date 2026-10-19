@@ -21,10 +21,10 @@ export function setupComplete(s: SetupStatus): boolean {
   return s.ai_connected && s.employees_active > 0 && s.tasks > 0;
 }
 
-export default function SetupGuide({ status, isAdmin }: { status: SetupStatus; isAdmin: boolean }) {
+export default function SetupGuide({ status }: { status: SetupStatus }) {
   if (setupComplete(status)) return null;
 
-  if (!isAdmin) {
+  if (false) {
     if (status.ai_connected) return null;
     return (
       <div className="card rise flex items-start gap-3 border-ask/40 p-4 text-sm" role="status">
