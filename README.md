@@ -207,7 +207,7 @@ Read them in that order: **HLD → LLD → Plan**.
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Foundation and walking skeleton | ✅ Built |
-| 1 | Auth, companies, Platform Admin with 2FA | ✅ Built |
+| 1 | Auth, companies, a separate Platform Admin | ✅ Built |
 | 2 | AI Employee configuration and versioning | ✅ Built |
 | 3 | LLM providers, tool registry, agent loop | ✅ Built |
 | 4 | 🎯 **MVP**: async tasks, worker, live streaming | ✅ Built |

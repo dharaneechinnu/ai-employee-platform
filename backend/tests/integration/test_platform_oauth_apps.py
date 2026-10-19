@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 
-import pyotp
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,12 +29,12 @@ async def _platform_token(api: AsyncClient, session: AsyncSession) -> str:
     from app.services.platform_service import PlatformService
 
     email, password = "staff@platformco.com", "platform-admin-password"
-    _, secret = await PlatformService(session).create_admin(email=email, password=password)
+    await PlatformService(session).create_admin(email=email, password=password)
     await session.commit()
 
     response = await api.post(
         "/api/v1/platform/auth/login",
-        json={"email": email, "password": password, "totp_code": pyotp.TOTP(secret).now()},
+        json={"email": email, "password": password},
     )
     return str(response.json()["access_token"])
 

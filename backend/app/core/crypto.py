@@ -1,7 +1,7 @@
 """Envelope encryption for secrets at rest.
 
-Used for TOTP secrets now, and for customer API keys and connection
-credentials in phases 3 and 5.
+Used for customer API keys, OAuth client secrets and connection
+credentials.
 
     master key (env)  ->  wraps  ->  per-company data key  ->  encrypts  ->  secret
 

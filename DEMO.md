@@ -19,28 +19,13 @@ returns it.
 |---|---|
 | Email | `admin@victopialabs.com` |
 | Password | `DemoAdmin2026!` |
-| Authenticator | see below |
 
-Two-factor is compulsory. This account governs every company, so a
-password alone is deliberately not enough.
-
-Add the secret to Google Authenticator, 1Password, or any TOTP app:
-
-```
-MBSSAELQU4G3MQGPOGYLH6SNG6CGZY4R
-```
-
-Or paste this into an app that accepts a URI:
-
-```
-otpauth://totp/AI%20Employee%20Platform:admin%40victopialabs.com?secret=MBSSAELQU4G3MQGPOGYLH6SNG6CGZY4R&issuer=AI%20Employee%20Platform
-```
-
-No authenticator app to hand? Print a current code:
-
-```bash
-cd backend && python -c "import pyotp; print(pyotp.TOTP('MBSSAELQU4G3MQGPOGYLH6SNG6CGZY4R').now())"
-```
+Email and password only. The second factor this account used to
+require was removed on request, so be clear-eyed about what guards it
+now: this password alone can create and suspend every company on the
+platform. What still stands is a separate token type a company
+admin's token cannot satisfy, an append-only audit log, and the
+absence of any endpoint that returns customer content.
 
 ## Company users — <http://localhost:5173/login>
 

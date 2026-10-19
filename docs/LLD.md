@@ -209,7 +209,6 @@ CREATE TABLE platform_admins (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     email           citext UNIQUE NOT NULL,
     password_hash   text NOT NULL,
-    totp_secret_enc bytea NOT NULL,                       -- 2FA compulsory
     created_at      timestamptz NOT NULL DEFAULT now()
 );
 
@@ -567,7 +566,7 @@ Adding a table without `org_id` fails CI. The whitelist is deliberately short an
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/platform/auth/login` | Password + TOTP |
+| POST | `/platform/auth/login` | Password only |
 | GET · POST | `/platform/companies` | |
 | PATCH | `/platform/companies/{id}/limits` | |
 | POST | `/platform/companies/{id}/suspend` · `/reactivate` · `/close` | |
@@ -971,7 +970,7 @@ if existing := await repo.find_invocation(key):
 ```
 master key (env var, or KMS in production)
    └── wraps → per-company data key (DEK), stored wrapped
-                  └── encrypts → credentials, API keys, TOTP secrets
+                  └── encrypts → credentials, API keys, OAuth secrets
 ```
 
 ```python

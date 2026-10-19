@@ -622,7 +622,7 @@ sequenceDiagram
     actor CA as 👔 Company Admin
 
     PA->>API: POST /platform/companies<br/>{name, first email, max_employees}
-    API->>API: verify platform admin + 2FA session
+    API->>API: verify platform admin session
     API->>DB: INSERT organization (status=active)
     API->>DB: INSERT invitation (one-time token)
     API->>DB: INSERT platform_admin_audit

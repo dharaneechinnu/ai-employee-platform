@@ -14,12 +14,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
-import pyotp
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.crypto import decrypt, encrypt
+from app.core.crypto import encrypt
 from app.core.errors import ConflictError, InvalidCredentialsError, NotFoundError
 from app.core.observability import get_logger
 from app.core.security import create_access_token, hash_password, hash_token, verify_password
@@ -88,33 +87,30 @@ class PlatformService:
 
     # ------------------------------------------------------------- admins
 
-    async def create_admin(self, *, email: str, password: str) -> tuple[PlatformAdmin, str]:
-        """Create a platform admin and return the TOTP secret once.
-
-        Used by the bootstrap script. The secret is shown exactly here,
-        for entering into an authenticator app; afterwards only the
-        encrypted form exists.
-        """
+    async def create_admin(self, *, email: str, password: str) -> PlatformAdmin:
+        """Create a platform admin. Used by the bootstrap script."""
         email = email.lower()
         if await self.admins.get_by_email(email):
             raise ConflictError("A platform admin with that email already exists.")
 
-        totp_secret = pyotp.random_base32()
         admin = PlatformAdmin(
             email=email,
             password_hash=hash_password(password),
-            totp_secret_enc=encrypt(totp_secret, scope="platform"),
-            totp_confirmed=True,
         )
         self.session.add(admin)
         await self.session.flush()
-        return admin, totp_secret
+        return admin
 
-    async def login(self, *, email: str, password: str, totp_code: str) -> str:
-        """Password *and* a valid TOTP code. Both, always.
+    async def login(self, *, email: str, password: str) -> str:
+        """Password only.
 
-        This account can create and suspend every company, so a leaked
-        password alone must not be enough.
+        Second-factor was removed on request. Worth being plain about
+        what that costs: this account can create and suspend every
+        company on the platform, so a single leaked or guessed password
+        is now enough to reach all of them. The compensating controls
+        are what remain — the separate token type, the append-only
+        audit log, and the fact that no platform endpoint returns
+        customer content.
         """
         admin = await self.admins.get_by_email(email)
 
@@ -124,11 +120,6 @@ class PlatformService:
 
         if not verify_password(password, admin.password_hash) or not admin.is_active:
             raise InvalidCredentialsError()
-
-        secret = decrypt(admin.totp_secret_enc, scope="platform")
-        if not pyotp.TOTP(secret).verify(totp_code, valid_window=1):
-            log.warning("platform_admin_totp_failed", admin_id=str(admin.id))
-            raise InvalidCredentialsError("Email, password or code is incorrect.")
 
         admin.last_login_at = datetime.now(UTC)
         self.admins.record_audit(admin_id=admin.id, action="platform_login")

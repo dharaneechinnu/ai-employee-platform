@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../components/icons";
 import {
   Avatar,
@@ -123,52 +123,9 @@ export default function PlatformAdmin() {
 
 // ---------------------------------------------------------------- sign in
 
-function CodeInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const refs = useRef<(HTMLInputElement | null)[]>([]);
-  const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? "");
-
-  function setAt(index: number, raw: string) {
-    const clean = raw.replace(/\D/g, "");
-    if (clean.length > 1) {
-      // A pasted or autofilled code fills every box at once.
-      const next = clean.slice(0, 6);
-      onChange(next);
-      refs.current[Math.min(next.length, 5)]?.focus();
-      return;
-    }
-    const next = (value.slice(0, index) + clean + value.slice(index + 1)).slice(0, 6);
-    onChange(next);
-    if (clean && index < 5) refs.current[index + 1]?.focus();
-  }
-
-  return (
-    <div className="grid grid-cols-6 gap-2">
-      {digits.map((digit, i) => (
-        <input
-          key={i}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          value={digit}
-          inputMode="numeric"
-          autoComplete={i === 0 ? "one-time-code" : "off"}
-          aria-label={`Digit ${i + 1}`}
-          maxLength={6}
-          onChange={(e) => setAt(i, e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Backspace" && !digit && i > 0) refs.current[i - 1]?.focus();
-          }}
-          className={`field h-14 min-w-0 px-0 text-center font-mono text-[22px] font-semibold ${digit ? "border-accent-line bg-accent-soft" : ""}`}
-        />
-      ))}
-    </div>
-  );
-}
-
 function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -177,7 +134,7 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
     setError(null);
     setBusy(true);
     try {
-      const body = await call<{ access_token: string }>("/auth/login", { email, password, totp_code: code });
+      const body = await call<{ access_token: string }>("/auth/login", { email, password });
       platformToken = body.access_token;
       onSignedIn();
     } catch (err) {
@@ -205,17 +162,13 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
             <h2 className="font-display text-2xl font-semibold">Platform sign in</h2>
             <Input label="Email" type="email" value={email} onChange={setEmail} required autoComplete="username" />
             <Input label="Password" type="password" value={password} onChange={setPassword} required autoComplete="current-password" />
-            <fieldset>
-              <legend className="label mb-2">Authenticator code</legend>
-              <CodeInput value={code} onChange={setCode} />
-              <p className="mt-2 text-xs text-dim">Paste the whole code into any box; it fills them all.</p>
-            </fieldset>
             <ErrorNote message={error} />
-            <button type="submit" disabled={busy || code.length !== 6} className="btn btn-primary h-[50px] rounded-[14px] text-[15px]">
+            <button type="submit" disabled={busy} className="btn btn-primary h-[50px] rounded-[14px] text-[15px]">
               {busy ? "Checking…" : "Enter control room"}
             </button>
             <p className="border-t border-line pt-3.5 text-[13px] leading-normal text-dim">
-              Two-factor is required. This account can create and suspend every company, so a password alone is not enough.
+              This account can create and suspend every company. There is no second factor,
+              so the password is the whole key — keep it in a password manager and never reuse it.
             </p>
           </form>
         </div>

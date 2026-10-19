@@ -44,7 +44,6 @@ router = APIRouter(prefix="/platform", tags=["platform admin"])
 class PlatformLoginRequest(BaseModel):
     email: EmailStr
     password: str
-    totp_code: str = Field(min_length=6, max_length=6)
 
 
 class PlatformTokenResponse(BaseModel):
@@ -203,7 +202,7 @@ AdminDep = Annotated[PlatformAdmin, Depends(get_platform_admin)]
 @router.post("/auth/login", response_model=PlatformTokenResponse, summary="Admin sign in")
 async def platform_login(body: PlatformLoginRequest, session: SessionDep) -> PlatformTokenResponse:
     token = await PlatformService(session).login(
-        email=body.email, password=body.password, totp_code=body.totp_code
+        email=body.email, password=body.password
     )
     return PlatformTokenResponse(access_token=token)
 

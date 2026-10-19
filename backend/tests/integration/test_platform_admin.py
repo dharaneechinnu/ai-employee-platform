@@ -6,46 +6,46 @@ the first user, and set the employee limit.
 
 from __future__ import annotations
 
-import pyotp
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def _make_admin(session: AsyncSession) -> tuple[str, str, str]:
-    """Returns (email, password, totp_secret)."""
+async def _make_admin(session: AsyncSession) -> tuple[str, str]:
+    """Returns (email, password)."""
     from app.services.platform_service import PlatformService
 
     email, password = "root@platform.com", "platform-admin-password"
-    _, secret = await PlatformService(session).create_admin(email=email, password=password)
+    await PlatformService(session).create_admin(email=email, password=password)
     await session.commit()
-    return email, password, secret
+    return email, password
 
 
-async def _sign_in(api: AsyncClient, email: str, password: str, secret: str) -> str:
+async def _sign_in(api: AsyncClient, email: str, password: str) -> str:
     response = await api.post(
         "/api/v1/platform/auth/login",
-        json={"email": email, "password": password, "totp_code": pyotp.TOTP(secret).now()},
+        json={"email": email, "password": password},
     )
     assert response.status_code == 200, response.text
     return str(response.json()["access_token"])
 
 
-async def test_platform_admin_can_sign_in_with_2fa(api: AsyncClient, session: AsyncSession) -> None:
-    email, password, secret = await _make_admin(session)
-    token = await _sign_in(api, email, password, secret)
-    assert token
+async def test_platform_admin_can_sign_in(api: AsyncClient, session: AsyncSession) -> None:
+    email, password = await _make_admin(session)
+    assert await _sign_in(api, email, password)
 
 
-async def test_login_without_the_totp_code_is_refused(
-    api: AsyncClient, session: AsyncSession
-) -> None:
-    """2FA is compulsory: this account governs every company, so a
-    leaked password alone must not be enough."""
-    email, password, _ = await _make_admin(session)
+async def test_a_wrong_password_is_refused(api: AsyncClient, session: AsyncSession) -> None:
+    """The only thing guarding this account now that 2FA is gone.
+
+    Worth a test of its own precisely because it is the whole gate: a
+    Platform Admin can create and suspend every company, and there is
+    no second factor behind this check any more.
+    """
+    email, _ = await _make_admin(session)
 
     response = await api.post(
         "/api/v1/platform/auth/login",
-        json={"email": email, "password": password, "totp_code": "000000"},
+        json={"email": email, "password": "not-the-password"},
     )
     assert response.status_code == 401
 
@@ -53,8 +53,8 @@ async def test_login_without_the_totp_code_is_refused(
 async def test_create_company_and_onboard_its_first_admin(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    email, password, secret = await _make_admin(session)
-    token = await _sign_in(api, email, password, secret)
+    email, password = await _make_admin(session)
+    token = await _sign_in(api, email, password)
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
@@ -86,8 +86,8 @@ async def test_create_company_and_onboard_its_first_admin(
 
 
 async def test_list_companies_shows_counts(api: AsyncClient, session: AsyncSession) -> None:
-    email, password, secret = await _make_admin(session)
-    token = await _sign_in(api, email, password, secret)
+    email, password = await _make_admin(session)
+    token = await _sign_in(api, email, password)
     headers = {"Authorization": f"Bearer {token}"}
 
     await api.post(
@@ -110,8 +110,8 @@ async def test_list_companies_shows_counts(api: AsyncClient, session: AsyncSessi
 
 
 async def test_change_employee_limit(api: AsyncClient, session: AsyncSession) -> None:
-    email, password, secret = await _make_admin(session)
-    token = await _sign_in(api, email, password, secret)
+    email, password = await _make_admin(session)
+    token = await _sign_in(api, email, password)
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
@@ -136,8 +136,8 @@ async def test_change_employee_limit(api: AsyncClient, session: AsyncSession) ->
 
 
 async def test_suspend_a_company(api: AsyncClient, session: AsyncSession) -> None:
-    email, password, secret = await _make_admin(session)
-    token = await _sign_in(api, email, password, secret)
+    email, password = await _make_admin(session)
+    token = await _sign_in(api, email, password)
     headers = {"Authorization": f"Bearer {token}"}
 
     created = await api.post(
@@ -198,8 +198,8 @@ async def test_company_list_counts_members_and_employees_independently(
         )
         assert created.status_code == 201
 
-    email, password, secret = await _make_admin(session)
-    token = await _sign_in(api, email, password, secret)
+    email, password = await _make_admin(session)
+    token = await _sign_in(api, email, password)
 
     listed = await api.get(
         "/api/v1/platform/companies", headers={"Authorization": f"Bearer {token}"}

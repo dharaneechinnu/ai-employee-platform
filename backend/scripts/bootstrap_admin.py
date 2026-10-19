@@ -2,8 +2,9 @@
 
     python -m scripts.bootstrap_admin --email you@example.com --password '...'
 
-Prints the TOTP secret exactly once, for entering into an authenticator
-app. It is stored encrypted and cannot be read back afterwards.
+Prints the password once if one was generated. Sign-in is email and
+password only; there is no second factor on this account, so treat
+the password as the whole key to every company on the platform.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ async def main(email: str, password: str | None) -> None:
 
     maker = async_sessionmaker(bind=get_engine(), expire_on_commit=False)
     async with maker() as session:
-        admin, totp_secret = await PlatformService(session).create_admin(
+        admin = await PlatformService(session).create_admin(
             email=email, password=password
         )
         await session.commit()
@@ -41,9 +42,8 @@ async def main(email: str, password: str | None) -> None:
     print("\nPlatform admin created.")
     print(f"  email:       {admin.email}")
     print(f"  password:    {password}")
-    print(f"  TOTP secret: {totp_secret}")
-    print("\nAdd the TOTP secret to an authenticator app now.")
-    print("It is stored encrypted and will not be shown again.\n")
+    print("\nThis password is the only thing guarding every company on the")
+    print("platform. Store it in a password manager and do not reuse it.\n")
 
 
 if __name__ == "__main__":
