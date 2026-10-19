@@ -166,3 +166,38 @@ class OrgConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     updated_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="SET NULL")
     )
+
+
+class OrgOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """One company's own Google or Microsoft app registration.
+
+    The platform-wide app in `platform_oauth_apps` is the easy path:
+    the operator registers once and every company signs in through it.
+    This is the other path — a company that would rather its staff
+    consent to an app in its own Google Cloud project, with its own
+    name on the consent screen and its own quota.
+
+    It also removes the platform admin from the critical path
+    entirely: a company can turn one-click on for itself without
+    anyone else doing anything first.
+
+    Resolution order is company, then platform, then environment, so
+    whichever exists wins in that order and neither path blocks the
+    other.
+    """
+
+    __tablename__ = "org_oauth_apps"
+    __table_args__ = (UniqueConstraint("org_id", "provider", name="uq_org_oauth_app"),)
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    provider: Mapped[ConnectionKind] = mapped_column(
+        StrEnumType(ConnectionKind, 30), nullable=False
+    )
+    client_id: Mapped[str] = mapped_column(String(300), nullable=False)
+    # Encrypted under this company's own scope, unlike the platform
+    # app: it is their credential, and their key should be the one
+    # that opens it.
+    client_secret_enc: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    secret_last4: Mapped[str] = mapped_column(String(4), nullable=False)

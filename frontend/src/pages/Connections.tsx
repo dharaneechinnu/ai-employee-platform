@@ -67,6 +67,128 @@ function BrandTile({ kind, size = 48 }: { kind: string; size?: number }) {
   );
 }
 
+/**
+ * Register this company's own Google or Microsoft app.
+ *
+ * The platform can register one app for everyone, but that puts the
+ * operator in the critical path of every customer's setup. This is the
+ * other route: the company's own Google Cloud project, its own name on
+ * the consent screen, and nobody else to wait for.
+ */
+function OwnAppForm({
+  option,
+  orgId,
+  onDone,
+  onClose,
+}: {
+  option: AvailableConnection;
+  orgId: string;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const toast = useToast();
+  const [clientId, setClientId] = useState("");
+  const [secret, setSecret] = useState("");
+  const [redirect, setRedirect] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // Shown before anything is saved: it has to go into Google's
+    // console first, and a mismatch here is the usual reason a
+    // sign-in fails.
+    setRedirect(`${window.location.origin.replace(":5173", ":8000")}/api/v1/oauth/${option.kind}/callback`);
+  }, [option.kind]);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSaving(true);
+    try {
+      await api.put(`/orgs/${orgId}/connections/oauth-apps/${option.kind}`, {
+        client_id: clientId,
+        client_secret: secret,
+      });
+      toast(`${option.display_name} sign-in is on for your company.`);
+      onDone();
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save that.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={save} className="card rise flex flex-col gap-4 border-accent-line p-5">
+      <div className="flex items-center gap-3">
+        <h2 className="font-display text-[17px] font-semibold">
+          Use your own {option.display_name} app
+        </h2>
+        <button type="button" className="icon-btn ml-auto h-9 w-9" aria-label="Close" onClick={onClose}>
+          <Icon name="x" size={16} />
+        </button>
+      </div>
+
+      <p className="text-[13px] leading-normal text-muted">
+        Create an OAuth client in your own {option.kind === "google" ? "Google Cloud" : "Microsoft Entra"}{" "}
+        project, then paste its ID and secret here. Your company's name appears on the sign-in
+        screen, and nobody else has to set anything up first.
+      </p>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
+          Add this as the redirect URI first
+        </span>
+        <div className="flex items-center gap-2 rounded-xl border border-line bg-sunken px-3 py-2">
+          <code className="min-w-0 flex-1 truncate font-mono text-[13px]">{redirect}</code>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void navigator.clipboard.writeText(redirect).then(
+                () => toast("Copied."),
+                () => toast("Copy failed. Select it and copy by hand.", "bad"),
+              );
+            }}
+          >
+            <Icon name="copy" size={15} />
+            Copy
+          </Button>
+        </div>
+        <span className="text-[13px] text-dim">
+          It must match to the character, including http vs https.
+        </span>
+      </div>
+
+      <Input label="Client ID" value={clientId} onChange={setClientId} required mono autoComplete="off" />
+      <Input
+        label="Client secret"
+        type="password"
+        value={secret}
+        onChange={setSecret}
+        required
+        mono
+        autoComplete="off"
+      />
+      <ErrorNote message={error} />
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={!clientId || !secret || saving}>
+          {saving ? "Saving…" : "Save and switch on"}
+        </Button>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+      <p className="text-[13px] text-dim">
+        The secret is encrypted and never shown again. If your consent screen is still in
+        &ldquo;Testing&rdquo;, Google expires these connections after seven days — set it to
+        production once you are past trying it out.
+      </p>
+    </form>
+  );
+}
+
 export default function Connections() {
   const { org } = useAuth();
   const isAdmin = useIsAdmin();
@@ -76,6 +198,7 @@ export default function Connections() {
   const [connected, setConnected] = useState<ConnectionItem[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [manual, setManual] = useState<AvailableConnection | null>(null);
+  const [ownApp, setOwnApp] = useState<AvailableConnection | null>(null);
   const [tools, setTools] = useState<Record<string, ToolEntry>>({});
   const [servers, setServers] = useState<McpServer[]>([]);
 
@@ -260,15 +383,17 @@ export default function Connections() {
                       </span>
                     ) : null}
                     {option.allowed && oauth && !option.configured && (
-                      <span className="text-xs text-dim">
-                        {/* It is the platform operator who registers the
-                            app, not anyone inside this company. The old
-                            wording sent admins looking through their own
-                            settings for a switch that was never there. */}
-                        One-click sign-in isn't switched on for this platform yet. Ask whoever runs
-                        AI Employees to register its {option.display_name} app — or use a method
-                        below in the meantime.
-                      </span>
+                      <button
+                        type="button"
+                        className="text-xs text-accent-text hover:underline"
+                        onClick={() => setOwnApp(option)}
+                      >
+                        {/* Not a dead end. Either the platform registers
+                            one app for everybody, or a company does it
+                            for itself — and nobody has to wait for the
+                            other. */}
+                        One-click sign-in isn't set up yet. Use your own {option.display_name} app →
+                      </button>
                     )}
                   </div>
                 )}
@@ -298,6 +423,14 @@ export default function Connections() {
         )}
 
         {manual && <ManualForm option={manual} onClose={() => setManual(null)} onSaved={() => { setManual(null); void load(); }} />}
+        {ownApp && org && (
+          <OwnAppForm
+            option={ownApp}
+            orgId={org.id}
+            onDone={() => void load()}
+            onClose={() => setOwnApp(null)}
+          />
+        )}
       </PageBody>
     </>
   );

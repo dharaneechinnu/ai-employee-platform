@@ -1,0 +1,183 @@
+"""A company switching one-click sign-in on for itself.
+
+The platform can register one Google app that every company signs in
+through, but that puts the operator in the critical path of every
+customer's setup. A company can instead register its own app, in its
+own Google Cloud project, with its own name on the consent screen.
+
+Resolution is company, then platform, then environment — so a company
+that does nothing still gets the platform's app, and a company that
+registers its own is not overridden by it.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.integration.conftest import seed_company
+
+OWN_ID = "555-acme-own.apps.googleusercontent.com"
+OWN_SECRET = "GOCSPX-acme-own-secret-8kL2"
+
+PLATFORM_ID = "111-platform.apps.googleusercontent.com"
+PLATFORM_SECRET = "GOCSPX-platform-secret-4421"
+
+
+async def _platform_token(api: AsyncClient, session: AsyncSession) -> str:
+    from app.services.platform_service import PlatformService
+
+    email, password = "staff@platformco.com", "platform-admin-password"
+    await PlatformService(session).create_admin(email=email, password=password)
+    await session.commit()
+
+    response = await api.post(
+        "/api/v1/platform/auth/login", json={"email": email, "password": password}
+    )
+    return str(response.json()["access_token"])
+
+
+@pytest.fixture
+async def staff(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
+    return {"Authorization": f"Bearer {await _platform_token(api, session)}"}
+
+
+async def _google(api: AsyncClient, org_id: object, headers: dict[str, str]) -> dict:
+    listing = await api.get(f"/api/v1/orgs/{org_id}/connections/available", headers=headers)
+    return next(a for a in listing.json() if a["kind"] == "google")
+
+
+async def _client_id_in_use(api: AsyncClient, org_id: object, headers: dict[str, str]) -> str:
+    from urllib.parse import parse_qs, urlparse
+
+    start = await api.post(
+        f"/api/v1/orgs/{org_id}/connections/oauth/google/start", headers=headers
+    )
+    query = parse_qs(urlparse(start.json()["authorize_url"]).query)
+    return str(query["client_id"][0])
+
+
+async def test_a_company_can_switch_one_click_on_by_itself(
+    api: AsyncClient, session: AsyncSession
+) -> None:
+    """No platform admin involved at any point in this test."""
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+
+    assert (await _google(api, acme.org_id, headers))["configured"] is False
+
+    saved = await api.put(
+        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
+        headers=headers,
+    )
+    assert saved.status_code == 200
+    # The redirect address comes back, because it has to go into
+    # Google's console and must match to the character.
+    assert saved.json()["redirect_uri"].endswith("/oauth/google/callback")
+
+    assert (await _google(api, acme.org_id, headers))["configured"] is True
+    assert await _client_id_in_use(api, acme.org_id, headers) == OWN_ID
+
+
+async def test_a_companys_own_app_wins_over_the_platforms(
+    api: AsyncClient, session: AsyncSession, staff: dict[str, str]
+) -> None:
+    """Registering one is deliberate, so it outranks the shared app."""
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+    other = await seed_company(session, api, name="Globex", slug="globex")
+    acme_h = {"Authorization": f"Bearer {acme.admin_token}"}
+    other_h = {"Authorization": f"Bearer {other.admin_token}"}
+
+    await api.put(
+        "/api/v1/platform/oauth-apps/google",
+        json={"client_id": PLATFORM_ID, "client_secret": PLATFORM_SECRET},
+        headers=staff,
+    )
+    await api.put(
+        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
+        headers=acme_h,
+    )
+
+    assert await _client_id_in_use(api, acme.org_id, acme_h) == OWN_ID
+    # The company that did nothing still gets the platform's app.
+    assert await _client_id_in_use(api, other.org_id, other_h) == PLATFORM_ID
+
+
+async def test_removing_our_own_app_falls_back_to_the_platforms(
+    api: AsyncClient, session: AsyncSession, staff: dict[str, str]
+) -> None:
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+
+    await api.put(
+        "/api/v1/platform/oauth-apps/google",
+        json={"client_id": PLATFORM_ID, "client_secret": PLATFORM_SECRET},
+        headers=staff,
+    )
+    await api.put(
+        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
+        headers=headers,
+    )
+    assert await _client_id_in_use(api, acme.org_id, headers) == OWN_ID
+
+    removed = await api.delete(
+        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google", headers=headers
+    )
+    assert removed.status_code == 204
+    assert await _client_id_in_use(api, acme.org_id, headers) == PLATFORM_ID
+
+
+async def test_one_companys_app_is_invisible_to_another(
+    api: AsyncClient, session: AsyncSession
+) -> None:
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+    other = await seed_company(session, api, name="Globex", slug="globex")
+
+    await api.put(
+        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
+        headers={"Authorization": f"Bearer {acme.admin_token}"},
+    )
+
+    listing = await api.get(
+        f"/api/v1/orgs/{other.org_id}/connections/oauth-apps",
+        headers={"Authorization": f"Bearer {other.admin_token}"},
+    )
+    assert listing.json() == []
+    assert (await _google(api, other.org_id, {"Authorization": f"Bearer {other.admin_token}"}))[
+        "configured"
+    ] is False
+
+
+async def test_the_secret_is_never_returned(api: AsyncClient, session: AsyncSession) -> None:
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+
+    saved = await api.put(
+        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
+        headers=headers,
+    )
+    listing = await api.get(f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps", headers=headers)
+
+    for body in (saved.json(), listing.json()):
+        assert OWN_SECRET not in json.dumps(body)
+    assert saved.json()["secret_last4"] == OWN_SECRET[-4:]
+
+
+async def test_a_member_cannot_register_one(api: AsyncClient, session: AsyncSession) -> None:
+    """Connecting apps is admin work, like every other connection."""
+    acme = await seed_company(session, api, name="Acme", slug="acme")
+
+    response = await api.put(
+        f"/api/v1/orgs/{acme.org_id}/connections/oauth-apps/google",
+        json={"client_id": OWN_ID, "client_secret": OWN_SECRET},
+        headers={"Authorization": f"Bearer {acme.member_token}"},
+    )
+    assert response.status_code == 403

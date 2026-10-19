@@ -50,6 +50,7 @@ from app.db.models.policy import (
 from app.db.models.provider import (
     ConnectionStatus,
     OrgConnectionAccess,
+    OrgOAuthApp,
     PlatformOAuthApp,
     ProviderConfig,
     ProviderKind,
@@ -92,6 +93,7 @@ __all__ = [
     "MemoryVector1536",
     "NotificationSettings",
     "OrgConnectionAccess",
+    "OrgOAuthApp",
     "OrgStatus",
     "Organization",
     "PlatformAdmin",

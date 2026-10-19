@@ -37,7 +37,7 @@ from app.core.errors import NotFoundError, PermissionDeniedError, ValidationErro
 from app.core.observability import get_logger
 from app.core.signed import InvalidSignedTokenError, sign_for, verify
 from app.db.models.policy import Connection, ConnectionKind
-from app.db.models.provider import OrgConnectionAccess
+from app.db.models.provider import OrgConnectionAccess, OrgOAuthApp
 from app.services.oauth_providers import OAuthProvider, get_oauth_provider, resolve_client
 
 log = get_logger(__name__)
@@ -199,7 +199,9 @@ class ConnectionService:
             ruling = access.get(kind)
             oauth = get_oauth_provider(kind.value)
             configured = (
-                await resolve_client(self.session, oauth) is not None if oauth else True
+                await resolve_client(self.session, oauth, self.org_id) is not None
+                if oauth
+                else True
             )
             out.append(
                 AvailableConnection(
@@ -258,6 +260,80 @@ class ConnectionService:
             config=public,
         )
 
+    # --- this company's own OAuth app ----------------------------------
+
+    async def own_oauth_apps(self) -> dict[str, dict[str, str]]:
+        """What this company has registered, by provider key.
+
+        Only the client id and the last four of the secret. There is no
+        read path for the secret itself, here or anywhere.
+        """
+        rows = await self.session.scalars(
+            select(OrgOAuthApp).where(OrgOAuthApp.org_id == self.org_id)
+        )
+        return {
+            row.provider.value: {"client_id": row.client_id, "secret_last4": row.secret_last4}
+            for row in rows.all()
+        }
+
+    async def save_own_oauth_app(
+        self, *, kind: str, client_id: str, client_secret: str
+    ) -> OrgOAuthApp:
+        """Register this company's own Google or Microsoft app.
+
+        The point is that nobody else has to act first: a company can
+        switch one-click on for itself, with its own name on the
+        consent screen, without the platform operator registering
+        anything.
+        """
+        provider = get_oauth_provider(kind)
+        if provider is None:
+            raise ValidationError(f"'{kind}' is not connected with one click.")
+
+        await self._require_allowed(provider.kind)
+
+        existing = await self.session.scalar(
+            select(OrgOAuthApp).where(
+                OrgOAuthApp.org_id == self.org_id, OrgOAuthApp.provider == provider.kind
+            )
+        )
+        # The company's own key, so their scope opens it.
+        ciphertext = encrypt(client_secret, scope=self.org_id)
+        last4 = client_secret[-4:] if len(client_secret) >= 4 else "????"
+
+        if existing is None:
+            existing = OrgOAuthApp(
+                org_id=self.org_id,
+                provider=provider.kind,
+                client_id=client_id,
+                client_secret_enc=ciphertext,
+                secret_last4=last4,
+            )
+            self.session.add(existing)
+        else:
+            existing.client_id = client_id
+            existing.client_secret_enc = ciphertext
+            existing.secret_last4 = last4
+
+        await self.session.flush()
+        return existing
+
+    async def delete_own_oauth_app(self, kind: str) -> None:
+        """Fall back to the platform's app, if there is one."""
+        provider = get_oauth_provider(kind)
+        row = (
+            await self.session.scalar(
+                select(OrgOAuthApp).where(
+                    OrgOAuthApp.org_id == self.org_id, OrgOAuthApp.provider == provider.kind
+                )
+            )
+            if provider
+            else None
+        )
+        if row is None:
+            raise NotFoundError(f"No {kind} app is registered for this company.")
+        await self.session.delete(row)
+
     # --- one click (OAuth) --------------------------------------------
 
     async def _require_allowed(self, kind: ConnectionKind) -> None:
@@ -282,11 +358,12 @@ class ConnectionService:
         provider = get_oauth_provider(kind)
         if provider is None:
             raise ValidationError(f"'{kind}' does not support one-click connection.")
-        client = await resolve_client(self.session, provider)
+        client = await resolve_client(self.session, provider, self.org_id)
         if client is None:
             raise ValidationError(
-                f"{provider.display_name} sign-in is not set up on this platform yet. "
-                "The platform operator needs to add its OAuth client id and secret."
+                f"{provider.display_name} sign-in is not set up yet. Add your own "
+                f"{provider.display_name} app under Connections, or ask whoever runs "
+                "AI Employees to register one for everybody."
             )
         return provider, client
 

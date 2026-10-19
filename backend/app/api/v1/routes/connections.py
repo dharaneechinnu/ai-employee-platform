@@ -30,6 +30,7 @@ from app.core.permissions import Permission, role_has
 from app.core.signed import InvalidSignedTokenError
 from app.db.repositories.identity_repo import MembershipRepository
 from app.services.connection_service import ConnectionService
+from app.services.oauth_providers import get_oauth_provider
 
 log = get_logger(__name__)
 
@@ -82,6 +83,22 @@ class ManualConnectionRequest(BaseModel):
     label: str = Field(min_length=1, max_length=100)
     secret: str = Field(min_length=1, max_length=1000)
     config: dict[str, Any] = Field(default_factory=dict)
+
+
+class OwnOAuthAppRequest(BaseModel):
+    client_id: str = Field(min_length=5, max_length=300)
+    # Write-only, like every other credential here.
+    client_secret: str = Field(min_length=5, max_length=500)
+
+
+class OwnOAuthAppResponse(BaseModel):
+    kind: str
+    client_id: str
+    secret_last4: str
+    # Shown so it can be pasted into Google's or Microsoft's console.
+    # A redirect that does not match to the character is the usual
+    # reason a sign-in fails.
+    redirect_uri: str
 
 
 class ToggleRequest(BaseModel):
@@ -220,3 +237,68 @@ async def oauth_callback(
         return _back_to_app(error="Something went wrong finishing the sign-in. Please try again.")
 
     return _back_to_app(connected=kind, account=conn.label)
+
+
+@router.get(
+    "/connections/oauth-apps",
+    response_model=list[OwnOAuthAppResponse],
+    summary="Our own sign-in apps",
+)
+async def list_own_oauth_apps(
+    ctx: CanManage, session: SessionDep
+) -> list[OwnOAuthAppResponse]:
+    service = ConnectionService(session, ctx.org_id)
+    saved = await service.own_oauth_apps()
+    out: list[OwnOAuthAppResponse] = []
+    for kind, row in saved.items():
+        provider = get_oauth_provider(kind)
+        if provider is None:
+            continue
+        out.append(
+            OwnOAuthAppResponse(
+                kind=kind,
+                client_id=row["client_id"],
+                secret_last4=row["secret_last4"],
+                redirect_uri=provider.redirect_uri(),
+            )
+        )
+    return out
+
+
+@router.put(
+    "/connections/oauth-apps/{kind}",
+    response_model=OwnOAuthAppResponse,
+    summary="Use our own sign-in app",
+)
+async def save_own_oauth_app(
+    kind: str, body: OwnOAuthAppRequest, ctx: CanManage, session: SessionDep
+) -> OwnOAuthAppResponse:
+    """Switch one-click on for this company without anyone else acting.
+
+    The platform operator can register one app for everybody; this is
+    the other route, for a company that would rather its own name be
+    on the consent screen, or that does not want to wait.
+    """
+    row = await ConnectionService(session, ctx.org_id).save_own_oauth_app(
+        kind=kind, client_id=body.client_id, client_secret=body.client_secret
+    )
+    await session.commit()
+
+    provider = get_oauth_provider(kind)
+    assert provider is not None
+    return OwnOAuthAppResponse(
+        kind=kind,
+        client_id=row.client_id,
+        secret_last4=row.secret_last4,
+        redirect_uri=provider.redirect_uri(),
+    )
+
+
+@router.delete(
+    "/connections/oauth-apps/{kind}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Stop using our own app",
+)
+async def delete_own_oauth_app(kind: str, ctx: CanManage, session: SessionDep) -> None:
+    await ConnectionService(session, ctx.org_id).delete_own_oauth_app(kind)
+    await session.commit()

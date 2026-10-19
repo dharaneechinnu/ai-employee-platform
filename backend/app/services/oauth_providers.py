@@ -12,6 +12,7 @@ or remove one.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
@@ -119,16 +120,38 @@ def get_oauth_provider(kind: str) -> OAuthProvider | None:
 
 
 async def resolve_client(
-    session: AsyncSession, provider: OAuthProvider
+    session: AsyncSession,
+    provider: OAuthProvider,
+    org_id: uuid.UUID | None = None,
 ) -> tuple[str, str] | None:
     """The credentials in force for this provider, or None if unset.
 
-    A row the Platform Admin saved wins; the environment is the
-    fallback. Disabling a row is deliberate and beats the environment
-    too — otherwise "turn it off" would quietly fail on a deployment
-    that still had the variables set.
+    Three sources, most specific first:
+
+    1. the company's own app, if it registered one — its name on the
+       consent screen, its quota, and nobody else in the way;
+    2. the platform's app, registered once by the operator and shared
+       by every company that has not brought its own;
+    3. the environment, for local development.
+
+    A company's own app wins even when the platform has one, because
+    registering it is a deliberate act. A disabled platform row beats
+    the environment, or "turn it off" would quietly fail wherever the
+    variables were still set.
     """
-    from app.db.models.provider import PlatformOAuthApp  # circular at import time
+    from app.db.models.provider import (  # circular at import time
+        OrgOAuthApp,
+        PlatformOAuthApp,
+    )
+
+    if org_id is not None:
+        own = await session.scalar(
+            select(OrgOAuthApp).where(
+                OrgOAuthApp.org_id == org_id, OrgOAuthApp.provider == provider.kind
+            )
+        )
+        if own is not None:
+            return own.client_id, decrypt(own.client_secret_enc, scope=org_id)
 
     app = await session.scalar(
         select(PlatformOAuthApp).where(PlatformOAuthApp.provider == provider.kind)
