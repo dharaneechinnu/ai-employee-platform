@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.api.v1.deps import ContextDep, SessionDep
-from app.db.models.ai_employee import AIEmployee, EmployeeStatus
 from app.db.models.policy import Connection
 from app.db.models.provider import ProviderConfig
 from app.db.models.task import Task
@@ -31,8 +30,6 @@ class SetupStatus(BaseModel):
 
     ai_connected: bool
     apps_connected: bool
-    employees: int
-    employees_active: int
     tasks: int
 
 
@@ -53,14 +50,6 @@ async def setup_status(ctx: ContextDep, session: SessionDep) -> SetupStatus:
             .where(Connection.owner_id == me, Connection.enabled.is_(True))
         )
         > 0,
-        employees=await count(
-            select(func.count()).select_from(AIEmployee).where(AIEmployee.owner_id == me)
-        ),
-        employees_active=await count(
-            select(func.count())
-            .select_from(AIEmployee)
-            .where(AIEmployee.owner_id == me, AIEmployee.status == EmployeeStatus.ACTIVE)
-        ),
         tasks=await count(select(func.count()).select_from(Task).where(Task.owner_id == me)),
     )
 

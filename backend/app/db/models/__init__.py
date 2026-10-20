@@ -4,12 +4,6 @@ Every model must be imported here so Alembic autogenerate and the
 tenant-isolation test can see it.
 """
 
-from app.db.models.ai_employee import (
-    AIEmployee,
-    AIEmployeeVersion,
-    EmployeeStatus,
-    Template,
-)
 from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.db.models.conversation import ChatMode, Conversation, ConversationMessage, MessageRole
 from app.db.models.identity import (
@@ -25,7 +19,6 @@ from app.db.models.memory import (
     EmbeddingConfig,
     Memory,
     MemoryKind,
-    MemoryScope,
     MemoryVector384,
     MemoryVector768,
     MemoryVector1024,
@@ -67,8 +60,6 @@ from app.db.models.task import (
 
 __all__ = [
     "VECTOR_TABLES",
-    "AIEmployee",
-    "AIEmployeeVersion",
     "Approval",
     "ApprovalStatus",
     "Base",
@@ -79,13 +70,11 @@ __all__ = [
     "Conversation",
     "ConversationMessage",
     "EmbeddingConfig",
-    "EmployeeStatus",
     "EventType",
     "LLMCall",
     "McpServer",
     "Memory",
     "MemoryKind",
-    "MemoryScope",
     "MemoryVector384",
     "MemoryVector768",
     "MemoryVector1024",
@@ -114,7 +103,6 @@ __all__ = [
     "SupportedProvider",
     "Task",
     "TaskStatus",
-    "Template",
     "TimestampMixin",
     "ToolInvocation",
     "UUIDPrimaryKeyMixin",

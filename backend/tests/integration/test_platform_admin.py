@@ -1,7 +1,7 @@
 """Platform Admin: the normal path.
 
-Create an admin, sign in with 2FA, create a company, hand its invite to
-the first user, and set the employee limit.
+Create an admin, sign in, create an account, hand its setup link to the
+person, and suspend or restore them.
 """
 
 from __future__ import annotations
@@ -59,12 +59,11 @@ async def test_create_an_account_and_let_its_owner_set_a_password(
 
     created = await api.post(
         "/api/v1/platform/people",
-        json={"email": "owner@victopia.com", "max_employees": 5},
+        json={"email": "owner@victopia.com"},
         headers=headers,
     )
     assert created.status_code == 201, created.text
     body = created.json()
-    assert body["max_employees"] == 5
 
     # The setup link is returned once. The owner sets their own
     # password through it, so the Platform Admin never knows one.
@@ -79,47 +78,26 @@ async def test_create_an_account_and_let_its_owner_set_a_password(
         headers={"Authorization": f"Bearer {accepted.json()['access_token']}"},
     )
     assert me.json()["email"] == "owner@victopia.com"
-    assert me.json()["max_employees"] == 5
 
 
-async def test_list_people_shows_counts(api: AsyncClient, session: AsyncSession) -> None:
+async def test_list_people_shows_who_and_whether_active(
+    api: AsyncClient, session: AsyncSession
+) -> None:
     email, password = await _make_admin(session)
     token = await _sign_in(api, email, password)
     headers = {"Authorization": f"Bearer {token}"}
 
     await api.post(
         "/api/v1/platform/people",
-        json={"email": "owner@acme.com", "max_employees": 3},
+        json={"email": "owner@acme.com"},
         headers=headers,
     )
 
     listed = await api.get("/api/v1/platform/people", headers=headers)
     assert listed.status_code == 200
     row = next(r for r in listed.json() if r["email"] == "owner@acme.com")
-    assert row["max_employees"] == 3
-    assert row["employees_used"] == 0
     assert row["active"] is True
-
-
-async def test_change_employee_limit(api: AsyncClient, session: AsyncSession) -> None:
-    email, password = await _make_admin(session)
-    token = await _sign_in(api, email, password)
-    headers = {"Authorization": f"Bearer {token}"}
-
-    created = await api.post(
-        "/api/v1/platform/people",
-        json={"email": "owner@acme.com", "max_employees": 3},
-        headers=headers,
-    )
-    owner_id = created.json()["id"]
-
-    updated = await api.patch(
-        f"/api/v1/platform/people/{owner_id}/limits",
-        json={"max_employees": 10},
-        headers=headers,
-    )
-    assert updated.status_code == 200
-    assert updated.json()["max_employees"] == 10
+    assert "created_at" in row
 
 
 async def test_suspend_and_restore_an_account(api: AsyncClient, session: AsyncSession) -> None:
@@ -129,7 +107,7 @@ async def test_suspend_and_restore_an_account(api: AsyncClient, session: AsyncSe
 
     created = await api.post(
         "/api/v1/platform/people",
-        json={"email": "owner@acme.com", "max_employees": 3},
+        json={"email": "owner@acme.com"},
         headers=headers,
     )
     owner_id = created.json()["id"]
@@ -158,34 +136,3 @@ async def test_a_customer_token_cannot_reach_platform_routes(
     assert response.status_code == 401
 
 
-async def test_the_list_counts_each_persons_employees(
-    api: AsyncClient, session: AsyncSession
-) -> None:
-    """Counting both in one query multiplies the rows together.
-
-    A company with 2 members and 3 AI Employees would report 6 of each.
-    This caught a real bug where the list always showed 0 employees
-    while the detail view showed the right number.
-    """
-    from tests.integration.conftest import seed_company
-
-    acme = await seed_company(session, api, name="Acme", slug="acme")  # 2 members
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
-
-    for i in range(3):
-        created = await api.post(
-            "/api/v1/me/ai-employees",
-            json={"name": f"Bot {i}", "config": {"guided": {"what_it_does": "work"}}},
-            headers=headers,
-        )
-        assert created.status_code == 201
-
-    email, password = await _make_admin(session)
-    token = await _sign_in(api, email, password)
-
-    listed = await api.get(
-        "/api/v1/platform/people", headers={"Authorization": f"Bearer {token}"}
-    )
-    row = next(r for r in listed.json() if r["email"] == acme.email)
-
-    assert row["employees_used"] == 3

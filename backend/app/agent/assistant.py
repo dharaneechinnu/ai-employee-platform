@@ -156,11 +156,6 @@ def system_prompt(mode: ChatMode, *, person: str | None, team: bool, tool_names:
     return "\n\n".join(parts)
 
 
-# Handing work to the person's AI Employees belongs to AI Employees; a
-# chat has its own team of specialists.
-_NOT_IN_CHAT = {"delegate_to_specialist"}
-
-
 def chat_tools(resolver: Any, connected: set[str]) -> list[type[Tool]]:
     """Every tool this person's assistant can use right now.
 
@@ -173,8 +168,6 @@ def chat_tools(resolver: Any, connected: set[str]) -> list[type[Tool]]:
     """
     chosen: list[type[Tool]] = []
     for tool in [*registry.all(), *resolver.extra_tools.values()]:
-        if tool.name in _NOT_IN_CHAT:
-            continue
         if tool.requires_connection and tool.requires_connection not in connected:
             continue
         if resolver.evaluate(tool.name).setting is PolicySetting.BLOCKED:

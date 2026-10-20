@@ -55,9 +55,6 @@ class MeResponse(BaseModel):
     id: uuid.UUID
     email: EmailStr
     full_name: str | None
-    # The cap the platform set for this person; the UI shows
-    # "2 of 5 AI Employees" from it.
-    max_employees: int
 
 
 class SetupRequest(BaseModel):

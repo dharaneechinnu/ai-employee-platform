@@ -104,7 +104,7 @@ async def test_deleting_removes_it_from_search(api: AsyncClient, session: AsyncS
     assert found.json() == []
 
 
-async def test_memory_never_crosses_company_boundaries(
+async def test_memory_never_crosses_person_boundaries(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     """Memory holds the most sensitive text in the product: business
@@ -131,47 +131,6 @@ async def test_memory_never_crosses_company_boundaries(
     )
     assert found.json() == []
 
-
-async def test_an_employee_scoped_memory_is_private_to_that_employee(
-    api: AsyncClient, session: AsyncSession
-) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
-
-    first = await api.post(
-        "/api/v1/me/ai-employees",
-        json={"name": "Bot A", "config": {"guided": {"what_it_does": "A"}}},
-        headers=headers,
-    )
-    second = await api.post(
-        "/api/v1/me/ai-employees",
-        json={"name": "Bot B", "config": {"guided": {"what_it_does": "B"}}},
-        headers=headers,
-    )
-
-    await api.post(
-        "/api/v1/me/memory",
-        json={
-            "content": "Bot A prefers the ZEBRA convention",
-            "scope": "employee",
-            "employee_id": first.json()["id"],
-        },
-        headers=headers,
-    )
-
-    for_b = await api.post(
-        "/api/v1/me/memory/search",
-        json={"query": "ZEBRA convention", "employee_id": second.json()["id"]},
-        headers=headers,
-    )
-    assert for_b.json() == []
-
-    for_a = await api.post(
-        "/api/v1/me/memory/search",
-        json={"query": "ZEBRA convention", "employee_id": first.json()["id"]},
-        headers=headers,
-    )
-    assert for_a.json()
 
 
 async def test_switching_provider_requires_reembedding_and_search_refuses(

@@ -41,11 +41,10 @@ from app.core.crypto import decrypt, encrypt
 from app.core.errors import ValidationError
 from app.core.observability import get_logger
 from app.core.signed import sign
-from app.db.models.ai_employee import AIEmployee
 from app.db.models.identity import User
 from app.db.models.notification import NotificationSettings
 from app.db.models.policy import Approval
-from app.db.models.task import Run, RunStatus, Task
+from app.db.models.task import Run, Task
 
 log = get_logger(__name__)
 
@@ -198,8 +197,6 @@ class NotificationService:
                 email_enabled=True,
                 slack_enabled=False,
                 on_approval_requested=True,
-                on_task_completed=True,
-                on_task_failed=True,
             )
         return row
 
@@ -209,16 +206,12 @@ class NotificationService:
         email_enabled: bool,
         slack_enabled: bool,
         on_approval_requested: bool,
-        on_task_completed: bool,
-        on_task_failed: bool,
         slack_webhook_url: str | None,
         clear_slack_webhook: bool,
     ) -> NotificationSettings:
         row = await self.settings()
         row.email_enabled = email_enabled
         row.on_approval_requested = on_approval_requested
-        row.on_task_completed = on_task_completed
-        row.on_task_failed = on_task_failed
 
         if clear_slack_webhook:
             row.slack_webhook_enc = None
@@ -249,7 +242,7 @@ class NotificationService:
         """Send one message on every enabled channel and report each."""
         row = await self.settings()
         message = Message(
-            subject="Test notification from your AI Employees",
+            subject="Test notification from your assistant",
             lines=["Notifications are working. You will hear here when a run needs you."],
             buttons=[("Open approvals", _app_url("/approvals"), "primary")],
         )
@@ -281,15 +274,9 @@ class NotificationService:
         row = await self.settings()
         if not row.on_approval_requested:
             return
-        task, employee = await self._task_and_employee(approval.run_id)
+        task = await self._task(approval.run_id)
 
-        if employee is not None:
-            who = employee.name
-        elif task is not None and task.conversation_id is not None:
-            who = "Your assistant"
-        else:
-            who = "An AI Employee"
-        subject = f"Approval needed: {who} wants to {_humanise(approval.tool_name)}"
+        subject = f"Approval needed: your assistant wants to {_humanise(approval.tool_name)}"
         lines = [
             f"Task: {task.title or task.input[:120]}" if task else "",
             f"Action: {approval.tool_name} ({approval.side_effect})",
@@ -328,51 +315,11 @@ class NotificationService:
             )
             await self._try_slack(webhook, shared)
 
-    async def task_finished(self, task: Task, run: Run) -> None:
-        row = await self.settings()
-        succeeded = run.status is RunStatus.COMPLETED
-        if run.status is RunStatus.CANCELLED:
-            return  # the person who cancelled it already knows
-        if task.conversation_id is not None:
-            return  # a chat reply appears in the chat the person is in
-        if (succeeded and not row.on_task_completed) or (not succeeded and not row.on_task_failed):
-            return
-
-        employee = await self.session.get(AIEmployee, task.employee_id)
-        who = employee.name if employee else "Your AI Employee"
-        title = task.title or task.input[:80]
-        subject = f"{who} finished: {title}" if succeeded else f"{who} could not finish: {title}"
-        excerpt = (run.output or "") if succeeded else (run.error_message or run.stop_cause or "")
-        message = Message(
-            subject=subject,
-            lines=[
-                "The task is complete." if succeeded else "The task stopped before finishing.",
-                f"Steps: {run.step_count}",
-            ],
-            detail=excerpt[:1200] or None,
-            buttons=[("View the run", _app_url(f"/tasks?task={task.id}"), "primary")],
-        )
-
-        if row.email_enabled and get_settings().email_notifications_available:
-            creator = await self.session.get(User, task.created_by)
-            if creator is not None and creator.is_active:
-                await self._try_email(creator.email, message)
-
-        webhook = self._webhook(row)
-        if webhook:
-            await self._try_slack(webhook, message)
-
     # --- helpers -------------------------------------------------------
 
-    async def _task_and_employee(self, run_id: uuid.UUID) -> tuple[Task | None, AIEmployee | None]:
+    async def _task(self, run_id: uuid.UUID) -> Task | None:
         run = await self.session.get(Run, run_id)
-        task = await self.session.get(Task, run.task_id) if run else None
-        employee = (
-            await self.session.get(AIEmployee, task.employee_id)
-            if task and task.employee_id
-            else None
-        )
-        return task, employee
+        return await self.session.get(Task, run.task_id) if run else None
 
     async def _admins(self) -> list[User]:
         """Who to tell. On a personal account that is one person: the

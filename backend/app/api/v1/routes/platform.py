@@ -24,7 +24,6 @@ from sqlalchemy import func, select
 from app.api.v1.deps import SessionDep
 from app.core.errors import AuthError, NotFoundError
 from app.core.security import decode_access_token
-from app.db.models.ai_employee import COUNTS_TOWARD_LIMIT, AIEmployee
 from app.db.models.identity import PlatformAdmin, PlatformAdminAudit, User
 from app.db.models.provider import ProviderConfig
 from app.db.models.task import Task
@@ -53,14 +52,12 @@ class PlatformTokenResponse(BaseModel):
 class CreatePersonRequest(BaseModel):
     email: EmailStr
     full_name: str | None = Field(default=None, max_length=200)
-    max_employees: int = Field(default=3, ge=0, le=1000)
 
 
 class CreatePersonResponse(BaseModel):
     id: uuid.UUID
     email: EmailStr
     full_name: str | None
-    max_employees: int
     # Shown once, right after creation. Only its hash is stored, so a
     # lost link means issuing another rather than looking one up.
     setup_token: str
@@ -73,12 +70,7 @@ class PersonRow(BaseModel):
     email: EmailStr
     full_name: str | None
     active: bool
-    max_employees: int
-    employees_used: int
-
-
-class SetLimitRequest(BaseModel):
-    max_employees: int = Field(ge=0, le=1000)
+    created_at: datetime
 
 
 class AuditEntry(BaseModel):
@@ -159,8 +151,6 @@ class PersonDetail(BaseModel):
     full_name: str | None
     active: bool
     created_at: datetime
-    max_employees: int
-    employees_used: int
     task_count: int
     providers: list[ProviderStatusRow]
 
@@ -218,7 +208,6 @@ async def create_person(
         admin_id=admin.id,
         email=body.email,
         full_name=body.full_name,
-        max_employees=body.max_employees,
     )
     await session.commit()
     # Shown here once. There is no email service, so the Platform
@@ -228,41 +217,23 @@ async def create_person(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
-        max_employees=user.max_employees,
         setup_token=raw_token,
     )
 
 
-def _row(user: User, employees_used: int = 0) -> PersonRow:
+def _row(user: User) -> PersonRow:
     return PersonRow(
         id=user.id,
         email=user.email,
         full_name=user.full_name,
         active=user.is_active,
-        max_employees=user.max_employees,
-        employees_used=employees_used,
+        created_at=user.created_at,
     )
 
 
 @router.get("/people", response_model=list[PersonRow], summary="List accounts")
 async def list_people(admin: AdminDep, session: SessionDep) -> list[PersonRow]:
-    return [
-        _row(stat.user, stat.employee_count)
-        for stat in await PlatformService(session).list_people()
-    ]
-
-
-@router.patch(
-    "/people/{owner_id}/limits", response_model=PersonRow, summary="Change the employee limit"
-)
-async def set_limit(
-    owner_id: uuid.UUID, body: SetLimitRequest, admin: AdminDep, session: SessionDep
-) -> PersonRow:
-    user = await PlatformService(session).set_employee_limit(
-        admin_id=admin.id, owner_id=owner_id, max_employees=body.max_employees
-    )
-    await session.commit()
-    return _row(user)
+    return [_row(user) for user in await PlatformService(session).list_people()]
 
 
 @router.post("/people/{owner_id}/suspend", response_model=PersonRow, summary="Suspend")
@@ -333,11 +304,6 @@ async def company_detail(owner_id: uuid.UUID, admin: AdminDep, session: SessionD
     if user is None:
         raise NotFoundError("No such account.")
 
-    employees = await session.scalar(
-        select(func.count())
-        .select_from(AIEmployee)
-        .where(AIEmployee.owner_id == owner_id, AIEmployee.status.in_(COUNTS_TOWARD_LIMIT))
-    )
     tasks = await session.scalar(
         select(func.count()).select_from(Task).where(Task.owner_id == owner_id)
     )
@@ -352,8 +318,6 @@ async def company_detail(owner_id: uuid.UUID, admin: AdminDep, session: SessionD
         full_name=user.full_name,
         active=user.is_active,
         created_at=user.created_at,
-        max_employees=user.max_employees,
-        employees_used=employees or 0,
         task_count=tasks or 0,
         providers=[
             ProviderStatusRow(

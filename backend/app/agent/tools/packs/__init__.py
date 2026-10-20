@@ -1,7 +1,6 @@
 """Tool packs. Importing a pack registers its tools."""
 
 from app.agent.tools.packs import (
-    delegation,
     email,
     github,
     google,
@@ -11,4 +10,4 @@ from app.agent.tools.packs import (
     web,
 )
 
-__all__ = ["delegation", "email", "github", "google", "memory", "microsoft", "sql", "web"]
+__all__ = ["email", "github", "google", "memory", "microsoft", "sql", "web"]

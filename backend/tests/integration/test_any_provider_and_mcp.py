@@ -134,7 +134,7 @@ async def test_a_company_picks_its_model_and_runs_use_it(
             return None
 
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: Answers(api_key))
-    acme, headers = await _company(api, session)
+    _acme, headers = await _company(api, session)
     await api.post(
         "/api/v1/me/providers",
         json={"provider_key": "anthropic", "api_key": "sk-ant-test-1234"},
@@ -148,13 +148,7 @@ async def test_a_company_picks_its_model_and_runs_use_it(
     assert picked.json()["default_model"] == "claude-haiku-5-5"
     assert picked.json()["model_chosen"] is True
 
-    employee = await _employee(api, acme.owner_id, headers, [])
-    task = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee, "input": "Hi"},
-        headers=headers,
-    )
-    await _run(task.json()["id"])
+    await _run(await _say(api, headers, "Hi"))
     assert used == [("anthropic", "claude-haiku-5-5")]
 
     back = await api.put(
@@ -226,7 +220,7 @@ async def test_another_company_never_sees_the_tools(
     assert not any(t["name"].startswith("mcp__") for t in catalogue)
 
 
-async def test_an_employee_uses_an_mcp_tool_in_a_real_run(
+async def test_the_assistant_uses_an_mcp_tool_in_a_real_run(
     api: AsyncClient,
     session: AsyncSession,
     public_dns: None,
@@ -266,7 +260,7 @@ async def test_an_employee_uses_an_mcp_tool_in_a_real_run(
     monkeypatch.setattr(
         job, "build_provider", lambda key, api_key, **_: LooksUpThenAnswers(api_key)
     )
-    acme, headers = await _company(api, session)
+    _acme, headers = await _company(api, session)
     await api.post(
         "/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": "test-key-abcd1234"},
@@ -277,21 +271,13 @@ async def test_an_employee_uses_an_mcp_tool_in_a_real_run(
         json={"name": "CRM", "url": MCP_URL, "token": "crm-secret-9876"},
         headers=headers,
     )
-    employee = await _employee(api, acme.owner_id, headers, ["mcp__crm__find_customer"])
-
-    task = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee, "input": "Who is Asha?"},
-        headers=headers,
-    )
-    outcome = await _run(task.json()["id"])
+    task_id = await _say(api, headers, "Who is Asha?")
+    outcome = await _run(task_id)
 
     assert outcome["status"] == "completed"
     # The token reached the server; it never reached the model.
     assert fake_server.calls == [("find_customer", {"query": "Asha"})]
-    detail = (
-        await api.get(f"/api/v1/me/tasks/{task.json()['id']}", headers=headers)
-    ).json()
+    detail = (await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)).json()
     assert "Asha Rao" in (detail["run"]["output"] or "")
 
 
@@ -326,7 +312,7 @@ async def test_a_write_tool_from_a_server_waits_for_approval(
             return None
 
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: MovesADeal(api_key))
-    acme, headers = await _company(api, session)
+    _acme, headers = await _company(api, session)
     await api.post(
         "/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": "test-key-abcd1234"},
@@ -337,13 +323,7 @@ async def test_a_write_tool_from_a_server_waits_for_approval(
         json={"name": "CRM", "url": MCP_URL, "token": "crm-secret-9876"},
         headers=headers,
     )
-    employee = await _employee(api, acme.owner_id, headers, ["mcp__crm__update_deal_stage"])
-    task = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee, "input": "Mark D-9 as won"},
-        headers=headers,
-    )
-    outcome = await _run(task.json()["id"])
+    outcome = await _run(await _say(api, headers, "Mark D-9 as won"))
 
     assert outcome["status"] == "awaiting_approval"
     assert fake_server.calls == []  # nothing happened before a person said yes
@@ -356,20 +336,16 @@ async def test_a_write_tool_from_a_server_waits_for_approval(
 # ------------------------------------------------------------ helpers
 
 
-async def _employee(
-    api: AsyncClient, owner_id: uuid.UUID, headers: dict[str, str], tools: list[str]
-) -> str:
-    created = await api.post(
-        "/api/v1/me/ai-employees",
-        json={
-            "name": "Ravi",
-            "config": {"guided": GUIDED, "model": "auto", "enabled_tools": tools},
-        },
+async def _say(api: AsyncClient, headers: dict[str, str], text: str) -> str:
+    """Start a conversation, say something, and return the turn's task id."""
+    created = await api.post("/api/v1/me/conversations", json={"mode": "work"}, headers=headers)
+    sent = await api.post(
+        f"/api/v1/me/conversations/{created.json()['id']}/messages",
+        json={"content": text},
         headers=headers,
     )
-    employee_id = created.json()["id"]
-    await api.post(f"/api/v1/me/ai-employees/{employee_id}/activate", headers=headers)
-    return employee_id
+    assert sent.status_code == 202, sent.text
+    return str(sent.json()["task_id"])
 
 
 async def _run(task_id: str) -> dict[str, Any]:

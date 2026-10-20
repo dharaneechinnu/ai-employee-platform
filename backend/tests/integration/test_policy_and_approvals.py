@@ -20,8 +20,6 @@ from app.agent.providers.base import (
 )
 from tests.integration.conftest import seed_company
 
-GUIDED = {"what_it_does": "Help with email.", "what_it_must_never_do": "Never spam."}
-
 
 class SendsThenAnswers(LLMProvider):
     """Asks to send an email, then (after approval) reports done."""
@@ -78,28 +76,28 @@ def stub_sender(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: SendsThenAnswers(api_key))
 
 
-async def _setup(api: AsyncClient, session: AsyncSession, tools: list[str]) -> tuple[Any, str]:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+async def _setup(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
+    """A person with a connected AI, ready to chat."""
+    person = await seed_company(session, api, name="Acme", slug="acme")
+    headers = {"Authorization": f"Bearer {person.admin_token}"}
 
     await api.post(
         "/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": "test-key-abcd1234"},
         headers=headers,
     )
-    created = await api.post(
-        "/api/v1/me/ai-employees",
-        json={
-            "name": "Support Bot",
-            "config": {"guided": GUIDED, "model": "gemini-2.0-flash", "enabled_tools": tools},
-        },
-        headers=headers,
+    return headers
+
+
+async def _say(api: AsyncClient, headers: dict[str, str], text: str) -> str:
+    """Start a conversation, say something, and return the turn's task id."""
+    created = await api.post("/api/v1/me/conversations", json={"mode": "work"}, headers=headers)
+    cid = created.json()["id"]
+    sent = await api.post(
+        f"/api/v1/me/conversations/{cid}/messages", json={"content": text}, headers=headers
     )
-    employee_id = created.json()["id"]
-    await api.post(
-        f"/api/v1/me/ai-employees/{employee_id}/activate", headers=headers
-    )
-    return acme, employee_id
+    assert sent.status_code == 202, sent.text
+    return str(sent.json()["task_id"])
 
 
 async def _run(task_id: str) -> dict[str, Any]:
@@ -215,15 +213,10 @@ async def test_the_tool_catalogue_shows_the_effective_setting(
 async def test_a_destructive_action_pauses_the_run_for_approval(
     api: AsyncClient, session: AsyncSession, stub_sender: None
 ) -> None:
-    acme, employee_id = await _setup(api, session, ["send_email"])
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    headers = await _setup(api, session)
 
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Reply to the invoice question"},
-        headers=headers,
-    )
-    result = await _run(created.json()["id"])
+    task_id = await _say(api, headers, "Reply to the invoice question")
+    result = await _run(task_id)
     assert result["status"] == "awaiting_approval"
 
     pending = await api.get("/api/v1/me/approvals", headers=headers)
@@ -239,24 +232,14 @@ async def test_a_destructive_action_pauses_the_run_for_approval(
 async def test_approving_resumes_the_run(
     api: AsyncClient, session: AsyncSession, stub_sender: None
 ) -> None:
-    acme, employee_id = await _setup(api, session, ["send_email"])
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    headers = await _setup(api, session)
 
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Reply to the customer"},
-        headers=headers,
-    )
-    task_id = created.json()["id"]
+    task_id = await _say(api, headers, "Reply to the customer")
     await _run(task_id)
 
-    approval_id = (await api.get("/api/v1/me/approvals", headers=headers)).json()[
-        0
-    ]["id"]
+    approval_id = (await api.get("/api/v1/me/approvals", headers=headers)).json()[0]["id"]
 
-    decided = await api.post(
-        f"/api/v1/me/approvals/{approval_id}/approve", headers=headers
-    )
+    decided = await api.post(f"/api/v1/me/approvals/{approval_id}/approve", headers=headers)
     assert decided.json()["status"] == "approved"
 
     # A worker picks the run back up and continues from the saved
@@ -271,20 +254,12 @@ async def test_approving_resumes_the_run(
 async def test_rejecting_ends_the_run_cleanly(
     api: AsyncClient, session: AsyncSession, stub_sender: None
 ) -> None:
-    acme, employee_id = await _setup(api, session, ["send_email"])
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    headers = await _setup(api, session)
 
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Reply to the customer"},
-        headers=headers,
-    )
-    task_id = created.json()["id"]
+    task_id = await _say(api, headers, "Reply to the customer")
     await _run(task_id)
 
-    approval_id = (await api.get("/api/v1/me/approvals", headers=headers)).json()[
-        0
-    ]["id"]
+    approval_id = (await api.get("/api/v1/me/approvals", headers=headers)).json()[0]["id"]
 
     await api.post(f"/api/v1/me/approvals/{approval_id}/reject", headers=headers)
 
@@ -299,8 +274,7 @@ async def test_setting_the_policy_to_auto_skips_the_approval(
     """With sending set to automatic the run does not pause. It then
     fails on the missing email connection, which is the correct next
     obstacle - the point is that no approval was requested."""
-    acme, employee_id = await _setup(api, session, ["send_email"])
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    headers = await _setup(api, session)
 
     await api.put(
         "/api/v1/me/policies",
@@ -313,12 +287,7 @@ async def test_setting_the_policy_to_auto_skips_the_approval(
         headers=headers,
     )
 
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Send it"},
-        headers=headers,
-    )
-    result = await _run(created.json()["id"])
+    result = await _run(await _say(api, headers, "Send it"))
 
     assert result["status"] != "awaiting_approval"
     assert (await api.get("/api/v1/me/approvals", headers=headers)).json() == []
@@ -330,41 +299,26 @@ async def test_always_allow_on_one_tool_needs_no_approval(
     """The switch on Connections and in the tool picker sets a rule for
     one tool. "Always allow" on a send means no approval is requested,
     and setting it back to "Ask me first" brings the approval back."""
-    acme, employee_id = await _setup(api, session, ["send_email"])
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    headers = await _setup(api, session)
     rule = {"scope": "tool", "scope_value": "send_email", "side_effect": None}
 
-    saved = await api.put(
-        "/api/v1/me/policies", json={**rule, "setting": "auto"}, headers=headers
-    )
+    saved = await api.put("/api/v1/me/policies", json={**rule, "setting": "auto"}, headers=headers)
     assert saved.status_code == 200, saved.text
     tools = await api.get("/api/v1/me/tools", headers=headers)
     assert {t["name"]: t for t in tools.json()}["send_email"]["effective_setting"] == "auto"
 
-    first = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Send it"},
-        headers=headers,
-    )
-    assert (await _run(first.json()["id"]))["status"] != "awaiting_approval"
+    assert (await _run(await _say(api, headers, "Send it")))["status"] != "awaiting_approval"
     assert (await api.get("/api/v1/me/approvals", headers=headers)).json() == []
 
-    await api.put(
-        "/api/v1/me/policies", json={**rule, "setting": "ask"}, headers=headers
-    )
-    second = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Send it again"},
-        headers=headers,
-    )
-    assert (await _run(second.json()["id"]))["status"] == "awaiting_approval"
+    await api.put("/api/v1/me/policies", json={**rule, "setting": "ask"}, headers=headers)
+    second = await _run(await _say(api, headers, "Send it again"))
+    assert second["status"] == "awaiting_approval"
 
 
 async def test_blocking_a_tool_stops_it_being_used(
     api: AsyncClient, session: AsyncSession, stub_sender: None
 ) -> None:
-    acme, employee_id = await _setup(api, session, ["send_email"])
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    headers = await _setup(api, session)
 
     await api.put(
         "/api/v1/me/policies",
@@ -372,12 +326,7 @@ async def test_blocking_a_tool_stops_it_being_used(
         headers=headers,
     )
 
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Send it"},
-        headers=headers,
-    )
-    task_id = created.json()["id"]
+    task_id = await _say(api, headers, "Send it")
     await _run(task_id)
 
     task = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
@@ -386,5 +335,3 @@ async def test_blocking_a_tool_stops_it_being_used(
 
     assert any(e["type"] == "tool_blocked" for e in trace.json()["events"])
     assert (await api.get("/api/v1/me/approvals", headers=headers)).json() == []
-
-

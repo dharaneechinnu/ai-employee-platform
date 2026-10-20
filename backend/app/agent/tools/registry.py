@@ -63,20 +63,6 @@ class ToolRegistry:
     def all(self) -> list[type[Tool]]:
         return sorted(self._tools.values(), key=lambda t: (t.pack, t.name))
 
-    def for_employee(
-        self, enabled: list[str], extra: dict[str, type[Tool]] | None = None
-    ) -> list[type[Tool]]:
-        """Only what this employee is allowed.
-
-        A tool absent from this list is not described to the model at
-        all, so as far as the model is concerned it does not exist.
-        `extra` holds the company's own tools (from MCP servers), which
-        live outside the global catalogue.
-        """
-        extra = extra or {}
-        found = [self._tools.get(n) or extra.get(n) for n in enabled]
-        return [t for t in found if t is not None]
-
     def schemas(self, tools: list[type[Tool]]) -> list[dict[str, object]]:
         return [
             {"name": t.name, "description": t.description, "parameters": t.json_schema()}

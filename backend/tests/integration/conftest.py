@@ -168,7 +168,6 @@ async def seed_person(
         email=email,
         full_name=name,
         password_hash=hash_password("correct-horse-battery"),
-        max_employees=3,
     )
     session.add(user)
     await session.flush()

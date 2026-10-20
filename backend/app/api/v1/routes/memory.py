@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.agent.embeddings import AVAILABLE_MODELS
 from app.api.v1.deps import ContextDep, SessionDep
-from app.db.models.memory import MemoryKind, MemoryScope
+from app.db.models.memory import MemoryKind
 from app.services.memory_service import MemoryService
 
 router = APIRouter(prefix="/me", tags=["memory"])
@@ -22,8 +22,6 @@ class MemoryResponse(BaseModel):
     id: uuid.UUID
     content: str
     kind: MemoryKind
-    scope: MemoryScope
-    employee_id: uuid.UUID | None
     embedding_model: str
     created_at: datetime
 
@@ -31,13 +29,10 @@ class MemoryResponse(BaseModel):
 class CreateMemoryRequest(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
     kind: MemoryKind = MemoryKind.FACT
-    scope: MemoryScope = MemoryScope.ORG
-    employee_id: uuid.UUID | None = None
 
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=1000)
-    employee_id: uuid.UUID | None = None
     limit: int = Field(default=5, ge=1, le=50)
 
 
@@ -75,18 +70,14 @@ def _to_response(memory: Any) -> MemoryResponse:
         id=memory.id,
         content=memory.content,
         kind=memory.kind,
-        scope=memory.scope,
-        employee_id=memory.employee_id,
         embedding_model=memory.embedding_model,
         created_at=memory.created_at,
     )
 
 
 @router.get("/memory", response_model=list[MemoryResponse], summary="Browse memories")
-async def list_memory(
-    ctx: ContextDep, session: SessionDep, employee_id: uuid.UUID | None = None
-) -> list[MemoryResponse]:
-    memories = await MemoryService(session, ctx.owner_id).list_memories(employee_id=employee_id)
+async def list_memory(ctx: ContextDep, session: SessionDep) -> list[MemoryResponse]:
+    memories = await MemoryService(session, ctx.owner_id).list_memories()
     return [_to_response(m) for m in memories]
 
 
@@ -102,8 +93,6 @@ async def create_memory(
     memory = await MemoryService(session, ctx.owner_id).remember(
         content=body.content,
         kind=body.kind,
-        scope=body.scope,
-        employee_id=body.employee_id,
         created_by=ctx.user_id,
     )
     return _to_response(memory)
@@ -120,9 +109,7 @@ async def delete_memory(memory_id: uuid.UUID, ctx: ContextDep, session: SessionD
 async def search_memory(
     body: SearchRequest, ctx: ContextDep, session: SessionDep
 ) -> list[SearchHitResponse]:
-    hits = await MemoryService(session, ctx.owner_id).recall(
-        body.query, employee_id=body.employee_id, limit=body.limit
-    )
+    hits = await MemoryService(session, ctx.owner_id).recall(body.query, limit=body.limit)
     return [
         SearchHitResponse(
             id=h.memory.id,

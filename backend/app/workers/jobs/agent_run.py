@@ -32,24 +32,19 @@ from app.agent.routing import (
     parse_kind,
     rank,
 )
-from app.agent.team import AskSpecialist, Team
+from app.agent.team import AskSpecialist, Team, specialist_policy
 from app.agent.tools.base import ToolContext
-from app.agent.tools.packs.delegation import specialist_policy
-from app.agent.tools.registry import registry
 from app.core.crypto import SecretUnreadableError
 from app.core.errors import NotFoundError
 from app.core.observability import get_logger
-from app.db.models.ai_employee import AIEmployee, AIEmployeeVersion
 from app.db.models.conversation import Conversation
 from app.db.models.identity import User
 from app.db.models.policy import Approval, ApprovalStatus, RunCheckpoint
 from app.db.models.task import LLMCall, Run, RunStatus, Task, TaskStatus
 from app.db.session import get_sessionmaker
-from app.schemas.ai_employee import EmployeeConfig
 from app.services.approval_service import ApprovalService
 from app.services.connection_service import ConnectionService
 from app.services.conversation_service import ConversationService
-from app.services.employee_service import build_system_prompt
 from app.services.mcp_service import McpService
 from app.services.notification_service import NotificationService, notify_safely
 from app.services.policy_service import PolicyService
@@ -66,6 +61,11 @@ async def run_task(ctx: dict[str, Any], task_id: str) -> dict[str, Any]:
     return await _execute(maker, uuid.UUID(task_id))
 
 
+# Lower than a task agent's default: a conversation wants a steady,
+# repeatable answer more than a surprising one.
+CHAT_TEMPERATURE = 0.4
+
+
 async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, Any]:  # type: ignore[type-arg]
     async with maker() as session:
         task = await session.scalar(select(Task).where(Task.id == task_id))
@@ -78,37 +78,15 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             # normal with a queue, so this is a no-op rather than an error.
             return {"status": str(task.status)}
 
-        # Who does the work: an AI Employee, or the personal assistant
-        # of a conversation, which has no stored configuration and is
-        # built from the conversation's own settings.
-        chat = (
-            await session.get(Conversation, task.conversation_id)
-            if task.conversation_id is not None
-            else None
-        )
-        employee = None
-        if chat is not None:
-            config = EmployeeConfig(
-                model=chat.model,
-                routing=Preference(chat.routing),
-                max_steps=assistant.CHAT_MAX_STEPS,
-                temperature=0.4,
-                # Filled in below from `chat_tools`: a chat has every
-                # tool its person can use, not a picked list.
-                enabled_tools=[],
-            )
-        else:
-            employee = await session.get(AIEmployee, task.employee_id) if task.employee_id else None
-            version = (
-                await session.get(AIEmployeeVersion, task.employee_version_id)
-                if task.employee_version_id
-                else None
-            )
-            if employee is None or version is None:  # pragma: no cover
-                task.status = TaskStatus.FAILED
-                await session.commit()
-                return {"status": "failed", "reason": "configuration missing"}
-            config = EmployeeConfig.model_validate(version.config)
+        # The personal assistant of a conversation. It has no stored
+        # configuration: it is built from the conversation's own
+        # settings, and has every tool its person can use.
+        chat = await session.get(Conversation, task.conversation_id)
+        if chat is None:  # pragma: no cover - the foreign key guarantees it
+            task.status = TaskStatus.FAILED
+            await session.commit()
+            return {"status": "failed", "reason": "conversation missing"}
+        routing = Preference(chat.routing)
 
         resuming = task.status is TaskStatus.AWAITING_APPROVAL
         run = None
@@ -153,11 +131,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         providers = ProviderService(session, task.owner_id)
         # A chat's history is read first: a long conversation is itself
         # a reason to pick an AI that handles long context well.
-        history = (
-            await ConversationService(session, task.owner_id).history_before(task)
-            if chat is not None
-            else None
-        )
+        history = await ConversationService(session, task.owner_id).history_before(task)
         classify_usage = Usage()
 
         async def classify(candidates: list[Candidate]) -> TaskKind:
@@ -165,9 +139,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
 
         try:
             choices = await providers.route(
-                config.model,
+                chat.model,
                 text=task.input,
-                preference=config.routing,
+                preference=routing,
                 history_chars=sum(len(m.content or "") for m in history or []),
                 classify=classify,
             )
@@ -257,7 +231,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         resolver = await PolicyService(session, task.owner_id).resolver()
 
         def check_policy(tool_name: str) -> tuple[str, str]:
-            if tool_name == AskSpecialist.name and chat is not None and chat.team:
+            if tool_name == AskSpecialist.name and chat.team:
                 # Specialists can only read; their own steps are checked one by one.
                 return "auto", "team mode is on for this conversation"
             decision = resolver.evaluate(tool_name)
@@ -294,22 +268,13 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             fresh = await session.scalar(select(Task.cancel_requested).where(Task.id == task_id))
             return bool(fresh)
 
-        tools = (
-            assistant.chat_tools(resolver, set(grants))
-            if chat is not None
-            else registry.for_employee(config.enabled_tools, extra=resolver.extra_tools)
-        )
-        context_config: dict[str, Any] = {
-            # The memory tools need a session and to know which
-            # employee is asking, so employee-scoped memories stay
-            # private to that employee. A chat has no employee: its
-            # memories belong to the person.
-            "_session": session,
-            "_employee_id": employee.id if employee else None,
-        }
+        tools = assistant.chat_tools(resolver, set(grants))
+        # The memory tools need the run's session. What they remember
+        # belongs to the person.
+        context_config: dict[str, Any] = {"_session": session}
 
         team: Team | None = None
-        if chat is not None and chat.team:
+        if chat.team:
             # Orchestration: the lead may hand parts to specialists, who
             # use the same AI and the conversation's read-only tools.
             async def emit(type_: str, **payload: Any) -> None:
@@ -324,7 +289,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 # With Automatic, each specialist gets the AI best at its
                 # role: long reading, careful reasoning, good writing.
                 provider_for=(
-                    _team_router(await providers.candidates(), options, config.routing)
+                    _team_router(await providers.candidates(), options, routing)
                     if len(options) > 1
                     else None
                 ),
@@ -343,8 +308,8 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 grants=grants,
                 config=context_config,
             ),
-            budget=Budget(max_steps=config.max_steps),
-            temperature=config.temperature,
+            budget=Budget(max_steps=assistant.CHAT_MAX_STEPS),
+            temperature=CHAT_TEMPERATURE,
             on_event=sink,
             is_cancelled=cancelled,
             check_policy=check_policy,
@@ -352,19 +317,13 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             approved_call=approved_call,
         )
 
-        if chat is not None:
-            person = await session.get(User, task.created_by)
-            system_prompt = assistant.system_prompt(
-                chat.mode,
-                person=(person.full_name or None) if person else None,
-                team=chat.team,
-                tool_names=[t.name for t in tools],
-            )
-        else:
-            assert employee is not None
-            system_prompt = build_system_prompt(
-                config, name=employee.name, job_title=employee.job_title
-            )
+        person = await session.get(User, task.created_by)
+        system_prompt = assistant.system_prompt(
+            chat.mode,
+            person=(person.full_name or None) if person else None,
+            team=chat.team,
+            tool_names=[t.name for t in tools],
+        )
 
         outcome = await loop.run(system_prompt=system_prompt, task=task.input, history=history)
         if team is not None:
@@ -482,8 +441,6 @@ async def _finish(
 
     await session.commit()
     log.info("run_finished", run_id=str(run.id), status=str(status), cause=stop_cause)
-    if task is not None:
-        await notify_safely(NotificationService(session, run.owner_id).task_finished(task, run))
     return {"status": str(status), "stop_cause": stop_cause, "run_id": str(run.id)}
 
 

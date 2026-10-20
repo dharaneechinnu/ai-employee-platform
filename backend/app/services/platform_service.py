@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -22,7 +22,6 @@ from app.core.crypto import encrypt
 from app.core.errors import ConflictError, InvalidCredentialsError, NotFoundError
 from app.core.observability import get_logger
 from app.core.security import create_access_token, hash_password, hash_token, verify_password
-from app.db.models.ai_employee import COUNTS_TOWARD_LIMIT, AIEmployee
 from app.db.models.identity import PlatformAdmin, SetupToken, User
 from app.db.models.policy import ConnectionKind
 from app.db.models.provider import OrgConnectionAccess, PlatformOAuthApp
@@ -69,19 +68,6 @@ class ConnectionAccessView:
     overridden: bool
     note: str | None
 
-
-@dataclass(slots=True)
-class PersonStats:
-    """One account, as the control room sees it.
-
-    Counts and health only: how many AI Employees they have running
-    against their limit, and whether the account is active. Nothing
-    here reaches their tasks, memory or mail, because no endpoint
-    returns those.
-    """
-
-    user: User
-    employee_count: int = 0
 
 
 class PlatformService:
@@ -143,7 +129,6 @@ class PlatformService:
         admin_id: uuid.UUID,
         email: str,
         full_name: str | None,
-        max_employees: int,
     ) -> tuple[User, str]:
         """Create an account and the link its owner signs in with.
 
@@ -163,7 +148,6 @@ class PlatformService:
             # A placeholder nobody can produce: the account is unusable
             # until the setup link sets a real one.
             password_hash=hash_password(secrets.token_urlsafe(32)),
-            max_employees=max_employees,
             is_active=True,
         )
         self.session.add(user)
@@ -182,28 +166,15 @@ class PlatformService:
             action="account_created",
             target_type="user",
             target_id=str(user.id),
-            detail=f"max_employees={max_employees}",
         )
         log.info("account_created", user_id=str(user.id))
         return user, raw_token
 
-    async def list_people(self) -> list[PersonStats]:
-        """Counts and health only. No customer content."""
-        employee_counts = (
-            select(AIEmployee.owner_id, func.count().label("employees"))
-            .where(AIEmployee.status.in_(COUNTS_TOWARD_LIMIT))
-            .group_by(AIEmployee.owner_id)
-            .subquery()
-        )
-
-        rows = await self.session.execute(
-            select(User, func.coalesce(employee_counts.c.employees, 0))
-            .outerjoin(employee_counts, employee_counts.c.owner_id == User.id)
-            .order_by(User.created_at)
-        )
-        return [
-            PersonStats(user=user, employee_count=employees) for user, employees in rows.all()
-        ]
+    async def list_people(self) -> list[User]:
+        """Every account. Who they are and whether they are active; nothing
+        about what they have done, because no endpoint returns that."""
+        rows = await self.session.scalars(select(User).order_by(User.created_at))
+        return list(rows.all())
 
     async def set_active(
         self, *, admin_id: uuid.UUID, owner_id: uuid.UUID, active: bool
@@ -220,22 +191,6 @@ class PlatformService:
             action="account_restored" if active else "account_suspended",
             target_type="user",
             target_id=str(owner_id),
-        )
-        return user
-
-    async def set_employee_limit(
-        self, *, admin_id: uuid.UUID, owner_id: uuid.UUID, max_employees: int
-    ) -> User:
-        user = await self._person(owner_id)
-
-        previous = user.max_employees
-        user.max_employees = max_employees
-        self.admins.record_audit(
-            admin_id=admin_id,
-            action="employee_limit_changed",
-            target_type="user",
-            target_id=str(owner_id),
-            detail=f"{previous} -> {max_employees}",
         )
         return user
 

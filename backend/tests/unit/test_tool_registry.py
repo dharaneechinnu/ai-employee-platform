@@ -46,23 +46,6 @@ def test_two_different_tools_cannot_share_a_name() -> None:
         reg.register(_tool("duplicate"))
 
 
-def test_for_employee_returns_only_the_allowed_tools() -> None:
-    reg = ToolRegistry()
-    reg.register(_tool("allowed"))
-    reg.register(_tool("not_allowed"))
-
-    assert [t.name for t in reg.for_employee(["allowed"])] == ["allowed"]
-
-
-def test_an_unknown_tool_name_is_ignored_rather_than_raising() -> None:
-    """Configuration can outlive a tool that was removed. Dropping it
-    quietly is better than breaking every run for that employee."""
-    reg = ToolRegistry()
-    reg.register(_tool("real"))
-
-    assert [t.name for t in reg.for_employee(["real", "deleted_last_year"])] == ["real"]
-
-
 def test_the_starter_pack_is_registered() -> None:
     assert registry.get("get_webpage") is not None
 

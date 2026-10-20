@@ -1,4 +1,4 @@
-"""Parallel tool execution and the delegation limits."""
+"""Parallel tool execution, and the rule specialists obey."""
 
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ from app.agent.providers.base import (
     Usage,
 )
 from app.agent.tools.base import SideEffect, Tool, ToolContext, ToolResult
-from app.agent.tools.packs.delegation import MAX_DELEGATION_DEPTH, DelegateToSpecialist
 
 
 class SleepArgs(BaseModel):
@@ -159,63 +158,15 @@ async def test_all_parallel_results_reach_the_model() -> None:
     assert all(e.payload["ok"] for e in results)
 
 
-# ----------------------------------------------------------------- delegation
+# ------------------------------------------------------------- specialists
 
 
-async def test_a_specialist_cannot_delegate_onward() -> None:
-    """Depth is capped at 1. Chaining agents multiplies error rates:
-    at 80% each, three levels is a coin flip, and a mistake by the
-    first becomes the second's input."""
-    tool = DelegateToSpecialist()
-    ctx = ToolContext(
-        owner_id=uuid.uuid4(),
-        config={"_session": object(), "_depth": MAX_DELEGATION_DEPTH},
-    )
-
-    result = await tool.execute(ctx, {"specialist_name": "Anyone", "task": "do this"})
-
-    assert not result.ok
-    assert result.error_class == "depth_limit"
-
-
-async def test_delegation_needs_a_session() -> None:
-    tool = DelegateToSpecialist()
-    result = await tool.execute(
-        ToolContext(owner_id=uuid.uuid4()), {"specialist_name": "A", "task": "t"}
-    )
-
-    assert not result.ok
-    assert result.error_class == "unavailable"
-
-
-async def test_too_many_specialists_is_refused() -> None:
-    tool = DelegateToSpecialist()
-    ctx = ToolContext(
-        owner_id=uuid.uuid4(),
-        config={
-            "_session": object(),
-            "_depth": 0,
-            "_delegated_to": {"One", "Two", "Three"},
-        },
-    )
-
-    result = await tool.execute(ctx, {"specialist_name": "Four", "task": "t"})
-
-    assert not result.ok
-    assert result.error_class == "too_many_specialists"
-
-
-def test_delegation_is_labelled_as_a_write() -> None:
-    """A specialist may take write actions of its own, so delegation is
-    not a read."""
-    assert DelegateToSpecialist.side_effect is SideEffect.WRITE
-
-
-def test_specialists_follow_the_company_permission_rules() -> None:
-    """Delegating must not be a way round Permissions. "Ask me first"
-    becomes a refusal, because a specialist cannot pause for a person;
-    its manager does that step instead, with the normal approval."""
-    from app.agent.tools.packs.delegation import specialist_policy
+def test_specialists_follow_the_persons_permission_rules() -> None:
+    """Handing work to a specialist must not be a way round Permissions.
+    "Ask me first" becomes a refusal, because a specialist cannot pause
+    for a person; the lead does that step instead, with the normal
+    approval."""
+    from app.agent.team import specialist_policy
     from app.db.models.policy import PolicySetting
     from app.services.policy_service import Decision
 
@@ -227,11 +178,11 @@ def test_specialists_follow_the_company_permission_rules() -> None:
 
     class Resolver:
         def evaluate(self, tool_name: str) -> Decision:
-            return Decision(rules[tool_name], "set by your company for this tool")
+            return Decision(rules[tool_name], "set by you for this tool")
 
     check = specialist_policy(Resolver())
     assert check("get_webpage")[0] == "auto"
     assert check("send_email")[0] == "blocked"
     setting, reason = check("gmail_send")
     assert setting == "blocked"
-    assert "manager" in reason
+    assert "lead" in reason

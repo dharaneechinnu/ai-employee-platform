@@ -28,7 +28,6 @@ from app.api.v1.deps import SessionDep
 from app.core.errors import AuthError, NotFoundError, PermissionDeniedError
 from app.core.security import decode_access_token
 from app.core.signed import InvalidSignedTokenError, verify
-from app.db.models.ai_employee import AIEmployee
 from app.db.models.identity import User
 from app.db.models.policy import ApprovalStatus
 from app.db.models.task import Run, Task
@@ -43,7 +42,6 @@ class ApprovalLinkView(BaseModel):
     owner_name: str
     task_title: str | None
     task_id: uuid.UUID | None
-    employee_name: str | None
     tool_name: str
     side_effect: str
     proposed: dict[str, Any]
@@ -80,16 +78,12 @@ async def _view(
     approval = await ApprovalService(session, owner_id).get(approval_id)
     run = await session.get(Run, approval.run_id)
     task = await session.get(Task, run.task_id) if run else None
-    employee = (
-        await session.get(AIEmployee, task.employee_id) if task and task.employee_id else None
-    )
     user = await session.get(User, user_id) if user_id else None
     return ApprovalLinkView(
         approval_id=approval.id,
         owner_name=(user.full_name or user.email) if user else "",
         task_title=(task.title or task.input[:120]) if task else None,
         task_id=task.id if task else None,
-        employee_name=employee.name if employee else None,
         tool_name=approval.tool_name,
         side_effect=approval.side_effect,
         proposed=approval.proposed,

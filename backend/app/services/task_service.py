@@ -1,9 +1,9 @@
 """Task creation, reading and cancellation.
 
-Creating a task writes a row and queues a job; it never runs the agent.
-An agent run takes minutes, and an HTTP request that waits that long
-times out, freezes the screen and loses the work. The API answers in
-milliseconds and the worker does the slow part.
+A task is one turn of a conversation: a row the worker picks up and
+runs. Creating them is the conversation service's job; this reads,
+lists and cancels them. An agent run takes minutes, so nothing here
+ever waits for one.
 """
 
 from __future__ import annotations
@@ -17,9 +17,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ConflictError, NotFoundError, ValidationError
+from app.core.errors import ConflictError, NotFoundError
 from app.core.observability import get_logger
-from app.db.models.ai_employee import AIEmployee, AIEmployeeVersion, EmployeeStatus
 from app.db.models.task import (
     TERMINAL_STATUSES,
     EventType,
@@ -46,56 +45,6 @@ class TaskService:
         self.session = session
         self.owner_id = owner_id
 
-    # ------------------------------------------------------------- create
-
-    async def create(
-        self,
-        *,
-        employee_id: uuid.UUID,
-        text: str,
-        title: str | None,
-        dry_run: bool,
-        user_id: uuid.UUID,
-    ) -> Task:
-        employee = await self.session.scalar(
-            select(AIEmployee).where(
-                AIEmployee.id == employee_id, AIEmployee.owner_id == self.owner_id
-            )
-        )
-        if employee is None:
-            raise NotFoundError("No such AI Employee.")
-
-        if employee.status not in (EmployeeStatus.ACTIVE, EmployeeStatus.DRAFT):
-            raise ConflictError(
-                f"{employee.name} is {employee.status} and cannot take tasks right now."
-            )
-
-        version = await self.session.scalar(
-            select(AIEmployeeVersion)
-            .where(AIEmployeeVersion.employee_id == employee_id)
-            .order_by(AIEmployeeVersion.version_no.desc())
-            .limit(1)
-        )
-        if version is None:
-            raise ValidationError("That AI Employee has no configuration.")
-
-        task = Task(
-            owner_id=self.owner_id,
-            employee_id=employee_id,
-            # Pinned now. A later edit must not rewrite what this run did.
-            employee_version_id=version.id,
-            title=title or text[:200],
-            input=text,
-            dry_run=dry_run,
-            created_by=user_id,
-            status=TaskStatus.QUEUED,
-        )
-        self.session.add(task)
-        await self.session.flush()
-
-        log.info("task_created", task_id=str(task.id), employee_id=str(employee_id))
-        return task
-
     # ------------------------------------------------------------- read
 
     async def get(self, task_id: uuid.UUID) -> TaskWithRun:
@@ -113,8 +62,7 @@ class TaskService:
     async def list_tasks(self, *, limit: int = 50) -> list[Task]:
         result = await self.session.scalars(
             select(Task)
-            # Chat turns live in their conversation, not the task list.
-            .where(Task.owner_id == self.owner_id, Task.conversation_id.is_(None))
+            .where(Task.owner_id == self.owner_id)
             .order_by(Task.created_at.desc())
             .limit(limit)
         )

@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from tests.integration.conftest import seed_company
-from tests.integration.test_policy_and_approvals import SendsThenAnswers, _run, _setup
+from tests.integration.test_policy_and_approvals import SendsThenAnswers, _run, _say, _setup
 
 ACCESS = "ya29.fake-access-token-0001"
 REFRESH = "1//fake-refresh-token-zz99"
@@ -282,9 +282,8 @@ async def test_approve_from_an_email_link_resumes_the_run(
     outbox: dict[str, list[Any]],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The whole loop: a run pauses, the admin is emailed a link, the
-    link approves without signing in, the run resumes and finishes, and
-    the person who assigned the task hears it is done."""
+    """The whole loop: a run pauses, the person is emailed a link, the
+    link approves without signing in, and the run resumes and finishes."""
     import app.api.v1.routes.approval_links as links
 
     queued: list[uuid.UUID] = []
@@ -295,24 +294,19 @@ async def test_approve_from_an_email_link_resumes_the_run(
 
     monkeypatch.setattr(links, "enqueue_task", fake_enqueue)
 
-    acme, employee_id = await _setup(api, session, ["send_email"])
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    headers = await _setup(api, session)
+    my_email = (await api.get("/api/v1/auth/me", headers=headers)).json()["email"]
     await api.put(
         "/api/v1/me/notifications",
         json={"slack_enabled": True, "slack_webhook_url": "https://hooks.slack.com/services/x"},
         headers=headers,
     )
 
-    task = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Send the invoice email."},
-        headers=headers,
-    )
-    task_id = task.json()["id"]
+    task_id = await _say(api, headers, "Send the invoice email.")
     paused = await _run(task_id)
     assert paused["status"] == "awaiting_approval"
 
-    [email] = [e for e in outbox["email"] if e["to"] == acme.admin_email]
+    [email] = [e for e in outbox["email"] if e["to"] == my_email]
     assert "Approval needed" in email["subject"]
     assert "customer@example.com" in email["text"]
     assert outbox["slack"], "the Slack channel should hear about it too"
@@ -324,7 +318,7 @@ async def test_approve_from_an_email_link_resumes_the_run(
     view = await api.get(f"/api/v1/approval-links/{token}")
     assert view.status_code == 200
     assert view.json()["status"] == "pending"
-    assert view.json()["acting_as"] == acme.admin_email
+    assert view.json()["acting_as"] == my_email
     assert view.json()["requires_sign_in"] is False
 
     decided = await api.post(f"/api/v1/approval-links/{token}/decide", json={"approve": True})
@@ -338,7 +332,9 @@ async def test_approve_from_an_email_link_resumes_the_run(
 
     finished = await _run(task_id)
     assert finished["status"] == "completed"
-    assert any("finished" in e["subject"] for e in outbox["email"])
+    # No "it finished" email: a chat reply appears in the chat the
+    # person is already in, so only things that need them are sent.
+    assert not any("finished" in e["subject"] for e in outbox["email"])
 
 
 

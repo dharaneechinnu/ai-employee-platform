@@ -1,8 +1,8 @@
 """Task and run routes, including the live stream.
 
-`POST /tasks` must answer in milliseconds. It writes a row, queues a
-job and returns; the worker does the slow part. Anything else means
-browser timeouts and lost work.
+A task is one turn of a conversation. These routes read them, cancel
+them and stream a run's events; sending a message (which creates the
+task and queues the job) lives with the conversation.
 """
 
 from __future__ import annotations
@@ -15,14 +15,13 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.api.v1.deps import ContextDep, SessionDep
 from app.db.models.task import TERMINAL_STATUSES, RunStatus, TaskStatus
 from app.services.task_service import TaskService
-from app.workers.queue import enqueue_task
 
 router = APIRouter(prefix="/me", tags=["tasks"])
 
@@ -31,13 +30,6 @@ router = APIRouter(prefix="/me", tags=["tasks"])
 # it, proxies and load balancers quietly drop an idle connection.
 KEEPALIVE_SECONDS = 15
 POLL_SECONDS = 0.5
-
-
-class CreateTaskRequest(BaseModel):
-    employee_id: uuid.UUID
-    input: str = Field(min_length=1, max_length=10_000)
-    title: str | None = Field(default=None, max_length=200)
-    dry_run: bool = False
 
 
 class RunSummary(BaseModel):
@@ -65,9 +57,7 @@ class TaskResponse(BaseModel):
     input: str
     status: TaskStatus
     dry_run: bool
-    # None for a chat turn, which belongs to a conversation instead.
-    employee_id: uuid.UUID | None
-    conversation_id: uuid.UUID | None = None
+    conversation_id: uuid.UUID
     created_at: datetime
     run: RunSummary | None = None
 
@@ -78,7 +68,7 @@ class TaskListItem(BaseModel):
     id: uuid.UUID
     title: str | None
     status: TaskStatus
-    employee_id: uuid.UUID | None
+    conversation_id: uuid.UUID
     created_at: datetime
 
 
@@ -98,32 +88,6 @@ def _run_summary(run: Any) -> RunSummary | None:
         started_at=run.started_at,
         ended_at=run.ended_at,
     )
-
-
-@router.post(
-    "/tasks",
-    response_model=TaskResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Assign a task (returns immediately)",
-)
-async def create_task(
-    body: CreateTaskRequest,
-    ctx: ContextDep,
-    session: SessionDep,
-) -> TaskResponse:
-    task = await TaskService(session, ctx.owner_id).create(
-        employee_id=body.employee_id,
-        text=body.input,
-        title=body.title,
-        dry_run=body.dry_run,
-        user_id=ctx.user_id,
-    )
-    # Commit before queueing: a worker must never pick up a job whose
-    # row is not visible yet.
-    await session.commit()
-    await enqueue_task(task.id)
-
-    return TaskResponse.model_validate(task)
 
 
 @router.get("/tasks", response_model=list[TaskListItem], summary="List tasks")

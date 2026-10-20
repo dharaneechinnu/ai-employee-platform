@@ -23,16 +23,12 @@ class NotificationSettingsResponse(BaseModel):
     slack_connected: bool
     slack_webhook_last4: str | None
     on_approval_requested: bool
-    on_task_completed: bool
-    on_task_failed: bool
 
 
 class UpdateNotificationSettings(BaseModel):
     email_enabled: bool = True
     slack_enabled: bool = False
     on_approval_requested: bool = True
-    on_task_completed: bool = True
-    on_task_failed: bool = True
     # Write-only. Omit to keep the current webhook; send a new one to
     # replace it; set `clear_slack_webhook` to remove it.
     slack_webhook_url: str | None = Field(default=None, max_length=500)
@@ -52,8 +48,6 @@ def _response(row: NotificationSettings) -> NotificationSettingsResponse:
         slack_connected=row.slack_webhook_enc is not None,
         slack_webhook_last4=row.slack_webhook_last4,
         on_approval_requested=row.on_approval_requested,
-        on_task_completed=row.on_task_completed,
-        on_task_failed=row.on_task_failed,
     )
 
 

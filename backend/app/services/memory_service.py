@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.embeddings import (
@@ -23,7 +23,6 @@ from app.db.models.memory import (
     EmbeddingConfig,
     Memory,
     MemoryKind,
-    MemoryScope,
 )
 
 log = get_logger(__name__)
@@ -100,22 +99,15 @@ class MemoryService:
         *,
         content: str,
         kind: MemoryKind = MemoryKind.FACT,
-        scope: MemoryScope = MemoryScope.ORG,
-        employee_id: uuid.UUID | None = None,
         meta: dict[str, Any] | None = None,
         created_by: uuid.UUID | None = None,
     ) -> Memory:
-        if scope is MemoryScope.EMPLOYEE and employee_id is None:
-            raise ValidationError("An employee-scoped memory needs an employee.")
-
         config = await self.config()
         provider = await self.provider()
         vector = await provider.embed_one(content)
 
         memory = Memory(
             owner_id=self.owner_id,
-            employee_id=employee_id if scope is MemoryScope.EMPLOYEE else None,
-            scope=scope,
             kind=kind,
             content=content,
             embedding_model=config.model,
@@ -148,20 +140,14 @@ class MemoryService:
             raise NotFoundError("No such memory.")
         return memory
 
-    async def list_memories(
-        self, *, employee_id: uuid.UUID | None = None, limit: int = 100
-    ) -> list[Memory]:
+    async def list_memories(self, *, limit: int = 100) -> list[Memory]:
         stmt = select(Memory).where(Memory.owner_id == self.owner_id)
-        if employee_id is not None:
-            stmt = stmt.where(or_(Memory.employee_id == employee_id, Memory.employee_id.is_(None)))
         result = await self.session.scalars(stmt.order_by(Memory.created_at.desc()).limit(limit))
         return list(result.all())
 
     # ------------------------------------------------------------- search
 
-    async def recall(
-        self, query: str, *, employee_id: uuid.UUID | None = None, limit: int = 5
-    ) -> list[SearchHit]:
+    async def recall(self, query: str, *, limit: int = 5) -> list[SearchHit]:
         config = await self.config()
 
         mismatched = await self.session.scalar(
@@ -182,16 +168,10 @@ class MemoryService:
         query_vector = await provider.embed_one(query)
         vector_table = VECTOR_TABLES[config.dim]
 
-        scope_filter = (
-            or_(Memory.employee_id == employee_id, Memory.employee_id.is_(None))
-            if employee_id is not None
-            else Memory.employee_id.is_(None)
-        )
-
         rows = await self.session.execute(
             select(Memory, vector_table.embedding.cosine_distance(query_vector).label("distance"))  # type: ignore[attr-defined]
             .join(vector_table, vector_table.memory_id == Memory.id)  # type: ignore[attr-defined]
-            .where(Memory.owner_id == self.owner_id, scope_filter)
+            .where(Memory.owner_id == self.owner_id)
             .order_by(text("distance"))
             .limit(limit * 2)
         )
@@ -215,7 +195,6 @@ class MemoryService:
             )
             .where(
                 Memory.owner_id == self.owner_id,
-                scope_filter,
                 Memory.content_tsv.op("@@")(func.plainto_tsquery("english", query)),
             )
             .order_by(text("rank DESC"))

@@ -30,7 +30,6 @@ APPROVAL_TTL_HOURS = 24
 class PendingApproval:
     approval: Approval
     task_title: str | None
-    employee_id: uuid.UUID | None  # None for a chat turn
 
 
 class ApprovalService:
@@ -94,7 +93,7 @@ class ApprovalService:
             .order_by(Approval.created_at)
         )
         return [
-            PendingApproval(approval=a, task_title=t.title, employee_id=t.employee_id)
+            PendingApproval(approval=a, task_title=t.title)
             for a, t in rows.all()
         ]
 

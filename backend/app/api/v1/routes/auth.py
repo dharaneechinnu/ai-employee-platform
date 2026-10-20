@@ -102,7 +102,6 @@ async def me(current: CurrentUserDep) -> MeResponse:
         id=current.user.id,
         email=current.user.email,
         full_name=current.user.full_name,
-        max_employees=current.user.max_employees,
     )
 
 

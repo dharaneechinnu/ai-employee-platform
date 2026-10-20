@@ -6,7 +6,8 @@ what comes back. Asking several specialists in one step runs them at
 the same time, because the loop already runs independent tool calls
 in parallel: fan out, then fan in.
 
-The limits are the point, as with delegation between AI Employees:
+The limits are the point, because chained agents multiply each
+other's errors:
 
 - Depth 1. A specialist has no `ask_specialist` tool, so it cannot
   start a chain. Chained agents multiply each other's error rates.
@@ -39,7 +40,7 @@ SPECIALIST_SECONDS = 180.0
 
 # Tools that share the run's database session. Parallel specialists
 # must not use one session at the same time, so these stay with the lead.
-_LEAD_ONLY_PACKS = {"memory", "delegation", "team"}
+_LEAD_ONLY_PACKS = {"memory", "team"}
 
 RoleKey = Literal["researcher", "analyst", "writer", "critic"]
 
@@ -217,3 +218,28 @@ class AskSpecialist(Tool):
                 "Carry on without that part, or do it yourself.",
             )
         return ToolResult.success({"specialist": role.label, "answer": outcome.output or ""})
+
+
+def specialist_policy(resolver: Any) -> Callable[[str], tuple[str, str]]:
+    """The permission check for a specialist's own tool calls.
+
+    "Always allow" and "Blocked" apply exactly as they do for the lead.
+    "Ask me first" becomes a refusal with a reason: a specialist runs
+    inside the lead's step and cannot pause for a person, so the lead
+    is told to take that step itself, where the normal approval
+    happens. Without this, handing work to a specialist was a way round
+    every rule.
+    """
+
+    def check(tool_name: str) -> tuple[str, str]:
+        decision = resolver.evaluate(tool_name)
+        setting = decision.setting.value
+        if setting == "ask":
+            return (
+                "blocked",
+                "it needs a person's approval, which a specialist cannot wait for; "
+                "hand this step back to the lead to do",
+            )
+        return setting, decision.reason
+
+    return check

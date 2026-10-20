@@ -50,23 +50,11 @@ class MemoryKind(StrEnum):
     DOCUMENT = "document"  # a chunk of an uploaded file
 
 
-class MemoryScope(StrEnum):
-    EMPLOYEE = "employee"  # only this AI Employee can recall it
-    ORG = "org"  # every AI Employee in the company can
-
-
 class Memory(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "memories"
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    # NULL means company-wide. Set means only that AI Employee.
-    employee_id: Mapped[uuid.UUID | None] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("ai_employees.id", ondelete="CASCADE")
-    )
-    scope: Mapped[MemoryScope] = mapped_column(
-        StrEnumType(MemoryScope, 20), nullable=False, default=MemoryScope.ORG
     )
     kind: Mapped[MemoryKind] = mapped_column(
         StrEnumType(MemoryKind, 20), nullable=False, default=MemoryKind.FACT
@@ -90,7 +78,7 @@ class Memory(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
     __table_args__ = (
-        Index("ix_memories_org_employee", "owner_id", "employee_id"),
+        Index("ix_memories_owner", "owner_id"),
         Index("ix_memories_tsv", "content_tsv", postgresql_using="gin"),
     )
 
@@ -173,7 +161,6 @@ class RunSummary(Base, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True
     )
     owner_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    employee_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True))
     goal: Mapped[str | None] = mapped_column(Text)
     outcome: Mapped[str | None] = mapped_column(Text)
     lesson: Mapped[str | None] = mapped_column(Text)

@@ -1,11 +1,15 @@
-"""Tasks end to end: create, run, stream, cancel.
+"""Turns as tasks: run, trace, cancel, list, and who may see them.
+
+Every reply the assistant gives is a task, and the task routes are how
+the activity count, the notification bell and the run trace find them.
+These tests cover that surface; what is *said* in a conversation lives
+in test_conversations.
 
 The worker job is executed directly rather than through Redis. That
 keeps the test fast and deterministic while still exercising the real
-code path — the same function arq calls in production.
-
-The provider is stubbed, because a real model gives a different answer
-every time and costs money and rate limit on every CI run.
+code path — the same function arq calls in production. The provider is
+stubbed, because a real model gives a different answer every time and
+costs money and rate limit on every CI run.
 """
 
 from __future__ import annotations
@@ -18,12 +22,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.providers.base import LLMProvider, LLMReply, Message, Role, StopReason, Usage
-from tests.integration.conftest import seed_company, seed_person
+from tests.integration.conftest import seed_person
 
-GUIDED = {
-    "what_it_does": "Answer questions about bugs.",
-    "what_it_must_never_do": "Never delete code.",
-}
+CONVERSATIONS = "/api/v1/me/conversations"
 
 
 class StubProvider(LLMProvider):
@@ -31,13 +32,9 @@ class StubProvider(LLMProvider):
 
     provider_key = "gemini"
 
-    def __init__(self, api_key: str, answer: str = "The bug is on line 24.") -> None:
-        super().__init__(api_key)
-        self.answer = answer
-
     async def complete(self, **kwargs: Any) -> LLMReply:  # type: ignore[override]
         return LLMReply(
-            message=Message(role=Role.ASSISTANT, content=self.answer),
+            message=Message(role=Role.ASSISTANT, content="The bug is on line 24."),
             stop_reason=StopReason.END_TURN,
             usage=Usage(prompt_tokens=120, output_tokens=30),
             model="gemini-2.0-flash",
@@ -55,95 +52,63 @@ def stub_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: StubProvider(api_key))
 
 
-async def _setup(api: AsyncClient, session: AsyncSession) -> tuple[Any, str, str]:
-    """A company with a connected provider and one active AI Employee."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
-
+async def _person(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
+    """Somebody with a connected AI, ready to chat."""
+    person = await seed_person(session, api, name="Asha")
+    headers = {"Authorization": f"Bearer {person.token}"}
     await api.post(
         "/api/v1/me/providers",
         json={"provider_key": "gemini", "api_key": "test-key-abcd1234"},
         headers=headers,
     )
+    return headers
 
-    created = await api.post(
-        "/api/v1/me/ai-employees",
-        json={
-            "name": "Bug Fixer Bot",
-            "job_title": "GitHub Helper",
-            "config": {"guided": GUIDED, "model": "gemini-2.0-flash", "enabled_tools": []},
-        },
-        headers=headers,
+
+async def _send(api: AsyncClient, headers: dict[str, str], text: str) -> str:
+    """Start a conversation, say something, and return the turn's task id.
+
+    The job is queued but not run: the caller decides whether the
+    worker gets to it, which is the whole point of the cancel tests.
+    """
+    created = await api.post(CONVERSATIONS, json={"mode": "study"}, headers=headers)
+    cid = created.json()["id"]
+    sent = await api.post(
+        f"{CONVERSATIONS}/{cid}/messages", json={"content": text}, headers=headers
     )
-    employee_id = created.json()["id"]
-    await api.post(
-        f"/api/v1/me/ai-employees/{employee_id}/activate", headers=headers
-    )
-    return acme, employee_id, acme.admin_token
+    assert sent.status_code == 202, sent.text
+    return str(sent.json()["task_id"])
 
 
-async def test_creating_a_task_returns_immediately(api: AsyncClient, session: AsyncSession) -> None:
-    """The API must not wait for the agent: a run takes minutes and a
-    browser gives up long before that."""
-    _acme, employee_id, token = await _setup(api, session)
-
-    response = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Look at bug 42"},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-
-    assert response.status_code == 202
-    body = response.json()
-    assert body["status"] == "queued"
-    assert body["run"] is None
-
-
-async def test_the_worker_runs_the_task_and_records_the_result(
-    api: AsyncClient, session: AsyncSession, stub_provider: None
-) -> None:
-    _acme, employee_id, token = await _setup(api, session)
-    headers = {"Authorization": f"Bearer {token}"}
-
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Look at bug 42"},
-        headers=headers,
-    )
-    task_id = created.json()["id"]
-
+async def _run(task_id: str) -> dict[str, Any]:
     from app.db.session import get_sessionmaker
     from app.workers.jobs.agent_run import _execute
 
-    result = await _execute(get_sessionmaker(), uuid.UUID(task_id))
-    assert result["stop_cause"] == "completed"
+    return await _execute(get_sessionmaker(), uuid.UUID(task_id))
 
-    finished = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
-    body = finished.json()
-    assert body["status"] == "completed"
-    assert body["run"]["output"] == "The bug is on line 24."
-    assert body["run"]["prompt_tokens"] == 120
-    assert float(body["run"]["estimated_cost_usd"]) > 0
+
+async def test_the_worker_runs_the_turn_and_records_the_result(
+    api: AsyncClient, session: AsyncSession, stub_provider: None
+) -> None:
+    headers = await _person(api, session)
+    task_id = await _send(api, headers, "Look at bug 42")
+
+    assert (await _run(task_id))["status"] == "completed"
+
+    task = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
+    assert task.json()["status"] == "completed"
+    run = task.json()["run"]
+    assert run["output"] == "The bug is on line 24."
+    assert run["prompt_tokens"] == 120
+    assert run["output_tokens"] == 30
 
 
 async def test_the_run_trace_records_every_step(
     api: AsyncClient, session: AsyncSession, stub_provider: None
 ) -> None:
     """The event log is what makes a run debuggable and auditable."""
-    _acme, employee_id, token = await _setup(api, session)
-    headers = {"Authorization": f"Bearer {token}"}
-
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Look at bug 42"},
-        headers=headers,
-    )
-    task_id = created.json()["id"]
-
-    from app.db.session import get_sessionmaker
-    from app.workers.jobs.agent_run import _execute
-
-    await _execute(get_sessionmaker(), uuid.UUID(task_id))
+    headers = await _person(api, session)
+    task_id = await _send(api, headers, "Look at bug 42")
+    await _run(task_id)
 
     task = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
     run_id = task.json()["run"]["id"]
@@ -159,206 +124,75 @@ async def test_the_run_trace_records_every_step(
     assert trace.json()["llm_calls"][0]["prompt_tokens"] == 120
 
 
-async def test_a_task_without_a_connected_provider_fails_with_a_clear_message(
-    api: AsyncClient, session: AsyncSession
-) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+async def test_cancelling_a_queued_turn(api: AsyncClient, session: AsyncSession) -> None:
+    headers = await _person(api, session)
+    task_id = await _send(api, headers, "Look at bug 42")
 
-    created = await api.post(
-        "/api/v1/me/ai-employees",
-        json={"name": "Bot", "config": {"guided": GUIDED, "model": "gemini-2.0-flash"}},
-        headers=headers,
-    )
-    employee_id = created.json()["id"]
-
-    task = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "do something"},
-        headers=headers,
-    )
-    task_id = task.json()["id"]
-
-    from app.db.session import get_sessionmaker
-    from app.workers.jobs.agent_run import _execute
-
-    await _execute(get_sessionmaker(), uuid.UUID(task_id))
-
-    finished = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
-    body = finished.json()
-    assert body["status"] == "failed"
-    assert "No AI key is connected" in body["run"]["error_message"]
-
-
-async def test_the_automatic_model_uses_whichever_provider_is_connected(
-    api: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A company that connected only Groq must not fail on a Gemini
-    default it never set up. Old "gemini-flash" configs count as auto."""
-    import app.workers.jobs.agent_run as job
-
-    used: list[str] = []
-
-    def build(key: str, api_key: str, **_: object) -> StubProvider:
-        used.append(key)
-        return StubProvider(api_key)
-
-    monkeypatch.setattr(job, "build_provider", build)
-
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
-    await api.post(
-        "/api/v1/me/providers",
-        json={"provider_key": "groq", "api_key": "gsk_test-key-1234"},
-        headers=headers,
-    )
-
-    for model in ("auto", "gemini-flash"):
-        created = await api.post(
-            "/api/v1/me/ai-employees",
-            json={"name": f"Bot {model}", "config": {"guided": GUIDED, "model": model}},
-            headers=headers,
-        )
-        employee_id = created.json()["id"]
-        await api.post(
-            f"/api/v1/me/ai-employees/{employee_id}/activate", headers=headers
-        )
-        task = await api.post(
-            "/api/v1/me/tasks",
-            json={"employee_id": employee_id, "input": "hello"},
-            headers=headers,
-        )
-        await job._execute(job.get_sessionmaker(), uuid.UUID(task.json()["id"]))
-        done = await api.get(
-            f"/api/v1/me/tasks/{task.json()['id']}", headers=headers
-        )
-        assert done.json()["status"] == "completed", done.text
-
-    assert used == ["groq", "groq"]
-
-
-async def test_a_new_employee_defaults_to_the_automatic_model(
-    api: AsyncClient, session: AsyncSession
-) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
-    created = await api.post(
-        "/api/v1/me/ai-employees",
-        json={"name": "Bot", "config": {"guided": GUIDED}},
-        headers=headers,
-    )
-    assert created.json()["config"]["model"] == "auto"
-
-
-async def test_cancelling_a_queued_task(api: AsyncClient, session: AsyncSession) -> None:
-    _acme, employee_id, token = await _setup(api, session)
-    headers = {"Authorization": f"Bearer {token}"}
-
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Look at bug 42"},
-        headers=headers,
-    )
-    task_id = created.json()["id"]
-
-    cancelled = await api.post(
-        f"/api/v1/me/tasks/{task_id}/cancel", headers=headers
-    )
+    cancelled = await api.post(f"/api/v1/me/tasks/{task_id}/cancel", headers=headers)
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
 
 
-async def test_a_cancelled_task_is_not_run_by_the_worker(
+async def test_a_cancelled_turn_is_not_run_by_the_worker(
     api: AsyncClient, session: AsyncSession, stub_provider: None
 ) -> None:
-    _acme, employee_id, token = await _setup(api, session)
-    headers = {"Authorization": f"Bearer {token}"}
-
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "Look at bug 42"},
-        headers=headers,
-    )
-    task_id = created.json()["id"]
+    headers = await _person(api, session)
+    task_id = await _send(api, headers, "Look at bug 42")
     await api.post(f"/api/v1/me/tasks/{task_id}/cancel", headers=headers)
 
-    from app.db.session import get_sessionmaker
-    from app.workers.jobs.agent_run import _execute
-
     # The worker sees it is no longer queued and does not run it.
-    result = await _execute(get_sessionmaker(), uuid.UUID(task_id))
-    assert result["status"] == "cancelled"
+    assert (await _run(task_id))["status"] == "cancelled"
 
 
-async def test_tasks_appear_in_the_list(api: AsyncClient, session: AsyncSession) -> None:
-    _acme, employee_id, token = await _setup(api, session)
-    headers = {"Authorization": f"Bearer {token}"}
-
-    await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "first"},
-        headers=headers,
-    )
+async def test_turns_appear_in_the_task_list(api: AsyncClient, session: AsyncSession) -> None:
+    headers = await _person(api, session)
+    await _send(api, headers, "first")
 
     listed = await api.get("/api/v1/me/tasks", headers=headers)
     assert listed.status_code == 200
     assert len(listed.json()) == 1
+    # The list says which conversation each one belongs to, so the
+    # notification bell can link straight to it.
+    assert listed.json()[0]["conversation_id"]
 
 
-async def test_anyone_signed_in_can_create_a_task(api: AsyncClient, session: AsyncSession) -> None:
-    """Member uses the AI Employees an Admin built."""
-    acme, employee_id, _ = await _setup(api, session)
-
-    response = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "please look at this"},
-        headers={"Authorization": f"Bearer {acme.token}"},
-    )
-    assert response.status_code == 202
-
-
-async def test_company_a_cannot_read_company_b_tasks(
+async def test_one_person_cannot_read_or_cancel_anothers_task(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    _acme, employee_id, token = await _setup(api, session)
-    globex = await seed_company(session, api, name="Globex", slug="globex")
+    headers = await _person(api, session)
+    task_id = await _send(api, headers, "secret work")
 
-    created = await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee_id, "input": "secret work"},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    task_id = created.json()["id"]
+    other = await seed_person(session, api)
+    theirs = {"Authorization": f"Bearer {other.token}"}
 
-    response = await api.get(
-        f"/api/v1/me/tasks/{task_id}",
-        headers={"Authorization": f"Bearer {globex.admin_token}"},
-    )
-    assert response.status_code == 404
+    # 404, not 403: whether somebody else's task exists is not theirs
+    # to learn.
+    assert (await api.get(f"/api/v1/me/tasks/{task_id}", headers=theirs)).status_code == 404
+    assert (
+        await api.post(f"/api/v1/me/tasks/{task_id}/cancel", headers=theirs)
+    ).status_code == 404
+
+    # And it is still queued: the refusal did not cancel it.
+    mine = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
+    assert mine.json()["status"] == "queued"
+    assert (await api.get("/api/v1/me/tasks", headers=theirs)).json() == []
 
 
-async def test_setup_progress_is_visible(
-    api: AsyncClient, session: AsyncSession
-) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+async def test_setup_progress_is_visible(api: AsyncClient, session: AsyncSession) -> None:
+    person = await seed_person(session, api)
+    headers = {"Authorization": f"Bearer {person.token}"}
     url = "/api/v1/me/setup"
 
-    fresh = await api.get(url, headers={"Authorization": f"Bearer {acme.token}"})
+    fresh = await api.get(url, headers=headers)
     assert fresh.status_code == 200
-    assert fresh.json() == {
-        "ai_connected": False,
-        "apps_connected": False,
-        "employees": 0,
-        "employees_active": 0,
-        "tasks": 0,
-    }
+    assert fresh.json() == {"ai_connected": False, "apps_connected": False, "tasks": 0}
 
     await api.post(
         "/api/v1/me/providers",
         json={"provider_key": "groq", "api_key": "gsk_test-key-1234"},
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers=headers,
     )
-    later = await api.get(url, headers={"Authorization": f"Bearer {acme.token}"})
+    later = await api.get(url, headers=headers)
     assert later.json()["ai_connected"] is True
 
     # The same URL for everybody, answered from the token. Another

@@ -21,7 +21,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    Integer,
     String,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -38,13 +37,6 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     full_name: Mapped[str | None] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-    # Moved here from the organisation when accounts became personal.
-    # A cap per person is what stops one account standing up fifty AI
-    # Employees.
-    max_employees: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=5, server_default="5"
-    )
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"

@@ -48,7 +48,7 @@ async def _platform_token(api: AsyncClient, session: AsyncSession) -> str:
 
 @pytest.fixture
 async def seeded(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
-    """A company holding content that must never be readable from /platform."""
+    """A person holding content that must never be readable from /platform."""
     acme = await seed_company(session, api, name="Acme", slug="acme")
     headers = {"Authorization": f"Bearer {acme.admin_token}"}
 
@@ -62,14 +62,14 @@ async def seeded(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
         json={"content": SECRET_MEMORY_TEXT},
         headers=headers,
     )
-    employee = await api.post(
-        "/api/v1/me/ai-employees",
-        json={"name": "Bot", "config": {"guided": {"what_it_does": "work"}}},
-        headers=headers,
+    # Said to the assistant, because a conversation is where a person's
+    # content lives now. It becomes both a message and a task.
+    conversation = await api.post(
+        "/api/v1/me/conversations", json={"mode": "work"}, headers=headers
     )
     await api.post(
-        "/api/v1/me/tasks",
-        json={"employee_id": employee.json()["id"], "input": SECRET_TASK_TEXT},
+        f"/api/v1/me/conversations/{conversation.json()['id']}/messages",
+        json={"content": SECRET_TASK_TEXT},
         headers=headers,
     )
 
@@ -135,7 +135,7 @@ async def test_the_customer_routes_are_closed_to_platform_staff(
         assert response.status_code in (401, 403, 404), f"{path} accepted a platform token"
 
 
-async def test_company_detail_shows_counts_but_no_content(
+async def test_a_persons_detail_shows_counts_but_no_content(
     api: AsyncClient, seeded: dict[str, str]
 ) -> None:
     """The supported shape: how many and how healthy."""
@@ -147,7 +147,7 @@ async def test_company_detail_shows_counts_but_no_content(
     body = response.json()
 
     assert body["task_count"] == 1
-    assert body["employees_used"] == 1
+    assert body["active"] is True
     # Whether a provider is connected, never which key.
     assert body["providers"][0]["provider_key"] == "gemini"
     assert body["providers"][0]["connected"] is True
@@ -165,7 +165,6 @@ async def test_the_audit_log_records_platform_actions(
             "name": "Globex",
             "slug": "globex",
             "email": "owner@globex.com",
-            "max_employees": 2,
         },
         headers=headers,
     )

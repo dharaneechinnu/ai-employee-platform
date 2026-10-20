@@ -37,5 +37,3 @@ class NotificationSettings(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     # Which events are worth interrupting someone for.
     on_approval_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    on_task_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    on_task_failed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

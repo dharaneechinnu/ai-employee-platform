@@ -108,8 +108,12 @@ async def test_a_chat_remembers_the_conversation(
         (Role.USER, "Now give me an exercise"),
     ]
 
-    # Chat turns stay out of the AI Employees' task list.
-    assert (await api.get("/api/v1/me/tasks", headers=headers)).json() == []
+    # Every turn is a task, and the task list is how the activity
+    # count and the notification bell find them. (They used to be kept
+    # out of it, back when the list belonged to AI Employees.)
+    listed = (await api.get("/api/v1/me/tasks", headers=headers)).json()
+    assert len(listed) == 2
+    assert {t["conversation_id"] for t in listed} == {cid}
 
 
 async def test_one_answer_at_a_time(
