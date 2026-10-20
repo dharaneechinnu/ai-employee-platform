@@ -72,12 +72,12 @@ export default function ApproveLink() {
               <div className="flex flex-wrap items-center gap-2">
                 <Chip tone={statusTone(view.side_effect)} dot={false}>{effectLabel(view.side_effect)}</Chip>
                 <StatusChip status={view.status} />
-                <span className="ml-auto text-xs text-dim">{view.org_name}</span>
+                <span className="ml-auto text-xs text-dim">{view.owner_name}</span>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <h1 className="font-display text-2xl font-semibold leading-tight">
-                  {view.employee_name ?? "An AI Employee"} wants to {toolAction(view.tool_name)}
+                  Your assistant wants to {toolAction(view.tool_name)}
                 </h1>
                 {view.task_title && <p className="text-sm text-muted">Task: {view.task_title}</p>}
               </div>

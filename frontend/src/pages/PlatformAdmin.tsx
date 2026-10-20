@@ -152,7 +152,7 @@ function SignIn({ onSignedIn }: { onSignedIn: () => void }) {
         ticker="Create, limit and suspend accounts. Counts and health only."
         points={[
           "Create accounts and send the setup link",
-          "Set how many AI Employees each may run",
+          "See which AI each person has connected, never what they ask it",
           "Suspend an account; customer data stays private",
         ]}
       />
@@ -200,7 +200,6 @@ function People({ onSignOut }: { onSignOut: () => void }) {
 
   const [name, setName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
-  const [limit, setLimit] = useState("5");
 
   async function load() {
     setPeople(await call<Person[]>("/people"));
@@ -252,14 +251,13 @@ function People({ onSignOut }: { onSignOut: () => void }) {
     setBusy("create");
     try {
       const created = await call<{ setup_token: string }>("/people", {
-        name,
-        first_admin_email: adminEmail,
-        max_employees: Number(limit),
+        email: adminEmail,
+        full_name: name.trim() || null,
       });
       // Shown once. Only the hash is stored, so a lost link means a
       // new invite rather than a lookup.
       setSetupLink(`${window.location.origin}/login?token=${created.setup_token}`);
-      toast(`${name} created.`);
+      toast(`${name.trim() || adminEmail} created.`);
       setName("");
       setAdminEmail("");
       await load();
@@ -284,28 +282,12 @@ function People({ onSignOut }: { onSignOut: () => void }) {
     }
   }
 
-  async function setLimitFor(person: Person, value: number) {
-    const next = Math.max(person.employees_used, value);
-    if (next === person.max_employees) return;
-    // Optimistic: the stepper should feel instant; a failure reloads.
-    setPeople((current) => current?.map((c) => (c.id === person.id ? { ...c, max_employees: next } : c)) ?? null);
-    try {
-      await call(`/people/${person.id}/limits`, { max_employees: next }, "PATCH");
-      toast(`${(person.full_name || person.email)} limit set to ${next}.`);
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Could not change the limit.", "bad");
-      await load();
-    }
-  }
-
   const stats = useMemo(() => {
     const list = people ?? [];
     return {
       total: list.length,
       active: list.filter((c) => c.active).length,
       suspended: list.filter((c) => !c.active).length,
-      used: list.reduce((n, c) => n + c.employees_used, 0),
-      seats: list.reduce((n, c) => n + c.max_employees, 0),
     };
   }, [people]);
 
@@ -385,7 +367,6 @@ function People({ onSignOut }: { onSignOut: () => void }) {
               <Stat label="People" value={stats.total} delay={0.04} />
               <Stat label="Active" value={stats.active} tone="text-ok-text" delay={0.08} />
               <Stat label="Suspended" value={stats.suspended} tone="text-bad-text" delay={0.12} />
-              <Stat label="AI Employee seats used" value={stats.used} suffix={` / ${stats.seats}`} delay={0.16} />
             </div>
 
             {creating && (
@@ -394,19 +375,18 @@ function People({ onSignOut }: { onSignOut: () => void }) {
                 <div className="grid items-end gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
                   <Input label="Person name" value={name} onChange={setName} required />
                   <Input label="Email" type="email" value={adminEmail} onChange={setAdminEmail} required />
-                  <Input label="AI Employee limit" type="number" value={limit} onChange={setLimit} mono />
                   <Button type="submit" disabled={busy === "create"}>
-                    {busy === "create" ? "Creating…" : "Create and get invite"}
+                    {busy === "create" ? "Creating…" : "Create and get setup link"}
                   </Button>
                 </div>
                 <ErrorNote message={error} />
-                <p className="text-[13px] text-dim">The first admin's invite link is shown once, right after creation. Only its hash is stored.</p>
+                <p className="text-[13px] text-dim">Their setup link is shown once, right after creation. They choose their own password through it, and only the link's hash is stored.</p>
               </form>
             )}
 
             {setupLink && (
               <div role="status" className="card rise flex flex-col gap-2 border-accent-line bg-accent-soft p-4">
-                <span className="text-xs text-accent-text">Send this to the first admin. It is shown only once.</span>
+                <span className="text-xs text-accent-text">Send this to the person. It is shown only once.</span>
                 <div className="flex items-center gap-2.5">
                   <code className="min-w-0 flex-1 truncate font-mono text-[13px]">{setupLink}</code>
                   <Button size="sm" variant="ghost" onClick={() => void copyLink()}>
@@ -436,12 +416,11 @@ function People({ onSignOut }: { onSignOut: () => void }) {
 
             <section className="card rise overflow-hidden">
               <div className="overflow-x-auto">
-                <div className="min-w-[940px]">
-                  <div className="grid grid-cols-[minmax(240px,1.6fr)_120px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3 font-mono text-xs uppercase tracking-[0.1em] text-dim">
+                <div className="min-w-[760px]">
+                  <div className="grid grid-cols-[minmax(240px,1.6fr)_120px_minmax(140px,1fr)_220px] items-center gap-3 border-b border-line px-5 py-3 font-mono text-xs uppercase tracking-[0.1em] text-dim">
                     <span>Account</span>
                     <span>Status</span>
-                    <span>AI Employees</span>
-                    <span>Limit</span>
+                    <span>Joined</span>
                     <span className="text-right">Actions</span>
                   </div>
                   {visible.length === 0 ? (
@@ -451,11 +430,10 @@ function People({ onSignOut }: { onSignOut: () => void }) {
                   ) : (
                     visible.map((person, i) => {
                       const active = person.active;
-                      const pct = person.max_employees ? Math.round((person.employees_used / person.max_employees) * 100) : 0;
                       return (
                         <div
                           key={person.id}
-                          className="slide-in grid grid-cols-[minmax(240px,1.6fr)_120px_minmax(170px,1fr)_150px_220px] items-center gap-3 border-b border-line px-5 py-3.5 text-sm transition-colors last:border-0 hover:bg-raised"
+                          className="slide-in grid grid-cols-[minmax(240px,1.6fr)_120px_minmax(140px,1fr)_220px] items-center gap-3 border-b border-line px-5 py-3.5 text-sm transition-colors last:border-0 hover:bg-raised"
                           style={{ animationDelay: `${Math.min(i, 10) * 0.04}s` }}
                         >
                           <button
@@ -478,36 +456,8 @@ function People({ onSignOut }: { onSignOut: () => void }) {
                           <span>
                             <Chip tone={statusTone((person.active ? "active" : "suspended"))}>{(person.active ? "active" : "suspended")}</Chip>
                           </span>
-                          <span className="flex items-center gap-2.5">
-                            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-raised">
-                              <span
-                                className="grow-x block h-full rounded-full"
-                                style={{ width: `${pct}%`, background: "linear-gradient(90deg,var(--accent),var(--accent2) 65%,var(--spark))", opacity: active ? 1 : 0.5 }}
-                              />
-                            </span>
-                            <span className="font-mono text-[13px] text-muted">
-                              {person.employees_used}/{person.max_employees}
-                            </span>
-                          </span>
-                          <span className="inline-flex w-fit items-center overflow-hidden rounded-[10px] border border-line2">
-                            <button
-                              type="button"
-                              aria-label={`Lower limit for ${(person.full_name || person.email)}`}
-                              disabled={person.max_employees <= person.employees_used}
-                              onClick={() => void setLimitFor(person, person.max_employees - 1)}
-                              className="h-9 w-9 bg-sunken text-base font-semibold text-muted transition-colors hover:bg-raised hover:text-accent-text disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              −
-                            </button>
-                            <span className="min-w-[40px] text-center font-mono">{person.max_employees}</span>
-                            <button
-                              type="button"
-                              aria-label={`Raise limit for ${(person.full_name || person.email)}`}
-                              onClick={() => void setLimitFor(person, person.max_employees + 1)}
-                              className="h-9 w-9 bg-sunken text-base font-semibold text-muted transition-colors hover:bg-raised hover:text-accent-text"
-                            >
-                              +
-                            </button>
+                          <span className="font-mono text-[13px] text-muted" title={new Date(person.created_at).toLocaleString()}>
+                            {relativeTime(person.created_at)}
                           </span>
                           <span className="flex justify-end">
                             {active ? (
@@ -525,8 +475,7 @@ function People({ onSignOut }: { onSignOut: () => void }) {
                               <Icon name="warn" size={20} className="text-bad-text" />
                               <span className="min-w-[240px] flex-1">
                                 Suspend <b>{person.full_name || person.email}</b>? They cannot sign
-                                in, and their {person.employees_used} AI Employees stop running.
-                                Nothing of theirs is read or deleted, and you can restore the
+                                in. Nothing of theirs is read or deleted, and you can restore the
                                 account later.
                               </span>
                               <Button size="sm" variant="danger" disabled={busy === person.id} onClick={() => void setStatus(person, "suspend")}>
@@ -641,15 +590,14 @@ function PersonPanel({
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-sunken p-4">
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr))]">
-        <Fact label="AI Employees" value={`${detail.employees_used} / ${detail.max_employees}`} />
-        <Fact label="Tasks ever run" value={String(detail.task_count)} />
+        <Fact label="Replies given" value={String(detail.task_count)} />
         <Fact label="Customer since" value={new Date(detail.created_at).toLocaleDateString()} />
       </div>
 
       <div className="flex flex-col gap-2">
         <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-dim">AI providers</span>
         {detail.providers.length === 0 ? (
-          <span className="text-[13px] text-muted">None connected. Their AI Employees cannot run yet.</span>
+          <span className="text-[13px] text-muted">None connected. Their assistant cannot answer yet.</span>
         ) : (
           <div className="flex flex-wrap gap-2">
             {detail.providers.map((provider) => (

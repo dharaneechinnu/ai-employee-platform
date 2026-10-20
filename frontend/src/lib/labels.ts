@@ -34,7 +34,6 @@ export const TOOL_LABELS: Record<string, string> = {
   get_webpage: "Read a web page",
   recall: "Look up company memory",
   remember: "Save to company memory",
-  delegate_to_specialist: "Ask another AI Employee",
   github_list_repos: "See GitHub repositories",
   github_search_code: "Search code on GitHub",
   github_read_file: "Read a file on GitHub",

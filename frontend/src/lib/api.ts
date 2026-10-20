@@ -129,57 +129,6 @@ export interface Me {
   id: string;
   email: string;
   full_name: string | null;
-  /** The cap on AI Employees for this account, set by the platform. */
-  max_employees: number;
-}
-
-export type EmployeeStatus = "draft" | "active" | "paused" | "archived";
-
-export interface EmployeeListItem {
-  id: string;
-  name: string;
-  job_title: string | null;
-  department: string | null;
-  avatar: string | null;
-  status: EmployeeStatus;
-}
-
-export interface EmployeeList {
-  items: EmployeeListItem[];
-  used: number;
-  limit: number;
-}
-
-export interface Employee extends EmployeeListItem {
-  version_no: number;
-  config: EmployeeConfig;
-  created_at: string;
-}
-
-export interface EmployeeConfig {
-  guided?: {
-    what_it_does: string;
-    what_it_must_never_do?: string | null;
-    tone?: string | null;
-    when_to_ask_a_human?: string | null;
-    what_good_looks_like?: string | null;
-  } | null;
-  raw_instructions?: string | null;
-  model: string;
-  /** With model "auto": what Automatic aims for. */
-  routing?: "balanced" | "quality" | "cost" | "private";
-  temperature: number;
-  max_steps: number;
-  enabled_tools: string[];
-}
-
-export interface Template {
-  id: string;
-  name: string;
-  description: string | null;
-  department: string | null;
-  config: EmployeeConfig;
-  is_platform_template: boolean;
 }
 
 export interface ProviderOption {
@@ -239,7 +188,8 @@ export interface TaskListItem {
   id: string;
   title: string | null;
   status: TaskStatus;
-  employee_id: string;
+  /** Every task is one reply in a conversation. */
+  conversation_id: string;
   created_at: string;
 }
 
@@ -307,8 +257,6 @@ export interface MemoryItem {
   id: string;
   content: string;
   kind: string;
-  scope: string;
-  employee_id: string | null;
   embedding_model: string;
   created_at: string;
 }
@@ -325,8 +273,7 @@ export interface Person {
   email: string;
   full_name: string | null;
   active: boolean;
-  max_employees: number;
-  employees_used: number;
+  created_at: string;
 }
 
 export interface ConnectionField {
@@ -372,16 +319,13 @@ export interface NotificationSettings {
   slack_connected: boolean;
   slack_webhook_last4: string | null;
   on_approval_requested: boolean;
-  on_task_completed: boolean;
-  on_task_failed: boolean;
 }
 
 export interface ApprovalLinkView {
   approval_id: string;
-  org_name: string;
+  owner_name: string;
   task_title: string | null;
   task_id: string | null;
-  employee_name: string | null;
   tool_name: string;
   side_effect: string;
   proposed: Record<string, unknown>;

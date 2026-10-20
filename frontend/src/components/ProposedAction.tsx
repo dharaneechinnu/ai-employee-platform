@@ -1,5 +1,5 @@
 /**
- * Exactly what an AI Employee wants to do, as readable fields: the
+ * Exactly what your assistant wants to do, as readable fields: the
  * same on the Approvals page and on the approve-from-email page.
  *
  * Every value is shown in full. You cannot meaningfully approve an

@@ -10,12 +10,10 @@ import { ApiError, api, type NotificationSettings } from "../lib/api";
  * the app.
  */
 
-type EventKey = "on_approval_requested" | "on_task_completed" | "on_task_failed";
+type EventKey = "on_approval_requested";
 
 const EVENTS: { key: EventKey; title: string; who: string }[] = [
-  { key: "on_approval_requested", title: "An action needs approval", who: "To every admin, with Approve and Reject buttons" },
-  { key: "on_task_failed", title: "A task fails", who: "" },
-  { key: "on_task_completed", title: "A task finishes", who: "" },
+  { key: "on_approval_requested", title: "An action needs approval", who: "With Approve and Reject buttons right in the message" },
 ];
 
 export default function Notifications() {
@@ -40,8 +38,6 @@ export default function Notifications() {
         email_enabled: merged.email_enabled,
         slack_enabled: merged.slack_enabled,
         on_approval_requested: merged.on_approval_requested,
-        on_task_completed: merged.on_task_completed,
-        on_task_failed: merged.on_task_failed,
         slack_webhook_url: next.slack_webhook_url ?? null,
         clear_slack_webhook: next.clear_slack_webhook ?? false,
       });
@@ -115,7 +111,7 @@ export default function Notifications() {
             {!settings.email_available && (
               <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px] leading-normal">
                 <Icon name="warn" className="text-ask-text" />
-                <span>Email sending isn't switched on yet, so nothing will be sent. Whoever set up AI Employees for your company can turn it on (it needs a mail server). Slack works without it.</span>
+                <span>Email sending isn't switched on yet, so nothing will be sent. Whoever runs this platform can turn it on (it needs a mail server). Slack works without it.</span>
               </div>
             )}
             <p className="text-[13px] leading-relaxed text-dim">

@@ -11,8 +11,8 @@ import { Icon } from "../icons";
 const SLIDES = [
   {
     kicker: "Welcome",
-    title: "Meet your AI team",
-    body: "AI Employees do real work in your real apps: reading email, checking data, drafting replies. Each one has a job, tools and limits.",
+    title: "Meet your assistant",
+    body: "Ask anything. It reads the web, remembers what matters, works in your real apps, and brings in a team of specialists for bigger questions.",
     visual: "team",
   },
   {
@@ -23,7 +23,7 @@ const SLIDES = [
   },
   {
     kicker: "Live",
-    title: "Watch them work",
+    title: "Watch it work",
     body: "Every step streams live and stays on record, with what it cost. Ask in plain words, or just say it out loud.",
     visual: "live",
   },
@@ -36,9 +36,9 @@ function Words({ text }: { text: string; delay?: number }) {
 
 function TeamVisual() {
   const people = [
-    { n: "R", name: "Ravi", job: "Checks the data", hue: "var(--accent)", dur: 16, start: 0 },
-    { n: "K", name: "Kiran", job: "Reads the inbox", hue: "var(--run)", dur: 16, start: -5.33 },
-    { n: "M", name: "Meera", job: "Drafts replies", hue: "var(--spark)", dur: 16, start: -10.66 },
+    { n: "R", name: "Researcher", job: "Finds and reads", hue: "var(--accent)", dur: 16, start: 0 },
+    { n: "A", name: "Analyst", job: "Works out the answer", hue: "var(--run)", dur: 16, start: -5.33 },
+    { n: "W", name: "Writer", job: "Drafts it clearly", hue: "var(--spark)", dur: 16, start: -10.66 },
   ];
   return (
     <div className="welcome-stage">

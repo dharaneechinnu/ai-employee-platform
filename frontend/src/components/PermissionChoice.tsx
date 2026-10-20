@@ -7,10 +7,9 @@ import { useToast } from "./ui";
 /**
  * Always allow / Ask me first / Blocked, for one tool.
  *
- * The same control on Connections, in an AI Employee's tool list and on
- * Permissions, so the choice is made right where the tool is. It saves a
- * company-wide rule for that tool, which every AI Employee (and every
- * specialist they hand work to) follows.
+ * The same control on Connections and on Permissions, so the choice is
+ * made right where the tool is. It saves a rule for that tool, which your
+ * assistant (and every specialist it brings in) follows.
  *
  * "Always allow" on something that can't be undone asks once more, in
  * plain words, because it removes the person from the loop.
@@ -68,7 +67,7 @@ export default function PermissionChoice({
         next === "auto"
           ? `${label}: always allowed. No approval needed.`
           : next === "ask"
-            ? `${label}: AI Employees will ask you first.`
+            ? `${label}: your assistant will ask you first.`
             : `${label}: blocked.`,
         next === "blocked" ? "info" : "ok",
       );
@@ -98,7 +97,7 @@ export default function PermissionChoice({
     <div className="flex flex-col gap-2">
       <span
         role="radiogroup"
-        aria-label={`${label}: when may AI Employees use it?`}
+        aria-label={`${label}: when may your assistant use it?`}
         aria-busy={saving}
         className="inline-flex self-start rounded-[11px] border border-line bg-sunken p-[3px]"
         data-coach="policy-choice"
@@ -129,7 +128,7 @@ export default function PermissionChoice({
           <span className="flex gap-2">
             <Icon name="warn" size={16} className="mt-0.5 shrink-0 text-ask-text" />
             <span>
-              AI Employees will <b>{toolAction(tool.name)}</b> without asking anyone, and it can't be undone. Allow it
+              Your assistant will <b>{toolAction(tool.name)}</b> without asking anyone, and it can't be undone. Allow it
               anyway?
             </span>
           </span>

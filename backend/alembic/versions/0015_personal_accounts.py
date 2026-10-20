@@ -16,6 +16,15 @@ nothing is orphaned. A company that somehow has no members at all
 would leave rows with no owner, so those rows are deleted rather than
 left unreachable and invisible to every query.
 
+Known gap, found afterwards: stored secrets (provider keys, connection
+credentials, OAuth client secrets, MCP tokens, Slack webhooks) are
+encrypted with the *scope's id* mixed into the key, and that id changed
+from the company's to the person's. This migration did not re-encrypt
+them, so on a database with real data every saved credential became
+unreadable and had to be re-encrypted by hand, using the old company id
+(which this migration drops). Anyone upgrading a database that holds
+secrets from before 0015 needs that step; a fresh database is fine.
+
 `downgrade` cannot restore which company anyone belonged to: the
 memberships that said so are gone. It rebuilds the columns and gives
 every user an organisation of their own, which is the same data under

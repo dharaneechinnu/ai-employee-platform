@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "../components/icons";
 import {
   Button,
@@ -9,7 +9,6 @@ import {
   PageHeader,
   Select,
   Spinner,
-  Tabs,
   TextArea,
   relativeTime,
   useToast,
@@ -32,8 +31,6 @@ interface SearchHit {
  * exact strings like error codes and file names.
  */
 
-type Scope = "all" | "org" | "employee";
-
 const KIND_TONE: Record<string, Tone> = { fact: "run", correction: "ask", summary: "ok", document: "brand" };
 
 export default function Memory() {
@@ -41,7 +38,6 @@ export default function Memory() {
 
   const [items, setItems] = useState<MemoryItem[] | null>(null);
   const [config, setConfig] = useState<EmbeddingConfig | null>(null);
-  const [scope, setScope] = useState<Scope>("all");
   const [query, setQuery] = useState("");
   const [searched, setSearched] = useState("");
   const [hits, setHits] = useState<SearchHit[] | null>(null);
@@ -87,7 +83,7 @@ export default function Memory() {
     try {
       await api.post(`/me/memory`, { content: draft, kind });
       setDraft("");
-      toast("Remembered. Every AI Employee can recall it now.");
+      toast("Remembered. Your assistant can recall it now.");
       await load();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Could not save that.", "bad");
@@ -112,10 +108,7 @@ export default function Memory() {
     await load();
   }
 
-  const visible = useMemo(
-    () => (items ?? []).filter((item) => scope === "all" || item.scope === scope),
-    [items, scope],
-  );
+  const visible = items ?? [];
 
   if (!items || !config) {
     return (
@@ -188,20 +181,10 @@ export default function Memory() {
               </>
             ) : (
               <>
-                <Tabs
-                  label="Who knows it"
-                  value={scope}
-                  onChange={setScope}
-                  items={[
-                    { key: "all", label: "All", count: items.length },
-                    { key: "org", label: "Whole company", count: items.filter((m) => m.scope === "org").length },
-                    { key: "employee", label: "One employee", count: items.filter((m) => m.scope === "employee").length },
-                  ]}
-                />
                 {visible.length === 0 ? (
                   <Empty
                     message="Nothing remembered yet"
-                    hint="Teach it facts about your company. AI Employees also save lessons from finished runs."
+                    hint="Teach it facts about you, how you like things done, and what you are working on. It also saves what it learns."
                   />
                 ) : (
                   visible.map((item, i) => (
@@ -212,9 +195,6 @@ export default function Memory() {
                       kind={item.kind}
                       meta={
                         <>
-                          <Chip tone="mute" dot={false}>
-                            {item.scope === "org" ? "company" : "one employee"}
-                          </Chip>
                           <span className="text-dim" title={formatDateTime(item.created_at)}>
                             {relativeTime(item.created_at)}
                           </span>
@@ -250,7 +230,7 @@ export default function Memory() {
                   value={kind}
                   onChange={setKind}
                   options={[
-                    { value: "fact", label: "A fact about the company" },
+                    { value: "fact", label: "A fact about me or my work" },
                     { value: "correction", label: "A correction to a past mistake" },
                   ]}
                 />

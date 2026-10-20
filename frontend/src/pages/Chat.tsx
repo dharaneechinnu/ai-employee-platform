@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Icon, type IconName } from "../components/icons";
 import Prose from "../components/Prose";
 import ProposedAction from "../components/ProposedAction";
+import RunFlow from "../components/RunFlow";
 import VoiceInput from "../components/VoiceInput";
 import { Button, ErrorNote, relativeTime, useToast } from "../components/ui";
 import {
@@ -455,11 +456,14 @@ function UsedLine({ names }: { names: string[] }) {
 function Trace({ taskId }: { taskId: string }) {
   const [events, setEvents] = useState<RunEvent[] | null>(null);
   const [cost, setCost] = useState<string | null>(null);
+  const [runStatus, setRunStatus] = useState<string | null>(null);
+  const [showRoute, setShowRoute] = useState(false);
   useEffect(() => {
     void (async () => {
       const task = await api.get<Task>(`/me/tasks/${taskId}`);
       if (!task.run) return setEvents([]);
       const r = task.run;
+      setRunStatus(r.status);
       setCost(`${r.step_count} ${r.step_count === 1 ? "step" : "steps"} · ${(r.prompt_tokens + r.output_tokens).toLocaleString()} tokens · ~$${Number(r.estimated_cost_usd).toFixed(4)}`);
       const trace = await api.get<{ events: RunEvent[] }>(`/me/runs/${task.run.id}/trace`);
       setEvents(trace.events.map(flatten));
@@ -470,6 +474,26 @@ function Trace({ taskId }: { taskId: string }) {
     <div className="flex flex-col gap-2">
       <Steps events={events} live={false} />
       {cost && <span className="pl-1 font-mono text-[11.5px] text-dim">{cost}</span>}
+      {events.length > 0 && (
+        <>
+          {/* The same events as above, drawn as a route: where the work
+              went. Opened on request because most people only want the
+              answer, and the ones who want this want all of it. */}
+          <button
+            type="button"
+            className="self-start pl-1 text-[12.5px] text-accent-text hover:underline"
+            aria-expanded={showRoute}
+            onClick={() => setShowRoute((v) => !v)}
+          >
+            {showRoute ? "Hide the route" : "See the full route"}
+          </button>
+          {showRoute && (
+            <div className="rounded-xl border border-line bg-sunken p-4">
+              <RunFlow events={events} assistant="Your assistant" runStatus={runStatus} />
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

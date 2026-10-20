@@ -136,13 +136,13 @@ export default function Providers() {
             </div>
             <div className="text-muted">
               Hard work like coding and analysis goes to your strongest AI, quick questions to the fastest and cheapest, and if
-              one is busy the next takes over. Choose Automatic, or pin one AI, in a chat or an AI Employee.
+              one is busy the next takes over. Choose Automatic, or pin one AI, in a chat.
             </div>
           </div>
         </div>
 
         {connected.length === 0 ? (
-          <Empty message="No provider connected" hint="AI Employees cannot run until you connect at least one key below." />
+          <Empty message="No provider connected" hint="Your assistant cannot answer until you connect at least one key below." />
         ) : (
           <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr))]">
             {connected.map((provider, i) => {

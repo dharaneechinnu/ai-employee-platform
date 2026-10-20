@@ -5,7 +5,7 @@ import { api, type Approval, type TaskListItem } from "./api";
  * What happened while you were looking somewhere else.
  *
  * A run takes minutes, so nobody sits and watches it. The whole point
- * of an AI Employee is that you give it work and go away — which only
+ * of an assistant is that you give it work and go away — which only
  * works if coming back tells you what finished.
  *
  * "Unread" is a per-device, per-person idea: whether *you* have looked
@@ -107,7 +107,7 @@ export function useInbox() {
         kind: task.status === "completed" ? "finished" : "failed",
         title: task.title ?? "Untitled task",
         at: task.created_at,
-        href: `/tasks?task=${task.id}`,
+        href: `/chat/${task.conversation_id}`,
         unread: !seen[`task:${task.id}:${task.status}`],
       });
     }

@@ -7,11 +7,11 @@ import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
 /**
- * Sign in, or accept an invitation.
+ * Sign in, or finish setting up an account.
  *
  * There is no sign-up form, because the backend has no registration
- * endpoint: an account exists only by accepting an invite. An invite
- * link carries ?token=..., which switches this page into setup mode:
+ * endpoint: an account is created by the platform, which sends a setup
+ * link. The link carries ?token=..., which switches this page into setup mode:
  * the account exists but has no password until its owner sets one.
  */
 export default function Login() {
@@ -54,9 +54,9 @@ export default function Login() {
         <div className="rise w-full max-w-[400px]">
           <form onSubmit={submit} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
-              <h2 className="font-display text-[26px] font-semibold tracking-[-0.02em]">{inviteToken ? "Join your company" : "Sign in"}</h2>
+              <h2 className="font-display text-[26px] font-semibold tracking-[-0.02em]">{inviteToken ? "Set your password" : "Sign in"}</h2>
               <p className="text-sm text-muted">
-                {inviteToken ? "Set a password to accept the invitation." : "Welcome back to your workspace."}{" "}
+                {inviteToken ? "Choose a password to finish setting up your account." : "Welcome back."}{" "}
                 <Link to="/" className="text-accent-text hover:underline">
                   What is this?
                 </Link>
@@ -95,13 +95,13 @@ export default function Login() {
             <ErrorNote message={error} />
 
             <button type="submit" disabled={busy} className="btn btn-primary h-11 text-[15px]">
-              {busy ? "Working…" : inviteToken ? "Join" : "Sign in"}
+              {busy ? "Working…" : inviteToken ? "Continue" : "Sign in"}
               {!busy && <Icon name="arrow" size={18} strokeWidth={2} />}
             </button>
 
             {!inviteToken && (
               <p className="border-t border-line pt-4 text-[13px] leading-normal text-dim">
-                There is no sign-up. Accounts come from an invite link sent by your company admin.
+                There is no sign-up yet. An account is created for you, and you get a setup link.
               </p>
             )}
           </form>
@@ -120,7 +120,7 @@ export function AuthStage({
   headline,
   ticker,
   points = [
-    "Assign work in plain words, or just say it",
+    "Ask in plain words, or just say it",
     "Anything risky waits for your approval",
     "Every step is on record, with what it cost",
   ],
@@ -157,7 +157,7 @@ export function AuthStage({
         </ul>
       </div>
 
-      <p className="text-[13px] text-dim">For operations, sales, HR and engineering teams.</p>
+      <p className="text-[13px] text-dim">For students, researchers and anyone with work to get done.</p>
     </section>
   );
 }

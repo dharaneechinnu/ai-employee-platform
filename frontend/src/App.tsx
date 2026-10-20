@@ -5,7 +5,6 @@ import { useAuth } from "./lib/auth";
 import ApproveLink from "./pages/ApproveLink";
 import Approvals from "./pages/Approvals";
 import Connections from "./pages/Connections";
-import Employees from "./pages/Employees";
 import FilmStage from "./pages/FilmStage";
 import Login from "./pages/Login";
 import Memory from "./pages/Memory";
@@ -14,7 +13,6 @@ import PlatformAdmin from "./pages/PlatformAdmin";
 import Policies from "./pages/Policies";
 import Product from "./pages/Product";
 import Providers from "./pages/Providers";
-import Tasks from "./pages/Tasks";
 import Chat from "./pages/Chat";
 
 /** After signing in, go where the person was heading (an approval
@@ -59,8 +57,10 @@ export default function App() {
         <Route path="/connections" element={<Connections />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/:id" element={<Chat />} />
-        <Route path="/tasks" element={<Tasks />} />
-        <Route path="/employees" element={<Employees />} />
+        {/* Old bookmarks and links. Tasks and AI Employees were folded
+            into the assistant, which lives in chat. */}
+        <Route path="/tasks" element={<Navigate to="/chat" replace />} />
+        <Route path="/employees" element={<Navigate to="/chat" replace />} />
         <Route path="/memory" element={<Memory />} />
                 <Route
           path="/approvals"

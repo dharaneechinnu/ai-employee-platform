@@ -27,7 +27,7 @@ import {
 import { effectLabel, learnToolLabels, toolLabel } from "../lib/labels";
 
 /**
- * The outside apps AI Employees work in.
+ * The outside apps your assistant works in.
  *
  * Google and Microsoft connect with one click: the admin signs in with
  * the provider and approves the listed permissions. Nothing secret is
@@ -226,7 +226,7 @@ export default function Connections() {
     const done = params.get("connected");
     const failed = params.get("error");
     if (!done && !failed) return;
-    if (done) toast(`Connected ${params.get("account") ?? done}. Your AI Employees can use it now.`);
+    if (done) toast(`Connected ${params.get("account") ?? done}. Your assistant can use it now.`);
     if (failed) toast(failed, "bad");
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,7 +263,7 @@ export default function Connections() {
   }
 
   async function remove(item: ConnectionItem) {
-    if (!window.confirm(`Disconnect ${item.label}? AI Employees will lose access to it straight away.`)) return;
+    if (!window.confirm(`Disconnect ${item.label}? Your assistant will lose access to it straight away.`)) return;
     await api.del(`/me/connections/${item.id}`);
     toast(`${item.label} disconnected.`, "info");
     await load();
@@ -284,7 +284,7 @@ export default function Connections() {
     <>
       <PageHeader crumb="Settings" title="Connections">
         <span className="max-w-[400px] text-[13px] leading-snug text-muted">
-          Let AI Employees work in your email, calendar and files. Every send still follows your Permissions.
+          Let your assistant work in your email, calendar and files. Every send still follows your Permissions.
         </span>
       </PageHeader>
 
@@ -397,7 +397,7 @@ export default function Connections() {
         {connected.length === 0 && servers.length === 0 && (
           <Empty
             message="Nothing connected yet"
-            hint="Connect Google or Microsoft above, then give an AI Employee the matching tools on the AI Employees page."
+            hint="Connect Google or Microsoft above, then ask your assistant to work in them."
           />
         )}
 
@@ -426,7 +426,7 @@ export default function Connections() {
 }
 
 /**
- * Each tool this app gives AI Employees, with its permission right
+ * Each tool this app gives your assistant, with its permission right
  * here: the place people connect an app is where they decide what may
  * be done with it.
  */
@@ -448,7 +448,7 @@ function ToolPermissions({
     <details className="group rounded-xl border border-line bg-raised" open={open} data-coach="connection-permissions">
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium">
         <Icon name="lock" size={15} className="text-accent-text" />
-        <span className="flex-1">What can AI Employees do here?</span>
+        <span className="flex-1">What can your assistant do here?</span>
         <span className="text-xs font-normal text-dim">
           {allowed} always · {asking} ask
         </span>
@@ -650,7 +650,7 @@ function McpSection({
 
   async function remove(server: McpServer) {
     await api.del(`/me/mcp-servers/${server.id}`);
-    toast(`${server.name} removed. Its tools are gone from every AI Employee.`, "info");
+    toast(`${server.name} removed. Its tools are gone from your assistant.`, "info");
     onChanged();
   }
 
@@ -661,7 +661,7 @@ function McpSection({
           <h2 className="font-display text-xl font-semibold">Tool servers (MCP)</h2>
           <p className="max-w-[640px] text-[13px] leading-snug text-muted">
             Many apps now offer an MCP server: a web address that lists the actions an AI can take there. Add one, and its
-            tools appear for your AI Employees, with the same Always allow, Ask me first and Blocked choices.
+            tools appear for your assistant, with the same Always allow, Ask me first and Blocked choices.
           </p>
         </div>
         {!adding && (

@@ -75,7 +75,7 @@ export default function Approvals() {
     <>
       <PageHeader crumb="Work" title="Approvals">
         <span className="max-w-[360px] text-[13px] leading-snug text-muted">
-          AI Employees stop here before anything they cannot undo.
+          Your assistant stops here before anything it cannot undo.
         </span>
       </PageHeader>
 
@@ -85,7 +85,7 @@ export default function Approvals() {
         ) : items.length === 0 ? (
           <Empty
             message="Nothing is waiting for you"
-            hint="When an AI Employee needs a decision, it appears here and the sidebar shows a count."
+            hint="When your assistant needs a decision, it appears here and the menu shows a count."
           />
         ) : (
           items.map((approval, i) => (
@@ -190,8 +190,8 @@ function ApprovalCard({
           <Button variant="danger-ghost" disabled={busy} onClick={() => onDecide(false)} data-coach="approval-reject">
             Reject
           </Button>
-          <Link to="/tasks" className="btn btn-ghost">
-            View tasks
+          <Link to="/chat" className="btn btn-ghost">
+            Back to chat
           </Link>
           {destructive && <span className="text-xs text-dim">Hold for a second, or press Enter twice.</span>}
         </div>

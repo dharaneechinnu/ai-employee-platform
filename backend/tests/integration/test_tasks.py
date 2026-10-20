@@ -176,30 +176,3 @@ async def test_one_person_cannot_read_or_cancel_anothers_task(
     mine = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)
     assert mine.json()["status"] == "queued"
     assert (await api.get("/api/v1/me/tasks", headers=theirs)).json() == []
-
-
-async def test_setup_progress_is_visible(api: AsyncClient, session: AsyncSession) -> None:
-    person = await seed_person(session, api)
-    headers = {"Authorization": f"Bearer {person.token}"}
-    url = "/api/v1/me/setup"
-
-    fresh = await api.get(url, headers=headers)
-    assert fresh.status_code == 200
-    assert fresh.json() == {"ai_connected": False, "apps_connected": False, "tasks": 0}
-
-    await api.post(
-        "/api/v1/me/providers",
-        json={"provider_key": "groq", "api_key": "gsk_test-key-1234"},
-        headers=headers,
-    )
-    later = await api.get(url, headers=headers)
-    assert later.json()["ai_connected"] is True
-
-    # The same URL for everybody, answered from the token. Another
-    # person asking gets their own progress, not a 404 and not a
-    # glimpse of this one's.
-    other = await seed_person(session, api)
-    theirs = await api.get(url, headers={"Authorization": f"Bearer {other.token}"})
-    assert theirs.status_code == 200
-    assert theirs.json()["ai_connected"] is False
-    assert theirs.json()["tasks"] == 0

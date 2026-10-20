@@ -15,7 +15,7 @@ import {
  *
  * The Timeline answers "what happened, in order". This answers a
  * different question people actually ask first: *where does my work
- * go?* So it is drawn as a route — you hand work to the AI Employee,
+ * go?* So it is drawn as a route — you ask your assistant,
  * it asks the model what to do, the model names a tool, we go out to
  * Gmail or Drive or the database, the answer comes back, and round
  * again until there is something to say.
@@ -55,8 +55,7 @@ const DESTINATIONS: { match: RegExp; name: string; icon: IconName; away: boolean
   { match: /^github_/, name: "GitHub", icon: "terminal", away: true },
   { match: /^get_webpage$/, name: "The web", icon: "link", away: true },
   { match: /^recall$|^remember$/, name: "Company memory", icon: "memory", away: false },
-  { match: /^delegate_to_specialist$/, name: "A specialist", icon: "employees", away: false },
-];
+  ];
 
 function destinationFor(tool: string) {
   const hit = DESTINATIONS.find((d) => d.match.test(tool));
@@ -93,14 +92,14 @@ const VERBS: Record<string, string> = {
 
 export function buildStages(
   events: RunEvent[],
-  employee: string,
+  assistant: string,
   runStatus: string | null,
 ): Stage[] {
   const stages: Stage[] = [
     {
       kind: "trigger",
-      title: "You assign the work",
-      detail: `${employee} picks it up`,
+      title: "You ask",
+      detail: `${assistant} picks it up`,
       icon: "tasks",
       away: false,
       state: "done",
@@ -115,7 +114,7 @@ export function buildStages(
       case "thinking":
         stages.push({
           kind: "think",
-          title: `${employee} works out the next step`,
+          title: `${assistant} works out the next step`,
           detail: null,
           icon: "sparkle",
           away: false,
@@ -208,7 +207,7 @@ export function buildStages(
         stages.push({
           kind: "answer",
           title: "You get the answer",
-          detail: `${employee} writes up what it found`,
+          detail: `${assistant} writes up what it found`,
           icon: "check",
           away: false,
           state: "done",
@@ -261,16 +260,16 @@ const TONE: Record<Stage["state"], { stroke: string; soft: string; text: string 
 
 export default function RunFlow({
   events,
-  employee,
+  assistant,
   runStatus,
 }: {
   events: RunEvent[];
-  employee: string;
+  assistant: string;
   runStatus: string | null;
 }) {
   const stages = useMemo(
-    () => buildStages(events, employee, runStatus),
-    [events, employee, runStatus],
+    () => buildStages(events, assistant, runStatus),
+    [events, assistant, runStatus],
   );
 
   // Replay on open: reveal one stage at a time so the route draws
@@ -302,7 +301,7 @@ export default function RunFlow({
         <Icon name="info" size={15} className="mt-0.5 shrink-0 text-accent-text" />
         Where your work goes. Everything marked{" "}
         <b className="font-medium text-ink">away</b> leaves this platform — that is the part worth
-        reading before you give an AI Employee more tools.
+        reading before you connect more apps.
       </p>
 
       <ol className="flex flex-col">

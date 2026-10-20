@@ -44,8 +44,6 @@ interface RailItem {
 
 const ITEMS: RailItem[] = [
   { to: "/chat", label: "Chat", icon: "chat", adminOnly: false },
-  { to: "/tasks", label: "Tasks", icon: "tasks", adminOnly: false },
-  { to: "/employees", label: "AI Employees", icon: "employees", adminOnly: false },
   { to: "/approvals", label: "Approvals", icon: "approvals", adminOnly: true },
 
   { to: "/memory", label: "Memory", icon: "memory", adminOnly: false, startsGroup: true },
@@ -106,7 +104,7 @@ export default function Rail({
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
       if (moved.current) setDock(dockForPoint(up.clientX, up.clientY));
-      else navigate("/tasks");
+      else navigate("/chat");
       setDragging(false);
     };
 
@@ -167,11 +165,11 @@ export default function Rail({
         <button
           type="button"
           className="rail-new"
-          onClick={() => navigate("/tasks?new=1")}
-          data-rail-label="New task"
+          onClick={() => navigate("/chat")}
+          data-rail-label="New chat"
         >
           <Icon name="plus" size={18} strokeWidth={2.6} />
-          <span className="sr-only">New task</span>
+          <span className="sr-only">New chat</span>
         </button>
 
         <div className="rail-items">
@@ -186,7 +184,7 @@ export default function Rail({
               >
                 <Icon name={item.icon} size={19} />
                 <span className="sr-only">{item.label}</span>
-                {item.to === "/tasks" && running > 0 && (
+                {item.to === "/chat" && running > 0 && (
                   <span className="rail-dot live-run" aria-label={`${running} running`} />
                 )}
                 {item.to === "/approvals" && waiting > 0 && (
@@ -226,9 +224,7 @@ export default function Rail({
                     <span className="truncate text-sm font-medium">
                       {me.full_name || me.email}
                     </span>
-                    <span className="text-xs text-muted">
-                      {me.max_employees} AI Employee{me.max_employees === 1 ? "" : "s"} included
-                    </span>
+                    <span className="text-xs text-muted">{me.email}</span>
                   </span>
                 </div>
               )}
