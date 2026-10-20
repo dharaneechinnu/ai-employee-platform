@@ -52,8 +52,9 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Orchestration: the assistant may split the work between
     # specialists (researcher, analyst, writer, critic) and combine it.
     team: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # Tool names this conversation may use, as the tool picker stores them.
-    tools: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    # No tool list: tools are the platform's side, not the person's.
+    # Every tool they can use is on (see `chat_tools`), and their
+    # Permissions decide what runs, asks, or is blocked.
 
     __table_args__ = (Index("ix_conversations_owner_updated", "owner_id", "updated_at"),)
 
@@ -79,6 +80,9 @@ class ConversationMessage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # On a reply that did not finish: what went wrong, said plainly.
     # Kept out of later history, so a failure is not repeated as fact.
     error: Mapped[str | None] = mapped_column(Text)
+    # On a reply: the tools it used and the specialists it asked, in
+    # order, so the chat can say "Used: …" without loading the run.
+    tools_used: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
 
     __table_args__ = (
         Index("ix_conversation_messages_conversation", "conversation_id", "created_at"),

@@ -189,23 +189,34 @@ async def test_another_person_cannot_read_a_conversation(
     assert sent.status_code == 404
 
 
-async def test_modes_suggest_tools_and_unknown_tools_are_dropped(
-    api: AsyncClient, session: AsyncSession
+async def test_every_tool_the_person_can_use_is_on_without_picking(
+    api: AsyncClient, session: AsyncSession, recorder: type[Recorder]
 ) -> None:
+    """Tools are the platform's side: nothing to tick. Built-in tools are
+    on, an app's tools wait for that app to be connected, and a tool the
+    person's Permissions block is not offered at all."""
     headers = await _person(api, session)
-    research = (await api.post(URL, json={"mode": "research"}, headers=headers)).json()
-    assert "get_webpage" in research["tools"]
+    cid = (await api.post(URL, json={"mode": "research"}, headers=headers)).json()["id"]
+    await _say(api, headers, cid, "Hello")
 
-    picked = await api.post(
-        URL,
-        json={"tools": ["recall", "no_such_tool", "delegate_to_specialist"]},
+    offered = {t.name for t in recorder.calls[-1]["tools"]}
+    assert {"get_webpage", "recall", "remember"} <= offered
+    assert "gmail_send" not in offered  # Google is not connected
+    assert "delegate_to_specialist" not in offered  # that is for AI Employees
+
+    blocked = await api.put(
+        "/api/v1/me/policies",
+        json={"scope": "pack", "scope_value": "web", "side_effect": "read", "setting": "blocked"},
         headers=headers,
     )
-    assert picked.json()["tools"] == ["recall"]
+    assert blocked.status_code == 200, blocked.text
+    await _say(api, headers, cid, "Again")
+    assert "get_webpage" not in {t.name for t in recorder.calls[-1]["tools"]}
 
     info = (await api.get("/api/v1/me/assistant", headers=headers)).json()
     assert [m["key"] for m in info["modes"]] == ["general", "study", "work", "research"]
     assert {r["key"] for r in info["team_roles"]} == {"researcher", "analyst", "writer", "critic"}
+    assert "suggested_tools" not in info["modes"][0]
 
 
 async def test_team_mode_runs_specialists_in_parallel_and_combines_them(
@@ -277,6 +288,11 @@ async def test_team_mode_runs_specialists_in_parallel_and_combines_them(
 
     done = await _say(api, headers, cid, "Is a four-day work week a good idea?")
     reply = done["messages"][1]["content"]
+    # The reply says who worked on it, without loading the run.
+    assert sorted(done["messages"][1]["tools_used"]) == [
+        "specialist:critic",
+        "specialist:researcher",
+    ]
     assert "four-day weeks kept output steady" in reply
     assert "the trials were small" in reply
     assert seen[0] == "lead-plan" and seen[-1] == "lead-combine"

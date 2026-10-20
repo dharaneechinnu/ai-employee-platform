@@ -179,7 +179,7 @@ Try it locally with the demo CRM server in `backend/scripts/demo_mcp_server.py` 
 | **Research** | Researchers | Summary, findings, open questions; separates fact from inference; never invents citations |
 | **General** | Everyone | Clear and direct |
 
-Pick the **AI** under the message box and switch it at any time: history is plain text, so a conversation started on Gemini carries on with Claude or your own Llama, and every reply says which model wrote it. **Tools** chooses what this conversation may use (web pages, memory, connected apps, MCP tools), and your Permissions still apply, so a change waits for your approval right in the chat.
+Pick the **AI** under the message box and switch it at any time: history is plain text, so a conversation started on Gemini carries on with Claude or your own Llama, and every reply says which model wrote it. There is no tool list to manage: **tools are the platform's side, the AI is yours.** Every built-in tool is on, an app's tools switch on once you connect that app, and your MCP servers' tools are on too. Your Permissions still decide each call, so a change waits for your approval right in the chat, and a blocked tool is never offered. Each answer shows what it used.
 
 ![Study mode: a step-by-step answer with code and a table](docs/screenshots/23-chat-study.png)
 

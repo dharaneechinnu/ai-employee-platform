@@ -1820,7 +1820,6 @@ html[data-dock='bottom'] .chat-shell {
 }
 .chat-pill:hover { background: var(--raised); }
 .chat-pill.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
-.chat-pill.on-soft { color: var(--text); }
 .chat-pill select {
   max-width: 220px;
   field-sizing: content;
@@ -1845,17 +1844,17 @@ html[data-dock='bottom'] .chat-shell {
 }
 .chat-send:disabled { opacity: .35; }
 .chat-send.stop { background: var(--text); color: var(--panel); }
-.chat-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  z-index: 30;
-  width: min(320px, 80vw);
-  border: 1px solid var(--line2);
-  border-radius: 14px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
+.chat-used {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 999px;
+  background: var(--raised);
+  padding: 2px 8px;
+  color: var(--muted);
 }
+.chat-used.team { background: var(--accent-soft); color: var(--accent-text); }
+
 
 .prose-table {
   margin: 4px 0;

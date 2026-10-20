@@ -29,7 +29,6 @@ class ModeInfo(BaseModel):
     label: str
     for_whom: str
     examples: list[str]
-    suggested_tools: list[str]
 
 
 class RoleInfo(BaseModel):
@@ -62,6 +61,7 @@ class MessageResponse(BaseModel):
     task_id: uuid.UUID | None
     model: str | None
     error: str | None
+    tools_used: list[str] = []
     created_at: datetime
 
 
@@ -72,7 +72,6 @@ class TurnResponse(BaseModel):
 
 
 class ConversationResponse(ConversationItem):
-    tools: list[str]
     messages: list[MessageResponse] = []
     # The latest exchange, so a page opened mid-answer can follow it live.
     turn: TurnResponse | None = None
@@ -82,8 +81,6 @@ class CreateConversationRequest(BaseModel):
     mode: ChatMode = ChatMode.GENERAL
     model: str = Field(default="auto", max_length=200)
     team: bool = False
-    # None means the mode's suggested tools.
-    tools: list[str] | None = Field(default=None, max_length=100)
 
 
 class UpdateConversationRequest(BaseModel):
@@ -91,7 +88,6 @@ class UpdateConversationRequest(BaseModel):
     mode: ChatMode | None = None
     model: str | None = Field(default=None, max_length=200)
     team: bool | None = None
-    tools: list[str] | None = Field(default=None, max_length=100)
 
 
 class SendRequest(BaseModel):
@@ -111,7 +107,6 @@ async def _full(service: ConversationService, conversation: Conversation) -> Con
         model=conversation.model,
         team=conversation.team,
         updated_at=conversation.updated_at,
-        tools=list(conversation.tools or []),
         messages=[
             MessageResponse.model_validate(m) for m in await service.messages(conversation.id)
         ],
@@ -131,7 +126,6 @@ async def assistant_info(ctx: ContextDep) -> AssistantInfo:
                 label=m.label,
                 for_whom=m.for_whom,
                 examples=list(m.examples),
-                suggested_tools=list(m.suggested_tools),
             )
             for m in MODES.values()
         ],
@@ -155,9 +149,7 @@ async def create_conversation(
     body: CreateConversationRequest, ctx: ContextDep, session: SessionDep
 ) -> ConversationResponse:
     service = ConversationService(session, ctx.owner_id)
-    conversation = await service.create(
-        mode=body.mode, model=body.model, team=body.team, tools=body.tools
-    )
+    conversation = await service.create(mode=body.mode, model=body.model, team=body.team)
     await session.commit()
     return await _full(service, conversation)
 
@@ -177,7 +169,7 @@ async def get_conversation(
 @router.patch(
     "/conversations/{conversation_id}",
     response_model=ConversationResponse,
-    summary="Rename, or change the mode, model, team or tools",
+    summary="Rename, or change the mode, model or team",
 )
 async def update_conversation(
     conversation_id: uuid.UUID,
@@ -192,7 +184,6 @@ async def update_conversation(
         mode=body.mode,
         model=body.model,
         team=body.team,
-        tools=body.tools,
     )
     await session.commit()
     return await _full(service, conversation)

@@ -12,8 +12,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
+from app.agent.tools.base import Tool
+from app.agent.tools.registry import registry
 from app.db.models.conversation import ChatMode
+from app.db.models.policy import PolicySetting
 
 # A chat turn may take a few tool steps; it should not take fifteen.
 CHAT_MAX_STEPS = 10
@@ -29,8 +33,6 @@ class Mode:
     label: str
     for_whom: str
     instructions: str
-    # Ticked for a new conversation in this mode, if the person has them.
-    suggested_tools: tuple[str, ...]
     examples: tuple[str, ...]
 
 
@@ -44,7 +46,6 @@ MODES: dict[ChatMode, Mode] = {
             "matters. Ask one short question when the request is ambiguous rather than "
             "guessing."
         ),
-        suggested_tools=("recall", "remember"),
         examples=(
             "Plan a three-day trip to Jaipur on a student budget",
             "Explain what a mutual fund SIP is in simple words",
@@ -61,7 +62,6 @@ MODES: dict[ChatMode, Mode] = {
             "exam questions, guide them to the answer with hints before giving it in "
             "full, unless they ask for the full solution. Point out common mistakes."
         ),
-        suggested_tools=("recall", "remember"),
         examples=(
             "Teach me recursion with one Python example",
             "Quiz me on the causes of the French Revolution",
@@ -78,7 +78,6 @@ MODES: dict[ChatMode, Mode] = {
             "needs (formal for clients, plain for colleagues). Never send, delete or "
             "change anything without saying exactly what you are about to do."
         ),
-        suggested_tools=("recall", "remember"),
         examples=(
             "Draft a polite follow-up email to a client who has not paid",
             "Turn these meeting notes into action items with owners",
@@ -95,7 +94,6 @@ MODES: dict[ChatMode, Mode] = {
             "you read a source with a tool, cite it by its address. Never invent "
             "citations, numbers or quotes: if you do not know, say so."
         ),
-        suggested_tools=("get_webpage", "recall", "remember"),
         examples=(
             "Compare RAG and fine-tuning for a small team, with trade-offs",
             "Summarise the main arguments for and against a four-day work week",
@@ -132,9 +130,36 @@ def system_prompt(mode: ChatMode, *, person: str | None, team: bool, tool_names:
         )
     else:
         parts.append(
-            "You have no tools in this conversation. If the request needs live data or an "
-            "action, say what you would need instead of pretending."
+            "You have no tools right now. If the request needs live data or an action, say "
+            "what you would need instead of pretending."
         )
     if team:
         parts.append(TEAM_INSTRUCTIONS)
     return "\n\n".join(parts)
+
+
+# Handing work to the person's AI Employees belongs to AI Employees; a
+# chat has its own team of specialists.
+_NOT_IN_CHAT = {"delegate_to_specialist"}
+
+
+def chat_tools(resolver: Any, connected: set[str]) -> list[type[Tool]]:
+    """Every tool this person's assistant can use right now.
+
+    Tools are the platform's side of the deal, so there is nothing to
+    pick: built-in tools are always on, an app's tools are on once the
+    person has connected that app, and every tool from their MCP
+    servers is on. Their Permissions still decide each call (run, ask
+    first, or blocked), and a blocked tool is not offered at all, so
+    the model never wastes a step on it.
+    """
+    chosen: list[type[Tool]] = []
+    for tool in [*registry.all(), *resolver.extra_tools.values()]:
+        if tool.name in _NOT_IN_CHAT:
+            continue
+        if tool.requires_connection and tool.requires_connection not in connected:
+            continue
+        if resolver.evaluate(tool.name).setting is PolicySetting.BLOCKED:
+            continue
+        chosen.append(tool)
+    return chosen

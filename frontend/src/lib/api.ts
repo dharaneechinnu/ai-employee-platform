@@ -396,7 +396,6 @@ export interface ChatModeInfo {
   label: string;
   for_whom: string;
   examples: string[];
-  suggested_tools: string[];
 }
 
 export interface AssistantInfo {
@@ -422,11 +421,12 @@ export interface ChatMessage {
   model: string | null;
   /** On a reply that did not finish: what went wrong. */
   error: string | null;
+  /** On a reply: tools it used, and "specialist:<role>" for each specialist asked. */
+  tools_used: string[];
   created_at: string;
 }
 
 export interface Conversation extends ConversationItem {
-  tools: string[];
   messages: ChatMessage[];
   turn: { task_id: string; status: TaskStatus; run_id: string | null } | null;
 }

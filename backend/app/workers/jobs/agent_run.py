@@ -81,7 +81,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 model=chat.model,
                 max_steps=assistant.CHAT_MAX_STEPS,
                 temperature=0.4,
-                enabled_tools=list(chat.tools),
+                # Filled in below from `chat_tools`: a chat has every
+                # tool its person can use, not a picked list.
+                enabled_tools=[],
             )
         else:
             employee = await session.get(AIEmployee, task.employee_id) if task.employee_id else None
@@ -221,7 +223,11 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             return bool(fresh)
 
         provider = build_provider(provider_key, api_key, base_url=base_url)
-        tools = registry.for_employee(config.enabled_tools, extra=resolver.extra_tools)
+        tools = (
+            assistant.chat_tools(resolver, set(grants))
+            if chat is not None
+            else registry.for_employee(config.enabled_tools, extra=resolver.extra_tools)
+        )
         context_config: dict[str, Any] = {
             # The memory tools need a session and to know which
             # employee is asking, so employee-scoped memories stay
@@ -351,6 +357,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             stop_cause=outcome.stop_cause,
             error=None if status is RunStatus.COMPLETED else outcome.output,
             model=f"{provider_key}:{model}",
+            tools_used=_tools_used(outcome.events, team.roles_used if team else []),
         )
 
 
@@ -363,6 +370,7 @@ async def _finish(
     stop_cause: str,
     error: str | None,
     model: str | None = None,
+    tools_used: list[str] | None = None,
 ) -> dict[str, Any]:
     run.status = status
     run.stop_cause = stop_cause
@@ -384,6 +392,7 @@ async def _finish(
                 content=run.output if completed else None,
                 model=model,
                 error=None if completed else _chat_error(status, stop_cause, error),
+                tools_used=tools_used,
             )
 
     await session.commit()
@@ -409,3 +418,15 @@ def _chat_error(status: RunStatus, stop_cause: str, error: str | None) -> str:
     if sentence and error:
         return f"{sentence} ({error[:300]})"
     return sentence or error or "Something went wrong before I could answer."
+
+
+def _tools_used(events: list[AgentEvent], roles: list[str]) -> list[str]:
+    """Each tool the turn used, once, in first-use order, then each
+    specialist asked as "specialist:<role>", so the chat can name both."""
+    used: list[str] = []
+    for event in events:
+        tool = event.payload.get("tool")
+        if event.type == "tool_call" and tool and tool != AskSpecialist.name:
+            used.append(str(tool))
+    used += [f"specialist:{role}" for role in roles]
+    return list(dict.fromkeys(used))

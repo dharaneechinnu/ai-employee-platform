@@ -16,9 +16,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.assistant import HISTORY_CHARS, HISTORY_MESSAGES, MODES
+from app.agent.assistant import HISTORY_CHARS, HISTORY_MESSAGES
 from app.agent.providers.base import Message, Role
-from app.agent.tools.registry import registry
 from app.core.errors import NotFoundError, ValidationError
 from app.core.observability import get_logger
 from app.db.models.conversation import ChatMode, Conversation, ConversationMessage, MessageRole
@@ -78,16 +77,12 @@ class ConversationService:
         mode: ChatMode = ChatMode.GENERAL,
         model: str = AUTO_MODEL,
         team: bool = False,
-        tools: list[str] | None = None,
     ) -> Conversation:
         conversation = Conversation(
             owner_id=self.owner_id,
             mode=mode,
             model=await self._check_model(model),
             team=team,
-            tools=await self._check_tools(
-                tools if tools is not None else list(MODES[mode].suggested_tools)
-            ),
         )
         self.session.add(conversation)
         await self.session.flush()
@@ -101,7 +96,6 @@ class ConversationService:
         mode: ChatMode | None = None,
         model: str | None = None,
         team: bool | None = None,
-        tools: list[str] | None = None,
     ) -> Conversation:
         """Any setting can change mid-conversation. Switching the model
         is the point: history is plain text, so the next reply simply
@@ -115,8 +109,6 @@ class ConversationService:
             conversation.model = await self._check_model(model)
         if team is not None:
             conversation.team = team
-        if tools is not None:
-            conversation.tools = await self._check_tools(tools)
         # Set here rather than left to the database, so the value is
         # known without reloading the row.
         conversation.updated_at = datetime.now(UTC)
@@ -232,7 +224,13 @@ class ConversationService:
         return kept
 
     async def record_reply(
-        self, task: Task, *, content: str | None, model: str | None, error: str | None
+        self,
+        task: Task,
+        *,
+        content: str | None,
+        model: str | None,
+        error: str | None,
+        tools_used: list[str] | None = None,
     ) -> ConversationMessage:
         assert task.conversation_id is not None
         reply = ConversationMessage(
@@ -243,6 +241,7 @@ class ConversationService:
             task_id=task.id,
             model=model,
             error=error,
+            tools_used=tools_used or [],
             created_at=datetime.now(UTC),
         )
         self.session.add(reply)
@@ -267,13 +266,3 @@ class ConversationService:
                 "That AI is not connected. Connect it under AI Providers, or choose Automatic."
             )
         return f"{provider_key}:{name}"
-
-    async def _check_tools(self, tools: list[str]) -> list[str]:
-        from app.services.mcp_service import McpService
-
-        known = {t.name for t in registry.all()} | set(
-            await McpService(self.session, self.owner_id).tools()
-        )
-        # Delegation to AI Employees belongs to AI Employees; the chat
-        # has its own team of specialists.
-        return sorted({t for t in tools if t in known and t != "delegate_to_specialist"})

@@ -21,7 +21,7 @@ import {
   type ToolEntry,
 } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { effectLabel, learnToolLabels, modelLabel, packLabel, toolLabel } from "../lib/labels";
+import { effectLabel, learnToolLabels, modelLabel, toolLabel } from "../lib/labels";
 
 /**
  * The personal assistant: ChatGPT-style, on the agent loop.
@@ -53,7 +53,6 @@ interface Draft {
   mode: ChatMode;
   model: string;
   team: boolean;
-  tools: string[] | null;
 }
 
 function greeting(name: string | null | undefined): string {
@@ -72,9 +71,8 @@ export default function Chat() {
   const [info, setInfo] = useState<AssistantInfo | null>(null);
   const [list, setList] = useState<ConversationItem[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
-  const [catalogue, setCatalogue] = useState<ToolEntry[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [draft, setDraft] = useState<Draft>({ mode: "general", model: "auto", team: false, tools: null });
+  const [draft, setDraft] = useState<Draft>({ mode: "general", model: "auto", team: false });
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,13 +88,12 @@ export default function Chat() {
   useEffect(() => {
     void api.get<AssistantInfo>("/me/assistant").then(setInfo);
     void api.get<ModelOption[]>("/me/models").then(setModels).catch(() => setModels([]));
+    // Only for naming tools in plain words: the assistant uses every
+    // tool the person can, so there is nothing here to choose.
     void api
       .get<ToolEntry[]>("/me/tools")
-      .then((tools) => {
-        learnToolLabels(tools);
-        setCatalogue(tools.filter((t) => !t.permanently_blocked && t.name !== "delegate_to_specialist"));
-      })
-      .catch(() => setCatalogue([]));
+      .then(learnToolLabels)
+      .catch(() => undefined);
     void loadList();
   }, [loadList]);
 
@@ -121,14 +118,12 @@ export default function Chat() {
   // The settings the composer shows: the open conversation's, or the
   // draft for a conversation not started yet.
   const settings: Draft = conversation
-    ? { mode: conversation.mode, model: conversation.model, team: conversation.team, tools: conversation.tools }
+    ? { mode: conversation.mode, model: conversation.model, team: conversation.team }
     : draft;
-  const modeInfo = info?.modes.find((m) => m.key === settings.mode);
-  const tools = settings.tools ?? modeInfo?.suggested_tools.filter((t) => catalogue.some((c) => c.name === t)) ?? [];
 
   async function change(patch: Partial<Draft>) {
     if (!conversation) {
-      setDraft((d) => ({ ...d, ...patch, tools: patch.mode && !patch.tools ? null : (patch.tools ?? d.tools) }));
+      setDraft((d) => ({ ...d, ...patch }));
       return;
     }
     try {
@@ -155,7 +150,6 @@ export default function Chat() {
           mode: draft.mode,
           model: draft.model,
           team: draft.team,
-          tools: draft.tools ?? tools,
         });
       }
       await api.post(`/me/conversations/${current.id}/messages`, { content: message });
@@ -196,7 +190,7 @@ export default function Chat() {
           className="w-full justify-center"
           icon="plus"
           onClick={() => {
-            setDraft({ mode: settings.mode, model: settings.model, team: settings.team, tools: null });
+            setDraft({ mode: settings.mode, model: settings.model, team: settings.team });
             navigate("/chat");
           }}
           data-coach="chat-new"
@@ -268,10 +262,8 @@ export default function Chat() {
               busy={busy}
               sending={sending}
               settings={settings}
-              tools={tools}
               info={info}
               models={models}
-              catalogue={catalogue}
               onChange={(patch) => void change(patch)}
             />
           </div>
@@ -306,7 +298,7 @@ function Welcome({
           {greeting(name)}
         </h1>
         <p className="text-[15px] text-muted">
-          Ask anything. Your assistant can use your tools, work through problems step by step, and bring in a team of
+          Ask anything. Your assistant reads the web, remembers what matters, works in the apps you connect, and brings in a team of
           specialists for bigger questions.
         </p>
       </div>
@@ -411,6 +403,7 @@ function Reply({ message, team }: { message: ChatMessage; team: boolean }) {
           <Prose text={message.content} />
         </div>
       )}
+      {message.tools_used.length > 0 && <UsedLine names={message.tools_used} />}
       {message.task_id && (
         <div className="flex flex-col gap-2">
           <button type="button" className="chat-how" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -420,6 +413,24 @@ function Reply({ message, team }: { message: ChatMessage; team: boolean }) {
           {open && <Trace taskId={message.task_id} />}
         </div>
       )}
+    </div>
+  );
+}
+
+/** "Used: Read a web page · Researcher · Critic", from the reply itself. */
+function UsedLine({ names }: { names: string[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-dim" aria-label="Tools used">
+      <span>Used</span>
+      {names.map((name) => {
+        const role = name.startsWith("specialist:") ? name.slice("specialist:".length) : null;
+        return (
+          <span key={name} className={`chat-used ${role ? "team" : ""}`}>
+            <Icon name={role ? "tree" : "check"} size={11} strokeWidth={2.4} />
+            {role ? (ROLE_LABEL[role] ?? role) : toolLabel(name)}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -648,10 +659,8 @@ function Composer({
   busy,
   sending,
   settings,
-  tools,
   info,
   models,
-  catalogue,
   onChange,
 }: {
   text: string;
@@ -661,15 +670,12 @@ function Composer({
   busy: boolean;
   sending: boolean;
   settings: Draft;
-  tools: string[];
   info: AssistantInfo | null;
   models: ModelOption[];
-  catalogue: ToolEntry[];
   onChange: (patch: Partial<Draft>) => void;
 }) {
   const box = useRef<HTMLTextAreaElement>(null);
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [toolsOpen, setToolsOpen] = useState(false);
 
   useEffect(() => {
     const el = box.current;
@@ -751,27 +757,6 @@ function Composer({
           Team
         </button>
 
-        <div className="relative">
-          <button
-            type="button"
-            className={`chat-pill ${tools.length ? "on-soft" : ""}`}
-            aria-expanded={toolsOpen}
-            onClick={() => setToolsOpen((o) => !o)}
-            data-coach="chat-tools"
-          >
-            <Icon name="sparkle" size={14} />
-            Tools{tools.length ? ` · ${tools.length}` : ""}
-          </button>
-          {toolsOpen && (
-            <ToolsMenu
-              catalogue={catalogue}
-              chosen={tools}
-              onClose={() => setToolsOpen(false)}
-              onChange={(next) => onChange({ tools: next })}
-            />
-          )}
-        </div>
-
         <span className="flex-1" />
         <VoiceInput onText={(t) => setText(text ? `${text} ${t}` : t)} onError={setVoiceError} />
         {busy ? (
@@ -789,68 +774,6 @@ function Composer({
             <Icon name={sending ? "spinner" : "arrow"} size={17} strokeWidth={2.4} className={sending ? "spin" : "-rotate-90"} />
           </button>
         )}
-      </div>
-    </div>
-  );
-}
-
-function ToolsMenu({
-  catalogue,
-  chosen,
-  onChange,
-  onClose,
-}: {
-  catalogue: ToolEntry[];
-  chosen: string[];
-  onChange: (tools: string[]) => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const away = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("mousedown", away);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [onClose]);
-
-  const set = new Set(chosen);
-  const packs = [...new Set(catalogue.map((t) => t.pack))];
-  return (
-    <div ref={ref} className="chat-menu" role="dialog" aria-label="Tools for this conversation">
-      <p className="px-3 pb-1 pt-2.5 text-[12px] text-dim">
-        Tools this conversation may use. Your Permissions still apply.
-      </p>
-      <div className="max-h-[300px] overflow-y-auto pb-1.5">
-        {packs.map((pack) => (
-          <div key={pack} className="flex flex-col">
-            <span className="px-3 pb-0.5 pt-2 text-[11px] font-medium uppercase tracking-[0.06em] text-dim">{packLabel(pack)}</span>
-            {catalogue
-              .filter((t) => t.pack === pack)
-              .map((t) => (
-                <label key={t.name} className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-[13.5px] hover:bg-raised">
-                  <input
-                    type="checkbox"
-                    className="accent-[var(--accent)]"
-                    checked={set.has(t.name)}
-                    onChange={(e) => {
-                      const next = new Set(set);
-                      if (e.target.checked) next.add(t.name);
-                      else next.delete(t.name);
-                      onChange([...next]);
-                    }}
-                  />
-                  <span className="flex-1 truncate">{toolLabel(t.name)}</span>
-                  {t.side_effect !== "read" && <span className="text-[11px] text-dim">{effectLabel(t.side_effect)}</span>}
-                </label>
-              ))}
-          </div>
-        ))}
       </div>
     </div>
   );
