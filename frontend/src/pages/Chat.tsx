@@ -21,7 +21,17 @@ import {
   type ToolEntry,
 } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { effectLabel, learnToolLabels, modelLabel, toolLabel } from "../lib/labels";
+import {
+  AUTO_CHOICES,
+  aiChoiceLabel,
+  aiChoiceValue,
+  effectLabel,
+  learnToolLabels,
+  modelLabel,
+  parseAiChoice,
+  toolLabel,
+  type Routing,
+} from "../lib/labels";
 
 /**
  * The personal assistant: ChatGPT-style, on the agent loop.
@@ -52,6 +62,7 @@ const ACTIVE = new Set(["queued", "running", "awaiting_approval"]);
 interface Draft {
   mode: ChatMode;
   model: string;
+  routing: Routing;
   team: boolean;
 }
 
@@ -72,7 +83,7 @@ export default function Chat() {
   const [list, setList] = useState<ConversationItem[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [draft, setDraft] = useState<Draft>({ mode: "general", model: "auto", team: false });
+  const [draft, setDraft] = useState<Draft>({ mode: "general", model: "auto", routing: "balanced", team: false });
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +129,7 @@ export default function Chat() {
   // The settings the composer shows: the open conversation's, or the
   // draft for a conversation not started yet.
   const settings: Draft = conversation
-    ? { mode: conversation.mode, model: conversation.model, team: conversation.team }
+    ? { mode: conversation.mode, model: conversation.model, routing: conversation.routing, team: conversation.team }
     : draft;
 
   async function change(patch: Partial<Draft>) {
@@ -129,7 +140,7 @@ export default function Chat() {
     try {
       const updated = await api.patch<Conversation>(`/me/conversations/${conversation.id}`, patch);
       setConversation(updated);
-      if (patch.model) toast(`Next answer comes from ${modelLabel(patch.model)}.`, "info");
+      if (patch.model) toast(`Next answer: ${aiChoiceLabel(patch.model, patch.routing ?? updated.routing)}.`, "info");
       void loadList();
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Could not change that.", "bad");
@@ -149,6 +160,7 @@ export default function Chat() {
         current = await api.post<Conversation>("/me/conversations", {
           mode: draft.mode,
           model: draft.model,
+          routing: draft.routing,
           team: draft.team,
         });
       }
@@ -190,7 +202,7 @@ export default function Chat() {
           className="w-full justify-center"
           icon="plus"
           onClick={() => {
-            setDraft({ mode: settings.mode, model: settings.model, team: settings.team });
+            setDraft({ mode: settings.mode, model: settings.model, routing: settings.routing, team: settings.team });
             navigate("/chat");
           }}
           data-coach="chat-new"
@@ -394,8 +406,11 @@ function Reply({ message, team }: { message: ChatMessage; team: boolean }) {
           <Icon name="sparkle" size={13} />
         </span>
         <span className="font-medium text-muted">Assistant</span>
-        {message.model && <span>· {modelLabel(message.model)}</span>}
+        {message.model && <span className="whitespace-nowrap font-medium text-muted">· {modelLabel(message.model)}</span>}
       </div>
+      {message.model_reason && (
+        <p className="-mt-1.5 pl-[30px] text-[12px] leading-snug text-dim">Why this AI: {message.model_reason}</p>
+      )}
       {message.error ? (
         <div className="rounded-xl border border-bad/30 bg-bad-soft px-4 py-3 text-[14px] text-bad-text">{message.error}</div>
       ) : (
@@ -562,6 +577,7 @@ function LiveTurn({
 interface Specialist {
   id: string;
   role: string;
+  model: string | null;
   task: string;
   state: "working" | "done" | "failed";
   steps: string[];
@@ -590,6 +606,7 @@ function Steps({ events, live }: { events: RunEvent[]; live: boolean }) {
             <div key={s.id} className={`chat-specialist ${s.state}`}>
               <div className="flex items-center gap-2">
                 <span className="chat-role">{ROLE_LABEL[s.role] ?? s.role}</span>
+                {s.model && <span className="truncate text-[11.5px] text-dim">· {modelLabel(s.model)}</span>}
                 <span className="ml-auto text-[11.5px] text-dim">
                   {s.state === "working" ? "working…" : s.state === "done" ? "done" : "could not finish"}
                 </span>
@@ -618,12 +635,23 @@ function summarise(events: RunEvent[]) {
   for (const e of events) {
     const tool = typeof e.tool === "string" ? e.tool : null;
     if (e.type === "specialist_started") {
-      team.set(String(e.id), { id: String(e.id), role: String(e.role), task: String(e.task ?? ""), state: "working", steps: [] });
+      team.set(String(e.id), {
+        id: String(e.id),
+        role: String(e.role),
+        model: typeof e.model === "string" ? e.model : null,
+        task: String(e.task ?? ""),
+        state: "working",
+        steps: [],
+      });
     } else if (e.type === "specialist_step" && e.kind === "tool_call" && e.tool) {
       team.get(String(e.id))?.steps.push(toolLabel(String(e.tool)));
     } else if (e.type === "specialist_finished") {
       const s = team.get(String(e.id));
       if (s) s.state = e.ok ? "done" : "failed";
+    } else if (e.type === "model_chosen" && e.reason) {
+      lead.push({ text: `Chose ${modelLabel(String(e.model))}: ${String(e.reason)}`, icon: "providers", tone: "brand" });
+    } else if (e.type === "model_fallback") {
+      lead.push({ text: `${modelLabel(String(e.from))} was busy, so ${modelLabel(String(e.to))} took over`, icon: "providers", tone: "ask" });
     } else if (e.type === "parallel_started") {
       lead.push({ text: `Running ${String(e.count)} steps at the same time`, icon: "tree", tone: "brand" });
     } else if (e.type === "tool_call" && tool && tool !== "ask_specialist") {
@@ -684,13 +712,17 @@ function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
   }, [text]);
 
+  // Automatic first: each message goes to whichever of the person's
+  // AIs suits it. Pinning one AI is still there, below.
+  const current = aiChoiceValue(settings.model, settings.routing);
   const modelOptions = [
-    { value: "auto", label: "Automatic" },
+    ...AUTO_CHOICES.map((c) => ({ value: `auto|${c.routing}`, label: c.label })),
     ...models.map((m) => ({ value: `${m.provider_key}:${m.model}`, label: `${m.display_name} · ${m.model}` })),
   ];
-  if (!modelOptions.some((o) => o.value === settings.model)) {
-    modelOptions.push({ value: settings.model, label: modelLabel(settings.model) });
+  if (!modelOptions.some((o) => o.value === current)) {
+    modelOptions.push({ value: current, label: modelLabel(settings.model) });
   }
+  const autoHint = AUTO_CHOICES.find((c) => `auto|${c.routing}` === current)?.hint;
 
   return (
     <div className="chat-composer" data-coach="chat-composer">
@@ -728,12 +760,12 @@ function Composer({
           </select>
         </label>
 
-        <label className="chat-pill" title="Which AI answers. You can switch at any time.">
+        <label className="chat-pill" title={autoHint ?? "This AI answers every message. You can switch at any time."}>
           <Icon name="providers" size={14} />
           <span className="sr-only">AI model</span>
           <select
-            value={settings.model}
-            onChange={(e) => onChange({ model: e.target.value })}
+            value={current}
+            onChange={(e) => onChange(parseAiChoice(e.target.value))}
             aria-label="AI model"
             data-coach="chat-model"
           >

@@ -166,6 +166,8 @@ export interface EmployeeConfig {
   } | null;
   raw_instructions?: string | null;
   model: string;
+  /** With model "auto": what Automatic aims for. */
+  routing?: "balanced" | "quality" | "cost" | "private";
   temperature: number;
   max_steps: number;
   enabled_tools: string[];
@@ -201,6 +203,8 @@ export interface ConnectedProvider {
   model_chosen?: boolean;
   /** Only for "custom": the company's own OpenAI-compatible server. */
   base_url?: string | null;
+  /** What Automatic sends to this AI, in plain words. */
+  strengths?: string[] | null;
 }
 
 export interface McpServerTool {
@@ -408,6 +412,7 @@ export interface ConversationItem {
   title: string;
   mode: ChatMode;
   model: string;
+  routing: "balanced" | "quality" | "cost" | "private";
   team: boolean;
   updated_at: string;
 }
@@ -419,6 +424,8 @@ export interface ChatMessage {
   task_id: string | null;
   /** On a reply: which AI wrote it, as "provider:model". */
   model: string | null;
+  /** Why that AI answered: "best of your AIs for coding". */
+  model_reason?: string | null;
   /** On a reply that did not finish: what went wrong. */
   error: string | null;
   /** On a reply: tools it used, and "specialist:<role>" for each specialist asked. */

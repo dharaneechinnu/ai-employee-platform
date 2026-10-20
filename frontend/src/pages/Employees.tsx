@@ -19,7 +19,7 @@ import {
   useToast,
 } from "../components/ui";
 import { ApiError, api, type Employee, type EmployeeList, type Template } from "../lib/api";
-import { isAutoModel, modelLabel } from "../lib/labels";
+import { AUTO_CHOICES, aiChoiceLabel, aiChoiceValue, modelLabel, parseAiChoice } from "../lib/labels";
 
 type ModelChoice = { provider_key: string; display_name: string; model: string };
 
@@ -124,7 +124,7 @@ export default function Employees() {
     setError(null);
     setEditing(employee);
     setEditTools(employee.config.enabled_tools);
-    setEditModel(isAutoModel(employee.config.model) ? "auto" : employee.config.model);
+    setEditModel(aiChoiceValue(employee.config.model, employee.config.routing));
     {
       void api
         .get<ModelChoice[]>(`/me/models`)
@@ -141,9 +141,10 @@ export default function Employees() {
       // PATCH replaces the whole configuration, so send it all back
       // with only the tool list changed.
       await api.patch(`/me/ai-employees/${editing.id}`, {
-        config: { ...editing.config, enabled_tools: editTools, model: editModel },
+        config: { ...editing.config, enabled_tools: editTools, ...parseAiChoice(editModel) },
       });
-      toast(`Saved. ${editing.name} has ${editTools.length} tools and uses ${modelLabel(editModel)}.`);
+      const chosen = parseAiChoice(editModel);
+      toast(`Saved. ${editing.name} has ${editTools.length} tools and uses ${aiChoiceLabel(chosen.model, chosen.routing)}.`);
       setEditing(null);
       await load();
     } catch (err) {
@@ -242,7 +243,7 @@ export default function Employees() {
                         <StatusChip status={employee.status} />
                         {detail && (
                           <span className="ml-auto text-xs text-dim">
-                            {modelLabel(detail.config.model)} · {detail.config.enabled_tools.length} tools
+                            {aiChoiceLabel(detail.config.model, detail.config.routing)} · {detail.config.enabled_tools.length} tools
                           </span>
                         )}
                         {detail && (
@@ -370,13 +371,14 @@ export default function Employees() {
                   value={editModel}
                   onChange={setEditModel}
                   options={[
-                    { value: "auto", label: "Automatic: the AI your company connected" },
+                    // Automatic: each task goes to whichever connected AI suits it.
+                    ...AUTO_CHOICES.map((c) => ({ value: `auto|${c.routing}`, label: c.label })),
                     ...models.map((m) => ({
                       value: `${m.provider_key}:${m.model}`,
                       label: `${m.display_name} · ${m.model}`,
                     })),
                     // Keep a pinned model visible even if its provider was disconnected.
-                    ...(editModel !== "auto" && !models.some((m) => `${m.provider_key}:${m.model}` === editModel)
+                    ...(!editModel.startsWith("auto|") && !models.some((m) => `${m.provider_key}:${m.model}` === editModel)
                       ? [{ value: editModel, label: `${modelLabel(editModel)} (not connected)` }]
                       : []),
                   ]}

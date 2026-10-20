@@ -95,7 +95,7 @@ class AnthropicProvider(LLMProvider):
                 continue
 
             if m.role is Role.ASSISTANT:
-                if m.raw:
+                if m.raw and m.raw_from in (None, "anthropic"):
                     # Exactly as Claude sent it, thinking blocks included.
                     out.append({"role": "assistant", "content": m.raw})
                     continue
@@ -186,7 +186,13 @@ class AnthropicProvider(LLMProvider):
 
         usage = data.get("usage") or {}
         return LLMReply(
-            message=Message(role=Role.ASSISTANT, content=text, tool_calls=tool_calls, raw=blocks),
+            message=Message(
+                role=Role.ASSISTANT,
+                content=text,
+                tool_calls=tool_calls,
+                raw=blocks,
+                raw_from="anthropic",
+            ),
             stop_reason=stop,
             usage=Usage(
                 prompt_tokens=usage.get("input_tokens", 0)

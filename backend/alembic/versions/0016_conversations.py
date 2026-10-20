@@ -48,6 +48,7 @@ def upgrade() -> None:
         sa.Column("title", sa.String(length=200), nullable=False, server_default="New chat"),
         sa.Column("mode", sa.String(length=20), nullable=False, server_default="general"),
         sa.Column("model", sa.String(length=200), nullable=False, server_default="auto"),
+        sa.Column("routing", sa.String(length=20), nullable=False, server_default="balanced"),
         sa.Column("team", sa.Boolean(), nullable=False, server_default=sa.false()),
         *_timestamps(),
         sa.ForeignKeyConstraint(["owner_id"], ["users.id"], ondelete="CASCADE"),
@@ -84,6 +85,7 @@ def upgrade() -> None:
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("task_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("model", sa.String(length=200), nullable=True),
+        sa.Column("model_reason", sa.String(length=300), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column(
             "tools_used",

@@ -13,6 +13,7 @@ it is called only by the worker, immediately before a provider call.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -21,6 +22,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.providers import CUSTOM_PROVIDER, build_provider
 from app.agent.providers.base import LLMError, LLMProvider
+from app.agent.routing import (
+    Candidate,
+    Choice,
+    Preference,
+    TaskKind,
+    classify_by_rules,
+    explain,
+    rank,
+)
+from app.agent.routing import strengths as routing_strengths
 from app.core.crypto import decrypt, encrypt
 from app.core.errors import NotFoundError, ValidationError
 from app.core.observability import get_logger
@@ -82,6 +93,8 @@ class ConnectedProvider:
     # True when the company picked it, rather than taking the default.
     model_chosen: bool = False
     base_url: str | None = None
+    # What Automatic routing sends to it, in plain words.
+    strengths: list[str] | None = None
 
 
 class ProviderService:
@@ -124,6 +137,9 @@ class ProviderService:
                 default_model=config.model or supported.default_model,
                 model_chosen=config.model is not None,
                 base_url=config.base_url,
+                strengths=routing_strengths(
+                    config.provider_key, config.model or supported.default_model or ""
+                ),
             )
             for config, supported in rows.all()
         ]
@@ -296,6 +312,84 @@ class ProviderService:
 
         best = min(candidates, key=rank)
         return best.provider_key, best.default_model or ""
+
+    async def candidates(self) -> list[Candidate]:
+        """Every connected AI, with the model this person picked for it."""
+        return [
+            Candidate(
+                provider_key=c.provider_key,
+                model=c.default_model,
+                display_name=c.display_name,
+                failed=c.status is ConnectionStatus.FAILED,
+            )
+            for c in await self.connected()
+            if c.default_model
+        ]
+
+    async def route(
+        self,
+        configured: str,
+        *,
+        text: str,
+        preference: Preference = Preference.BALANCED,
+        history_chars: int = 0,
+        classify: Callable[[list[Candidate]], Awaitable[TaskKind]] | None = None,
+    ) -> list[Choice]:
+        """Which AI should do this task, best first, the rest as fallbacks.
+
+        A pinned "provider:model" is used as it is, with no fallback:
+        the person chose it. "Automatic" decides the kind of task (rules
+        first; `classify` only when they cannot tell and there is a real
+        choice to make) and ranks the connected AIs for it.
+        """
+        if configured.strip() not in _AUTO_ALIASES:
+            provider_key, model = split_model(configured)
+            name = next(
+                (c.display_name for c in await self.connected() if c.provider_key == provider_key),
+                provider_key,
+            )
+            return [
+                Choice(
+                    provider_key=provider_key,
+                    model=model,
+                    display_name=name,
+                    kind=TaskKind.GENERAL,
+                    preference=preference,
+                    reason="the AI you chose",
+                )
+            ]
+
+        candidates = await self.candidates()
+        if not candidates:
+            raise NotFoundError("No AI is connected.")
+
+        kind = classify_by_rules(text, history_chars=history_chars)
+        if kind is None:
+            kind = (
+                await classify(candidates)
+                if classify is not None and len(candidates) > 1
+                else TaskKind.GENERAL
+            )
+
+        ranked = rank(candidates, kind, preference)
+        if not ranked:
+            raise NotFoundError(
+                "Private only uses your own server, and none is connected. "
+                "Connect one under AI Providers, or choose another preference."
+            )
+        return [
+            Choice(
+                provider_key=c.provider_key,
+                model=c.model,
+                display_name=c.display_name,
+                kind=kind,
+                preference=preference,
+                reason=explain(c, kind, preference, len(ranked) - 1)
+                if i == 0
+                else "next best, if the first is unavailable",
+            )
+            for i, c in enumerate(ranked)
+        ]
 
     async def model_choices(self) -> list[dict[str, object]]:
         """Models this company can actually pick, which means only the

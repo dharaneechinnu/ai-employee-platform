@@ -108,6 +108,9 @@ class Team:
     tools: list[type[Tool]]
     check_policy: PolicyCheck
     emit: Emit
+    # Role -> (provider, model, "provider:model"). None: every
+    # specialist uses the lead's AI.
+    provider_for: Callable[[str], tuple[Any, str, str]] | None = None
     calls: int = 0
     prompt_tokens: int = 0
     output_tokens: int = 0
@@ -165,7 +168,12 @@ class AskSpecialist(Tool):
         team.calls += 1
         sid = f"s{team.calls}"
         team.roles_used.append(role.key)
-        await team.emit("specialist_started", id=sid, role=role.key, task=args.task[:400])
+        provider, model, label = (
+            team.provider_for(role.key) if team.provider_for else (team.provider, team.model, None)
+        )
+        await team.emit(
+            "specialist_started", id=sid, role=role.key, task=args.task[:400], model=label
+        )
 
         async def forward(event: AgentEvent) -> None:
             if event.type in ("tool_call", "tool_result", "tool_blocked", "llm_call"):
@@ -182,8 +190,8 @@ class AskSpecialist(Tool):
         # not the team itself or the lead's database session.
         config = {k: v for k, v in (ctx.config or {}).items() if k not in ("_team", "_session")}
         loop = AgentLoop(
-            provider=team.provider,
-            model=team.model,
+            provider=provider,
+            model=model,
             tools=specialist_tools(team.tools, role),
             tool_context=replace(ctx, config=config),
             budget=Budget(max_steps=SPECIALIST_MAX_STEPS, max_seconds=SPECIALIST_SECONDS),

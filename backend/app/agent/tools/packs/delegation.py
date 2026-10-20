@@ -156,6 +156,7 @@ async def _run_specialist(
     """
     from app.agent.loop import AgentLoop, Budget
     from app.agent.providers import build_provider
+    from app.agent.providers.fallback import FallbackProvider, Option
     from app.agent.tools.registry import registry
     from app.schemas.ai_employee import EmployeeConfig
     from app.services.employee_service import build_system_prompt
@@ -166,9 +167,21 @@ async def _run_specialist(
     providers = ProviderService(session, ctx.owner_id)  # type: ignore[arg-type]
 
     try:
-        provider_key, model = await providers.resolve_model(config.model)
-        api_key = await providers.resolve_api_key(provider_key)
-        base_url = await providers.resolve_base_url(provider_key)
+        # With Automatic, the specialist's own preference picks the best
+        # of the person's AIs for this piece of work, with fallbacks.
+        options = []
+        for choice in await providers.route(config.model, text=task, preference=config.routing):
+            options.append(
+                Option(
+                    provider=build_provider(
+                        choice.provider_key,
+                        await providers.resolve_api_key(choice.provider_key),
+                        base_url=await providers.resolve_base_url(choice.provider_key),
+                    ),
+                    provider_key=choice.provider_key,
+                    model=choice.model,
+                )
+            )
     except Exception:  # noqa: BLE001 - reported to the manager, not raised
         return ToolResult.failure(
             "not_connected",
@@ -193,8 +206,8 @@ async def _run_specialist(
 
     resolver = await PolicyService(session, ctx.owner_id).resolver()  # type: ignore[arg-type]
     loop = AgentLoop(
-        provider=build_provider(provider_key, api_key, base_url=base_url),
-        model=model,
+        provider=FallbackProvider(options),
+        model=options[0].model,
         tools=registry.for_employee(config.enabled_tools, extra=resolver.extra_tools),
         tool_context=nested_context,
         # A smaller budget than the manager: a specialist is doing one

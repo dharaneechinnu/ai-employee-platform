@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.agent.routing import Preference
 from app.db.models.ai_employee import EmployeeStatus
 
 # A safety stop. An AI that gets confused can loop - think, call a tool,
@@ -45,6 +46,9 @@ class EmployeeConfig(BaseModel):
     # a friendly-looking shorthand is sent to the API verbatim and
     # comes back as "model not found".
     model: str = Field(default="auto", max_length=200)
+    # Used when `model` is "auto": what Automatic aims for when it picks
+    # one of the person's connected AIs for each task.
+    routing: Preference = Preference.BALANCED
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_steps: int = Field(default=DEFAULT_MAX_STEPS, ge=1, le=100)
     enabled_tools: list[str] = Field(default_factory=list)

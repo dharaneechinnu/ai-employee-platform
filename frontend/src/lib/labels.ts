@@ -152,3 +152,30 @@ export function formatDateTime(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : DATE_TIME.format(date);
 }
+
+// ------------------------------------------------- automatic routing
+
+export type Routing = "balanced" | "quality" | "cost" | "private";
+
+/** The four ways "Automatic" can pick one of the person's connected AIs. */
+export const AUTO_CHOICES: { routing: Routing; label: string; hint: string }[] = [
+  { routing: "balanced", label: "Automatic · Balanced", hint: "Strongest AI for hard work, fast and cheap for easy questions" },
+  { routing: "quality", label: "Automatic · Best quality", hint: "Always the most capable of your AIs" },
+  { routing: "cost", label: "Automatic · Lowest cost", hint: "The cheapest of your AIs that can do the job" },
+  { routing: "private", label: "Automatic · Private only", hint: "Only your own server: nothing leaves it" },
+];
+
+/** One select value for "which AI": "auto|balanced", or "provider:model" when pinned. */
+export function aiChoiceValue(model: string, routing: string | undefined): string {
+  return isAutoModel(model) ? `auto|${routing || "balanced"}` : model;
+}
+
+export function parseAiChoice(value: string): { model: string; routing?: Routing } {
+  if (value.startsWith("auto|")) return { model: "auto", routing: value.slice(5) as Routing };
+  return { model: value };
+}
+
+export function aiChoiceLabel(model: string, routing?: string): string {
+  if (!isAutoModel(model)) return modelLabel(model);
+  return AUTO_CHOICES.find((c) => c.routing === (routing || "balanced"))?.label ?? "Automatic";
+}

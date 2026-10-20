@@ -59,6 +59,7 @@ class ConnectedProviderResponse(BaseModel):
     default_model: str | None
     model_chosen: bool = False
     base_url: str | None = None
+    strengths: list[str] | None = None
 
 
 class ModelChoice(BaseModel):

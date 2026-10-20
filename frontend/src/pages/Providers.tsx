@@ -122,6 +122,25 @@ export default function Providers() {
       </PageHeader>
 
       <PageBody>
+        {/* Several AIs are better than one: Automatic gives each task to
+            the one that suits it, and falls back if one is busy. */}
+        <div className="flex flex-wrap items-start gap-3 rounded-xl border border-line bg-panel px-4 py-3.5" data-coach="routing-note">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-text">
+            <Icon name="sparkle" size={17} />
+          </span>
+          <div className="min-w-0 flex-1 text-[13.5px] leading-normal">
+            <div className="font-medium">
+              {connected.length > 1
+                ? `Automatic picks from your ${connected.length} AIs for every task`
+                : "Connect more than one AI and Automatic picks the right one for each task"}
+            </div>
+            <div className="text-muted">
+              Hard work like coding and analysis goes to your strongest AI, quick questions to the fastest and cheapest, and if
+              one is busy the next takes over. Choose Automatic, or pin one AI, in a chat or an AI Employee.
+            </div>
+          </div>
+        </div>
+
         {connected.length === 0 ? (
           <Empty message="No provider connected" hint="AI Employees cannot run until you connect at least one key below." />
         ) : (
@@ -171,6 +190,17 @@ export default function Providers() {
                         ))}
                       </span>
                       <span className="text-xs text-dim">{provider.display_name}</span>
+                    </div>
+                  )}
+
+                  {provider.strengths && provider.strengths.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                      <span className="text-dim">Automatic sends it</span>
+                      {provider.strengths.map((s) => (
+                        <span key={s} className="rounded-full bg-raised px-2 py-0.5 text-muted">
+                          {s}
+                        </span>
+                      ))}
                     </div>
                   )}
 

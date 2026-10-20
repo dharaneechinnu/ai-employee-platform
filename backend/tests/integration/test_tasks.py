@@ -151,7 +151,9 @@ async def test_the_run_trace_records_every_step(
     trace = await api.get(f"/api/v1/me/runs/{run_id}/trace", headers=headers)
     events = trace.json()["events"]
 
-    assert [e["type"] for e in events][:2] == ["run_started", "thinking"]
+    # First, which AI was chosen and why; then the run itself.
+    assert [e["type"] for e in events][:3] == ["model_chosen", "run_started", "thinking"]
+    assert events[0]["payload"]["reason"]
     # seq is gap-free, which is what lets a reconnecting client resume.
     assert [e["seq"] for e in events] == list(range(1, len(events) + 1))
     assert trace.json()["llm_calls"][0]["prompt_tokens"] == 120

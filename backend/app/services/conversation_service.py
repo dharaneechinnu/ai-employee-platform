@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.assistant import HISTORY_CHARS, HISTORY_MESSAGES
 from app.agent.providers.base import Message, Role
+from app.agent.routing import Preference
 from app.core.errors import NotFoundError, ValidationError
 from app.core.observability import get_logger
 from app.db.models.conversation import ChatMode, Conversation, ConversationMessage, MessageRole
@@ -77,11 +78,13 @@ class ConversationService:
         mode: ChatMode = ChatMode.GENERAL,
         model: str = AUTO_MODEL,
         team: bool = False,
+        routing: Preference = Preference.BALANCED,
     ) -> Conversation:
         conversation = Conversation(
             owner_id=self.owner_id,
             mode=mode,
             model=await self._check_model(model),
+            routing=routing.value,
             team=team,
         )
         self.session.add(conversation)
@@ -96,6 +99,7 @@ class ConversationService:
         mode: ChatMode | None = None,
         model: str | None = None,
         team: bool | None = None,
+        routing: Preference | None = None,
     ) -> Conversation:
         """Any setting can change mid-conversation. Switching the model
         is the point: history is plain text, so the next reply simply
@@ -109,6 +113,8 @@ class ConversationService:
             conversation.model = await self._check_model(model)
         if team is not None:
             conversation.team = team
+        if routing is not None:
+            conversation.routing = routing.value
         # Set here rather than left to the database, so the value is
         # known without reloading the row.
         conversation.updated_at = datetime.now(UTC)
@@ -231,6 +237,7 @@ class ConversationService:
         model: str | None,
         error: str | None,
         tools_used: list[str] | None = None,
+        model_reason: str | None = None,
     ) -> ConversationMessage:
         assert task.conversation_id is not None
         reply = ConversationMessage(
@@ -240,6 +247,7 @@ class ConversationService:
             content=(content or "").strip() or ("" if error else "(No answer.)"),
             task_id=task.id,
             model=model,
+            model_reason=(model_reason or "")[:300] or None,
             error=error,
             tools_used=tools_used or [],
             created_at=datetime.now(UTC),

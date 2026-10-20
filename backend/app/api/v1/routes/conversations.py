@@ -14,6 +14,7 @@ from fastapi import APIRouter, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agent.assistant import MODES
+from app.agent.routing import Preference
 from app.agent.team import ROLES
 from app.api.v1.deps import ContextDep, SessionDep
 from app.db.models.conversation import ChatMode, Conversation, MessageRole
@@ -48,6 +49,7 @@ class ConversationItem(BaseModel):
     title: str
     mode: ChatMode
     model: str
+    routing: Preference
     team: bool
     updated_at: datetime
 
@@ -60,6 +62,7 @@ class MessageResponse(BaseModel):
     content: str
     task_id: uuid.UUID | None
     model: str | None
+    model_reason: str | None = None
     error: str | None
     tools_used: list[str] = []
     created_at: datetime
@@ -80,6 +83,8 @@ class ConversationResponse(ConversationItem):
 class CreateConversationRequest(BaseModel):
     mode: ChatMode = ChatMode.GENERAL
     model: str = Field(default="auto", max_length=200)
+    # With "auto": what Automatic aims for when it picks an AI.
+    routing: Preference = Preference.BALANCED
     team: bool = False
 
 
@@ -87,6 +92,7 @@ class UpdateConversationRequest(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     mode: ChatMode | None = None
     model: str | None = Field(default=None, max_length=200)
+    routing: Preference | None = None
     team: bool | None = None
 
 
@@ -105,6 +111,7 @@ async def _full(service: ConversationService, conversation: Conversation) -> Con
         title=conversation.title,
         mode=conversation.mode,
         model=conversation.model,
+        routing=Preference(conversation.routing),
         team=conversation.team,
         updated_at=conversation.updated_at,
         messages=[
@@ -149,7 +156,9 @@ async def create_conversation(
     body: CreateConversationRequest, ctx: ContextDep, session: SessionDep
 ) -> ConversationResponse:
     service = ConversationService(session, ctx.owner_id)
-    conversation = await service.create(mode=body.mode, model=body.model, team=body.team)
+    conversation = await service.create(
+        mode=body.mode, model=body.model, team=body.team, routing=body.routing
+    )
     await session.commit()
     return await _full(service, conversation)
 
@@ -169,7 +178,7 @@ async def get_conversation(
 @router.patch(
     "/conversations/{conversation_id}",
     response_model=ConversationResponse,
-    summary="Rename, or change the mode, model or team",
+    summary="Rename, or change the mode, AI, routing preference or team",
 )
 async def update_conversation(
     conversation_id: uuid.UUID,
@@ -184,6 +193,7 @@ async def update_conversation(
         mode=body.mode,
         model=body.model,
         team=body.team,
+        routing=body.routing,
     )
     await session.commit()
     return await _full(service, conversation)

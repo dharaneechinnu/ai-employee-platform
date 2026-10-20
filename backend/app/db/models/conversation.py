@@ -49,6 +49,8 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     # "auto" or "provider:model", exactly as an AI Employee's model.
     model: Mapped[str] = mapped_column(String(200), nullable=False, default="auto")
+    # With "auto": balanced, quality, cost or private (see agent/routing).
+    routing: Mapped[str] = mapped_column(String(20), nullable=False, default="balanced")
     # Orchestration: the assistant may split the work between
     # specialists (researcher, analyst, writer, critic) and combine it.
     team: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -77,6 +79,8 @@ class ConversationMessage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     # On a reply: which model wrote it ("anthropic:claude-opus-5-5").
     model: Mapped[str | None] = mapped_column(String(200))
+    # Why that AI: "best of your AIs for coding", "the AI you chose".
+    model_reason: Mapped[str | None] = mapped_column(String(300))
     # On a reply that did not finish: what went wrong, said plainly.
     # Kept out of later history, so a failure is not repeated as fact.
     error: Mapped[str | None] = mapped_column(Text)

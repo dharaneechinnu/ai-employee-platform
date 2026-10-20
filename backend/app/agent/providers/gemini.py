@@ -76,7 +76,7 @@ class GeminiProvider(LLMProvider):
                 )
                 continue
 
-            if m.role is Role.ASSISTANT and m.raw:
+            if m.role is Role.ASSISTANT and m.raw and m.raw_from in (None, "gemini"):
                 # As Gemini sent them: newer models attach a thought
                 # signature to tool calls and reject a turn without it.
                 contents.append({"role": "model", "parts": m.raw})
@@ -196,6 +196,7 @@ class GeminiProvider(LLMProvider):
                 content="".join(text_parts) or None,
                 tool_calls=tool_calls,
                 raw=candidate.get("content", {}).get("parts") or None,
+                raw_from="gemini",
             ),
             stop_reason=stop,
             usage=Usage(

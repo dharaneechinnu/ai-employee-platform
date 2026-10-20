@@ -34,7 +34,7 @@ import {
   type Task,
   type TaskListItem,
 } from "../lib/api";
-import { formatDateTime, toolLabel } from "../lib/labels";
+import { formatDateTime, modelLabel, toolLabel } from "../lib/labels";
 
 /**
  * Phase 4. Assigning a task returns immediately; the run happens in a
@@ -607,6 +607,8 @@ const STOP_CAUSES: Record<string, string> = {
 
 /** The row's headline: the plain name of the tool when there is one. */
 function eventTitle(event: RunEvent): string {
+  if (event.type === "model_chosen" && event.model) return `Chose ${modelLabel(String(event.model))}`;
+  if (event.type === "model_fallback" && event.to) return `${modelLabel(String(event.to))} took over`;
   const tool = typeof event.tool === "string" ? toolLabel(event.tool) : null;
   if (tool && event.type === "tool_call" && event.tool !== "delegate_to_specialist") return tool;
   if (tool && event.type === "tool_result") return event.ok === false ? `Didn't work: ${tool}` : `Done: ${tool}`;
@@ -646,6 +648,8 @@ function eventStyle(event: RunEvent): { tone: "run" | "ok" | "ask" | "bad" | "br
 }
 
 function eventDetail(event: RunEvent): string {
+  if (event.type === "model_chosen") return String(event.reason ?? "");
+  if (event.type === "model_fallback") return `${modelLabel(String(event.from))} was busy or unavailable`;
   const args = (event.arguments ?? {}) as Record<string, unknown>;
   if (event.tool === "delegate_to_specialist" && event.type === "tool_call") {
     return `asked ${String(args.specialist_name ?? "a specialist")}`;

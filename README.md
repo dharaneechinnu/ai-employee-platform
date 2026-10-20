@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, a guided welcome tour, any AI provider (Claude, ChatGPT, Gemini or your own open-source model server), MCP tool servers, and a personal ChatGPT-style assistant with agent orchestration for students, professionals and researchers. 184 tests passing, 92 API operations, 27 built-in agent tools plus any tools an MCP server offers. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, a guided welcome tour, any AI provider (Claude, ChatGPT, Gemini or your own open-source model server), MCP tool servers, and a personal ChatGPT-style assistant with agent orchestration for students, professionals and researchers. 210 tests passing, 92 API operations, 27 built-in agent tools plus any tools an MCP server offers. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -195,6 +195,20 @@ The limits are deliberate: specialists can't start their own chains (depth 1), c
 
 ![The combined answer, with the team that produced it](docs/screenshots/25-chat-team-answer.png)
 
+### 21. Connect several AIs; each task goes to the one that suits it
+
+Connect as many AIs as you like with your own keys: Claude, ChatGPT, Gemini, Groq, DeepSeek, Mistral, or your own server. With the AI set to **Automatic**, every task (a chat message, an AI Employee's task, each specialist in a team) goes to the connected AI that fits it best:
+
+1. **What kind of task is it?** Fast rules decide most cases for free: code or an error message is coding, a long paste is a long document, "draft an email" is writing. Only when the rules can't tell is your cheapest AI asked, in one tiny call.
+2. **Which AI is best at it?** Each model has a small profile (skill per kind of task, speed, cost). The preference decides the trade-off: **Balanced** (the default: strongest AI for hard work, fast and cheap for easy questions), **Best quality**, **Lowest cost**, or **Private only** (your own server, so nothing leaves it).
+3. **If it's busy, the next one takes over.** The other connected AIs are kept as fallbacks, so a rate limit or an outage at one vendor doesn't fail the run.
+
+Every answer says which AI wrote it and why ("best of your AIs for coding"), and the run log shows any handover. In Team mode, each specialist gets the AI best at its role: the researcher one that reads long documents well, the critic the strongest reasoner. You can still pin one AI in a chat or an AI Employee.
+
+![Automatic chose Claude for a coding question; when it was unavailable, the user's own server took over](docs/screenshots/27-automatic-routing.png)
+
+![What Automatic sends to each connected AI](docs/screenshots/28-providers-strengths.png)
+
 ## Stack
 
 | Layer | Technology |
@@ -254,7 +268,7 @@ already works and is tested.
 
 ```bash
 docker compose up --build        # all five services
-make test                        # 184 tests
+make test                        # 210 tests
 make lint                        # ruff + mypy strict
 ```
 
@@ -285,7 +299,7 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 | Check | Result |
 |---|---|
-| Tests | 184 passing: unit, tenant isolation, and integration against real Postgres |
+| Tests | 210 passing: unit, tenant isolation, and integration against real Postgres |
 | Types | mypy **strict**, zero errors |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
 | Migrations | 16 (the newest, 0016, verified forward *and* backward) |

@@ -60,6 +60,9 @@ class Message:
     # they can be sent back unchanged. Claude needs this: its thinking
     # blocks must be returned exactly as received or the next turn fails.
     raw: list[dict[str, Any]] | None = None
+    # Which provider wrote `raw`. Only that provider can read it back:
+    # when a run moves to another AI, the plain fields are used instead.
+    raw_from: str | None = None
 
 
 @dataclass(slots=True)

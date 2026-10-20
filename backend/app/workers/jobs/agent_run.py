@@ -21,6 +21,17 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.agent import assistant
 from app.agent.loop import AgentEvent, AgentLoop, Budget, StopCause
 from app.agent.providers import build_provider
+from app.agent.providers.base import LLMError, Message, Role, Usage
+from app.agent.providers.fallback import FallbackProvider, Option
+from app.agent.routing import (
+    CLASSIFY_PROMPT,
+    Candidate,
+    Choice,
+    Preference,
+    TaskKind,
+    parse_kind,
+    rank,
+)
 from app.agent.team import AskSpecialist, Team
 from app.agent.tools.base import ToolContext
 from app.agent.tools.packs.delegation import specialist_policy
@@ -79,6 +90,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         if chat is not None:
             config = EmployeeConfig(
                 model=chat.model,
+                routing=Preference(chat.routing),
                 max_steps=assistant.CHAT_MAX_STEPS,
                 temperature=0.4,
                 # Filled in below from `chat_tools`: a chat has every
@@ -139,10 +151,27 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         writer = EventWriter(session, run_db.id, task.owner_id)
 
         providers = ProviderService(session, task.owner_id)
+        # A chat's history is read first: a long conversation is itself
+        # a reason to pick an AI that handles long context well.
+        history = (
+            await ConversationService(session, task.owner_id).history_before(task)
+            if chat is not None
+            else None
+        )
+        classify_usage = Usage()
+
+        async def classify(candidates: list[Candidate]) -> TaskKind:
+            return await _classify_with_ai(providers, candidates, task.input, classify_usage)
+
         try:
-            provider_key, model = await providers.resolve_model(config.model)
-            api_key = await providers.resolve_api_key(provider_key)
-            base_url = await providers.resolve_base_url(provider_key)
+            choices = await providers.route(
+                config.model,
+                text=task.input,
+                preference=config.routing,
+                history_chars=sum(len(m.content or "") for m in history or []),
+                classify=classify,
+            )
+            options = await _options(providers, choices)
         except SecretUnreadableError:
             await writer.append("run_stopped", {"cause": "provider_key_unreadable"})
             return await _finish(
@@ -156,20 +185,25 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                     "Enter it again under AI Providers, then try again."
                 ),
             )
-        except NotFoundError:
+        except NotFoundError as exc:
             # No key connected. A clear message beats a mysterious
             # failure three steps into a run.
             await writer.append("run_stopped", {"cause": "provider_not_connected"})
+            detail = (
+                str(exc)
+                if "Private only" in str(exc)
+                else (
+                    "No AI key is connected for the chosen model. "
+                    "Connect one under AI Providers, then try again."
+                )
+            )
             return await _finish(
                 session,
                 run_db,
                 task_id,
                 RunStatus.FAILED,
                 stop_cause="provider_not_connected",
-                error=(
-                    "No AI key is connected for the chosen model. "
-                    "Connect one under AI Providers, then try again."
-                ),
+                error=detail,
             )
 
         # Parallel tool calls and parallel specialists all report here,
@@ -181,6 +215,44 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 await writer.append(event.type, event.payload)
                 run_db.heartbeat_at = datetime.now(UTC)
                 await session.commit()
+
+        # Several AIs behind one provider: the best for this task first,
+        # the rest ready in case it is rate-limited or down.
+        chosen = choices[0]
+        switches: list[str] = []
+
+        async def on_switch(old: Option, new: Option, exc: LLMError) -> None:
+            names = {c.provider_key: c.display_name for c in choices}
+            switches.append(
+                f"{names.get(old.provider_key, old.provider_key)} was unavailable, "
+                f"so {names.get(new.provider_key, new.provider_key)} took over"
+            )
+            await sink(
+                AgentEvent(
+                    type="model_fallback",
+                    payload={
+                        "from": f"{old.provider_key}:{old.model}",
+                        "to": f"{new.provider_key}:{new.model}",
+                        "error": type(exc).__name__,
+                    },
+                )
+            )
+
+        provider = FallbackProvider(options, on_switch=on_switch)
+        model = options[0].model
+        await sink(
+            AgentEvent(
+                type="model_chosen",
+                payload={
+                    "model": f"{options[0].provider_key}:{model}",
+                    "name": chosen.display_name,
+                    "kind": chosen.kind.value,
+                    "preference": chosen.preference.value,
+                    "reason": chosen.reason,
+                    "fallbacks": len(options) - 1,
+                },
+            )
+        )
 
         resolver = await PolicyService(session, task.owner_id).resolver()
 
@@ -222,7 +294,6 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             fresh = await session.scalar(select(Task.cancel_requested).where(Task.id == task_id))
             return bool(fresh)
 
-        provider = build_provider(provider_key, api_key, base_url=base_url)
         tools = (
             assistant.chat_tools(resolver, set(grants))
             if chat is not None
@@ -250,6 +321,13 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 tools=tools,
                 check_policy=specialist_policy(resolver),
                 emit=emit,
+                # With Automatic, each specialist gets the AI best at its
+                # role: long reading, careful reasoning, good writing.
+                provider_for=(
+                    _team_router(await providers.candidates(), options, config.routing)
+                    if len(options) > 1
+                    else None
+                ),
             )
             context_config["_team"] = team
             tools = [*tools, AskSpecialist]
@@ -282,19 +360,23 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 team=chat.team,
                 tool_names=[t.name for t in tools],
             )
-            history = await ConversationService(session, task.owner_id).history_before(task)
         else:
             assert employee is not None
             system_prompt = build_system_prompt(
                 config, name=employee.name, job_title=employee.job_title
             )
-            history = None
 
         outcome = await loop.run(system_prompt=system_prompt, task=task.input, history=history)
         if team is not None:
             # The specialists' model calls are part of this turn's cost.
             outcome.prompt_tokens += team.prompt_tokens
             outcome.output_tokens += team.output_tokens
+        # So is the tiny call that decided which AI to use, if one was made.
+        outcome.prompt_tokens += classify_usage.prompt_tokens
+        outcome.output_tokens += classify_usage.output_tokens
+        # The AI that actually finished the run, after any fallback.
+        provider_key, model = provider.current.provider_key, provider.current.model
+        reason = chosen.reason + (f"; {switches[-1]}" if switches else "")
 
         if outcome.paused and outcome.pending_tool_call:
             call = outcome.pending_tool_call
@@ -358,6 +440,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             error=None if status is RunStatus.COMPLETED else outcome.output,
             model=f"{provider_key}:{model}",
             tools_used=_tools_used(outcome.events, team.roles_used if team else []),
+            model_reason=reason,
         )
 
 
@@ -371,6 +454,7 @@ async def _finish(
     error: str | None,
     model: str | None = None,
     tools_used: list[str] | None = None,
+    model_reason: str | None = None,
 ) -> dict[str, Any]:
     run.status = status
     run.stop_cause = stop_cause
@@ -393,6 +477,7 @@ async def _finish(
                 model=model,
                 error=None if completed else _chat_error(status, stop_cause, error),
                 tools_used=tools_used,
+                model_reason=model_reason,
             )
 
     await session.commit()
@@ -430,3 +515,99 @@ def _tools_used(events: list[AgentEvent], roles: list[str]) -> list[str]:
             used.append(str(tool))
     used += [f"specialist:{role}" for role in roles]
     return list(dict.fromkeys(used))
+
+
+# How long the "what kind of task is this?" call may take before the
+# run goes ahead treating it as a general task.
+CLASSIFY_TIMEOUT_S = 12.0
+
+# Which kind of work each specialist role mostly does.
+ROLE_KIND: dict[str, TaskKind] = {
+    "researcher": TaskKind.LONG,
+    "analyst": TaskKind.ANALYSIS,
+    "writer": TaskKind.WRITING,
+    "critic": TaskKind.ANALYSIS,
+}
+
+
+async def _options(providers: ProviderService, choices: list[Choice]) -> list[Option]:
+    """A ready-to-call provider per choice, in order. A choice whose
+    saved key cannot be read is skipped, unless it is the only one."""
+    options: list[Option] = []
+    unreadable: SecretUnreadableError | None = None
+    for choice in choices:
+        try:
+            api_key = await providers.resolve_api_key(choice.provider_key)
+        except SecretUnreadableError as exc:
+            unreadable = exc
+            continue
+        base_url = await providers.resolve_base_url(choice.provider_key)
+        options.append(
+            Option(
+                provider=build_provider(choice.provider_key, api_key, base_url=base_url),
+                provider_key=choice.provider_key,
+                model=choice.model,
+            )
+        )
+    if not options:
+        raise unreadable or NotFoundError("No AI is connected.")
+    return options
+
+
+async def _classify_with_ai(
+    providers: ProviderService, candidates: list[Candidate], text: str, usage: Usage
+) -> TaskKind:
+    """Ask the cheapest connected AI what kind of task this is, in one
+    tiny call. Any failure means "general": routing must never be the
+    reason a run fails."""
+    cheapest = rank(candidates, TaskKind.QUICK, Preference.COST)[0]
+    try:
+        [option] = await _options(
+            providers,
+            [
+                Choice(
+                    provider_key=cheapest.provider_key,
+                    model=cheapest.model,
+                    display_name=cheapest.display_name,
+                    kind=TaskKind.GENERAL,
+                    preference=Preference.COST,
+                    reason="",
+                )
+            ],
+        )
+        reply = await asyncio.wait_for(
+            option.provider.complete(
+                messages=[
+                    Message(role=Role.SYSTEM, content=CLASSIFY_PROMPT),
+                    Message(role=Role.USER, content=text[:3000]),
+                ],
+                model=option.model,
+                temperature=0.0,
+                max_tokens=10,
+            ),
+            timeout=CLASSIFY_TIMEOUT_S,
+        )
+    except Exception as exc:  # noqa: BLE001 - see the docstring
+        log.info("classify_failed", error=type(exc).__name__)
+        return TaskKind.GENERAL
+    usage.prompt_tokens += reply.usage.prompt_tokens
+    usage.output_tokens += reply.usage.output_tokens
+    return parse_kind(reply.text)
+
+
+def _team_router(candidates: list[Candidate], options: list[Option], preference: Preference) -> Any:
+    """For each specialist role, the person's AIs ranked for that role's
+    kind of work, behind one fallback provider."""
+    by_key = {o.provider_key: o for o in options}
+    cache: dict[str, tuple[FallbackProvider, str, str]] = {}
+
+    def provider_for(role: str) -> tuple[FallbackProvider, str, str]:
+        if role not in cache:
+            ranked = rank(candidates, ROLE_KIND.get(role, TaskKind.GENERAL), preference)
+            ordered = [by_key[c.provider_key] for c in ranked if c.provider_key in by_key]
+            fallback = FallbackProvider(ordered or options)
+            first = fallback.current
+            cache[role] = (fallback, first.model, f"{first.provider_key}:{first.model}")
+        return cache[role]
+
+    return provider_for
