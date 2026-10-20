@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.mcp.client import McpClient, McpError
 from app.agent.mcp.tools import build_tools, connection_kind, describe
 from app.agent.tools.base import Grant, Tool
-from app.core.crypto import decrypt, encrypt
+from app.core.crypto import SecretUnreadableError, decrypt, encrypt
 from app.core.errors import NotFoundError, ValidationError
 from app.core.observability import get_logger
 from app.core.urls import check_service_url
@@ -142,9 +142,16 @@ class McpService:
 
     async def grants(self) -> dict[str, Grant]:
         """Where each server lives and its token, for the worker only."""
-        return {
-            connection_kind(server.slug): Grant(
-                credential=self._token(server) or "", config={"url": server.url}
+        grants: dict[str, Grant] = {}
+        for server in await self.servers():
+            try:
+                token = self._token(server)
+            except SecretUnreadableError:
+                # One unreadable token must not stop a run: that
+                # server's tools report "not connected" instead.
+                log.warning("mcp_token_unreadable", slug=server.slug)
+                continue
+            grants[connection_kind(server.slug)] = Grant(
+                credential=token or "", config={"url": server.url}
             )
-            for server in await self.servers()
-        }
+        return grants

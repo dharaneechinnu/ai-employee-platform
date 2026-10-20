@@ -152,12 +152,18 @@ class AgentLoop:
             for t in self.tools.values()
         ]
 
-    async def run(self, *, system_prompt: str, task: str) -> RunOutcome:
+    async def run(
+        self, *, system_prompt: str, task: str, history: list[Message] | None = None
+    ) -> RunOutcome:
+        """`history` is the earlier turns of a conversation, as plain user
+        and assistant messages, placed between the instructions and the
+        new request."""
         messages: list[Message] = (
             deserialise(self._resume_from)
             if self._resume_from
             else [
                 Message(role=Role.SYSTEM, content=system_prompt),
+                *(history or []),
                 Message(role=Role.USER, content=task),
             ]
         )

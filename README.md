@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, a guided welcome tour, any AI provider (Claude, ChatGPT, Gemini or your own open-source model server) and MCP tool servers. 163 tests passing, 80 API operations, 27 built-in agent tools plus any tools an MCP server offers. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, a guided welcome tour, any AI provider (Claude, ChatGPT, Gemini or your own open-source model server), MCP tool servers, and a personal ChatGPT-style assistant with agent orchestration for students, professionals and researchers. 184 tests passing, 92 API operations, 27 built-in agent tools plus any tools an MCP server offers. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -168,6 +168,33 @@ Try it locally with the demo CRM server in `backend/scripts/demo_mcp_server.py` 
 
 ![Your own model server, connected, with the model picker open](docs/screenshots/22-own-model-server.png)
 
+### 19. A personal assistant, ChatGPT-style, that is really an agent
+
+**Chat** is the home page for individual users. It looks like a chat assistant, but every message is answered by the same agent loop as an AI Employee, so it can use your tools, stream its steps live, and pause for your approval before changing anything. A **mode** tells it who you are, so you don't re-explain yourself every message:
+
+| Mode | For | How it answers |
+|---|---|---|
+| **Study** | Students | Explains step by step with an example, checks understanding, gives hints before full homework answers |
+| **Work** | Professionals | Concise and ready to use: drafts, decisions, next steps |
+| **Research** | Researchers | Summary, findings, open questions; separates fact from inference; never invents citations |
+| **General** | Everyone | Clear and direct |
+
+Pick the **AI** under the message box and switch it at any time: history is plain text, so a conversation started on Gemini carries on with Claude or your own Llama, and every reply says which model wrote it. **Tools** chooses what this conversation may use (web pages, memory, connected apps, MCP tools), and your Permissions still apply, so a change waits for your approval right in the chat.
+
+![Study mode: a step-by-step answer with code and a table](docs/screenshots/23-chat-study.png)
+
+![Approving an action inside the chat](docs/screenshots/26-chat-approval.png)
+
+### 20. Agent orchestration: a lead and a team of specialists
+
+Switch on **Team** and the assistant becomes a lead with four specialists: a **researcher**, an **analyst**, a **writer** and a **critic**. For a big question it plans, hands independent parts to several specialists in the same step so they **work at the same time**, then checks and combines their answers. You can watch each specialist start and finish live, and open "How I worked this out" afterwards.
+
+The limits are deliberate: specialists can't start their own chains (depth 1), can only **read**, never change anything, follow your Permissions, see only the task they were given, and get a small step budget. There are at most six specialist calls per message, and their usage is counted in the turn's cost.
+
+![The team working in parallel](docs/screenshots/24-chat-team-working.png)
+
+![The combined answer, with the team that produced it](docs/screenshots/25-chat-team-answer.png)
+
 ## Stack
 
 | Layer | Technology |
@@ -227,7 +254,7 @@ already works and is tested.
 
 ```bash
 docker compose up --build        # all five services
-make test                        # 163 tests
+make test                        # 184 tests
 make lint                        # ruff + mypy strict
 ```
 
@@ -258,10 +285,10 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 | Check | Result |
 |---|---|
-| Tests | 163 passing: unit, tenant isolation, and integration against real Postgres |
+| Tests | 184 passing: unit, tenant isolation, and integration against real Postgres |
 | Types | mypy **strict**, zero errors |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
-| Migrations | 9, each verified forward *and* backward |
+| Migrations | 16 (the newest, 0016, verified forward *and* backward) |
 | Frontend | TypeScript strict build; screens checked in dark, light and phone widths |
 | UX audit | Every screen checked as admin and member, on desktop and phone, with the `icp-ux-audit` skill (`.claude/skills/`) |
 

@@ -283,7 +283,12 @@ class NotificationService:
             return
         task, employee = await self._task_and_employee(approval.run_id)
 
-        who = employee.name if employee else "An AI Employee"
+        if employee is not None:
+            who = employee.name
+        elif task is not None and task.conversation_id is not None:
+            who = "Your assistant"
+        else:
+            who = "An AI Employee"
         subject = f"Approval needed: {who} wants to {_humanise(approval.tool_name)}"
         lines = [
             f"Task: {task.title or task.input[:120]}" if task else "",
@@ -328,6 +333,8 @@ class NotificationService:
         succeeded = run.status is RunStatus.COMPLETED
         if run.status is RunStatus.CANCELLED:
             return  # the person who cancelled it already knows
+        if task.conversation_id is not None:
+            return  # a chat reply appears in the chat the person is in
         if (succeeded and not row.on_task_completed) or (not succeeded and not row.on_task_failed):
             return
 
@@ -360,7 +367,11 @@ class NotificationService:
     async def _task_and_employee(self, run_id: uuid.UUID) -> tuple[Task | None, AIEmployee | None]:
         run = await self.session.get(Run, run_id)
         task = await self.session.get(Task, run.task_id) if run else None
-        employee = await self.session.get(AIEmployee, task.employee_id) if task else None
+        employee = (
+            await self.session.get(AIEmployee, task.employee_id)
+            if task and task.employee_id
+            else None
+        )
         return task, employee
 
     async def _admins(self) -> list[User]:

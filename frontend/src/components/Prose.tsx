@@ -7,8 +7,8 @@ import type { ReactNode } from "react";
  * `whitespace-pre-wrap` dump shows people `**bold**` and `- item` and
  * makes the product look unfinished. This renders the handful of
  * things that actually turn up in an answer — headings, bullets,
- * numbered steps, bold, inline code, fenced blocks, links — and
- * leaves everything else as plain text.
+ * numbered steps, bold, inline code, fenced blocks, links, tables and
+ * dividers — and leaves everything else as plain text.
  *
  * Deliberately not a Markdown library: those are 40–90 KB for a
  * feature list we do not use, and they bring an HTML sanitiser
@@ -58,6 +58,18 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
   return out;
 }
 
+/** "| a | b |" into its cells. */
+function cells(row: string): string[] {
+  return row
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((c) => c.trim());
+}
+
+const TABLE_RULE = /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$/;
+
 export default function Prose({ text }: { text: string }) {
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
@@ -66,8 +78,45 @@ export default function Prose({ text }: { text: string }) {
   let numbers: string[] = [];
   let fence: string[] | null = null;
   let paragraph: string[] = [];
+  let table: string[] = [];
+
+  const flushTable = () => {
+    if (!table.length) return;
+    // A real table has a header row and a "---" rule under it; anything
+    // else that merely starts with "|" stays a paragraph.
+    if (table.length >= 2 && TABLE_RULE.test(table[1].trim())) {
+      const [head, , ...body] = table;
+      const k = `t${blocks.length}`;
+      blocks.push(
+        <div key={k} className="prose-table">
+          <table>
+            <thead>
+              <tr>
+                {cells(head).map((c, i) => (
+                  <th key={i}>{inline(c, `${k}-h${i}`)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {body.map((row, r) => (
+                <tr key={r}>
+                  {cells(row).map((c, i) => (
+                    <td key={i}>{inline(c, `${k}-${r}-${i}`)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+    } else {
+      paragraph.push(...table);
+    }
+    table = [];
+  };
 
   const flush = () => {
+    flushTable();
     if (paragraph.length) {
       blocks.push(
         <p key={`p${blocks.length}`}>{inline(paragraph.join(" "), `p${blocks.length}`)}</p>,
@@ -120,6 +169,19 @@ export default function Prose({ text }: { text: string }) {
 
     if (!trimmed) {
       flush();
+      continue;
+    }
+
+    if (trimmed.startsWith("|")) {
+      if (!table.length) flush();
+      table.push(trimmed);
+      continue;
+    }
+    flushTable();
+
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      flush();
+      blocks.push(<hr key={`r${blocks.length}`} />);
       continue;
     }
 

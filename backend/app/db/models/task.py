@@ -24,6 +24,7 @@ from typing import Any
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -77,12 +78,17 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    employee_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("ai_employees.id", ondelete="CASCADE"), nullable=False
+    # Who does the work: an AI Employee, or (for a chat turn) the
+    # personal assistant of a conversation. Exactly one is set.
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("ai_employees.id", ondelete="CASCADE")
     )
     # Pinned so the exact configuration that ran stays knowable.
-    employee_version_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("ai_employee_versions.id"), nullable=False
+    employee_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("ai_employee_versions.id")
+    )
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE")
     )
 
     title: Mapped[str | None] = mapped_column(String(200))
@@ -100,6 +106,11 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_tasks_org_status_created", "owner_id", "status", "created_at"),
         Index("ix_tasks_employee", "employee_id"),
+        Index("ix_tasks_conversation", "conversation_id"),
+        CheckConstraint(
+            "(employee_id IS NOT NULL) <> (conversation_id IS NOT NULL)",
+            name="ck_tasks_one_worker",
+        ),
     )
 
 

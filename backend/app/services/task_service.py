@@ -113,7 +113,8 @@ class TaskService:
     async def list_tasks(self, *, limit: int = 50) -> list[Task]:
         result = await self.session.scalars(
             select(Task)
-            .where(Task.owner_id == self.owner_id)
+            # Chat turns live in their conversation, not the task list.
+            .where(Task.owner_id == self.owner_id, Task.conversation_id.is_(None))
             .order_by(Task.created_at.desc())
             .limit(limit)
         )

@@ -11,6 +11,7 @@ from app.db.models.ai_employee import (
     Template,
 )
 from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.models.conversation import ChatMode, Conversation, ConversationMessage, MessageRole
 from app.db.models.identity import (
     PlatformAdmin,
     PlatformAdminAudit,
@@ -71,9 +72,12 @@ __all__ = [
     "Approval",
     "ApprovalStatus",
     "Base",
+    "ChatMode",
     "Connection",
     "ConnectionKind",
     "ConnectionStatus",
+    "Conversation",
+    "ConversationMessage",
     "EmbeddingConfig",
     "EmployeeStatus",
     "EventType",
@@ -86,6 +90,7 @@ __all__ = [
     "MemoryVector768",
     "MemoryVector1024",
     "MemoryVector1536",
+    "MessageRole",
     "NotificationSettings",
     "OrgConnectionAccess",
     "OrgOAuthApp",

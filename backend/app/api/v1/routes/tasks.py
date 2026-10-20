@@ -65,7 +65,9 @@ class TaskResponse(BaseModel):
     input: str
     status: TaskStatus
     dry_run: bool
-    employee_id: uuid.UUID
+    # None for a chat turn, which belongs to a conversation instead.
+    employee_id: uuid.UUID | None
+    conversation_id: uuid.UUID | None = None
     created_at: datetime
     run: RunSummary | None = None
 
@@ -76,7 +78,7 @@ class TaskListItem(BaseModel):
     id: uuid.UUID
     title: str | None
     status: TaskStatus
-    employee_id: uuid.UUID
+    employee_id: uuid.UUID | None
     created_at: datetime
 
 

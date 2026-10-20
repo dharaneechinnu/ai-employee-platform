@@ -15,13 +15,14 @@ import Policies from "./pages/Policies";
 import Product from "./pages/Product";
 import Providers from "./pages/Providers";
 import Tasks from "./pages/Tasks";
+import Chat from "./pages/Chat";
 
 /** After signing in, go where the person was heading (an approval
  * link, say), but only to a path inside this app. */
 function AfterSignIn() {
   const [params] = useSearchParams();
   const next = params.get("next");
-  const safe = next && next.startsWith("/") && !next.startsWith("//") ? next : "/tasks";
+  const safe = next && next.startsWith("/") && !next.startsWith("//") ? next : "/chat";
   return <Navigate to={safe} replace />;
 }
 
@@ -56,6 +57,8 @@ export default function App() {
       <Route path="/login" element={<AfterSignIn />} />
       <Route element={<Layout />}>
         <Route path="/connections" element={<Connections />} />
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/chat/:id" element={<Chat />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/employees" element={<Employees />} />
         <Route path="/memory" element={<Memory />} />
@@ -83,7 +86,7 @@ export default function App() {
             <Policies />
           }
         />
-        <Route path="*" element={<Navigate to="/tasks" replace />} />
+        <Route path="*" element={<Navigate to="/chat" replace />} />
       </Route>
     </Routes>
   );

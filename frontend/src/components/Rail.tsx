@@ -43,6 +43,7 @@ interface RailItem {
 }
 
 const ITEMS: RailItem[] = [
+  { to: "/chat", label: "Chat", icon: "chat", adminOnly: false },
   { to: "/tasks", label: "Tasks", icon: "tasks", adminOnly: false },
   { to: "/employees", label: "AI Employees", icon: "employees", adminOnly: false },
   { to: "/approvals", label: "Approvals", icon: "approvals", adminOnly: true },

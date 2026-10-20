@@ -80,7 +80,9 @@ async def _view(
     approval = await ApprovalService(session, owner_id).get(approval_id)
     run = await session.get(Run, approval.run_id)
     task = await session.get(Task, run.task_id) if run else None
-    employee = await session.get(AIEmployee, task.employee_id) if task else None
+    employee = (
+        await session.get(AIEmployee, task.employee_id) if task and task.employee_id else None
+    )
     user = await session.get(User, user_id) if user_id else None
     return ApprovalLinkView(
         approval_id=approval.id,

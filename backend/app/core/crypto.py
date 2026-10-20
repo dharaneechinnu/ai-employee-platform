@@ -18,9 +18,11 @@ import hashlib
 import os
 import uuid
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.config import get_settings
+from app.core.errors import ValidationError
 
 _NONCE_BYTES = 12
 
@@ -48,10 +50,22 @@ def encrypt(plaintext: str, *, scope: str | uuid.UUID = "platform") -> bytes:
     return nonce + ciphertext
 
 
+class SecretUnreadableError(ValidationError):
+    """A stored secret that no longer decrypts: it was saved under a
+    different scope or master key. Said plainly, because the only fix is
+    for its owner to enter it again."""
+
+    def __init__(self) -> None:
+        super().__init__("A saved key can no longer be read. Enter it again to keep using it.")
+
+
 def decrypt(blob: bytes, *, scope: str | uuid.UUID = "platform") -> str:
     scope_str = str(scope)
     nonce, ciphertext = blob[:_NONCE_BYTES], blob[_NONCE_BYTES:]
-    plaintext = AESGCM(_derive_key(scope_str)).decrypt(nonce, ciphertext, scope_str.encode())
+    try:
+        plaintext = AESGCM(_derive_key(scope_str)).decrypt(nonce, ciphertext, scope_str.encode())
+    except InvalidTag as exc:
+        raise SecretUnreadableError() from exc
     return plaintext.decode()
 
 

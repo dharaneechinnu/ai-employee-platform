@@ -386,3 +386,54 @@ export interface ApprovalLinkView {
   requires_sign_in: boolean;
   acting_as: string | null;
 }
+
+// ---------------------------------------------------------- assistant
+
+export type ChatMode = "general" | "study" | "work" | "research";
+
+export interface ChatModeInfo {
+  key: ChatMode;
+  label: string;
+  for_whom: string;
+  examples: string[];
+  suggested_tools: string[];
+}
+
+export interface AssistantInfo {
+  modes: ChatModeInfo[];
+  team_roles: { key: string; label: string }[];
+}
+
+export interface ConversationItem {
+  id: string;
+  title: string;
+  mode: ChatMode;
+  model: string;
+  team: boolean;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  task_id: string | null;
+  /** On a reply: which AI wrote it, as "provider:model". */
+  model: string | null;
+  /** On a reply that did not finish: what went wrong. */
+  error: string | null;
+  created_at: string;
+}
+
+export interface Conversation extends ConversationItem {
+  tools: string[];
+  messages: ChatMessage[];
+  turn: { task_id: string; status: TaskStatus; run_id: string | null } | null;
+}
+
+export interface ModelOption {
+  provider_key: string;
+  display_name: string;
+  model: string;
+  status: string;
+}

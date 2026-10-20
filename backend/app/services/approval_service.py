@@ -30,7 +30,7 @@ APPROVAL_TTL_HOURS = 24
 class PendingApproval:
     approval: Approval
     task_title: str | None
-    employee_id: uuid.UUID
+    employee_id: uuid.UUID | None  # None for a chat turn
 
 
 class ApprovalService:
