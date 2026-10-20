@@ -20,6 +20,7 @@ const PACKS: Record<string, { label: string; icon: IconName }> = {
   microsoft: { label: "Microsoft 365", icon: "mail" },
   email: { label: "Mailbox (IMAP)", icon: "mail" },
   database: { label: "Database", icon: "database" },
+  github: { label: "GitHub", icon: "terminal" },
   web: { label: "Web", icon: "search" },
   memory: { label: "Memory", icon: "memory" },
   delegation: { label: "Teamwork", icon: "tree" },

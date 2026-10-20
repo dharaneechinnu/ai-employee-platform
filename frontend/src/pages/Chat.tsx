@@ -48,6 +48,7 @@ const MODE_ICON: Record<ChatMode, IconName> = {
   study: "info",
   work: "tasks",
   research: "search",
+  code: "terminal",
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -325,7 +326,7 @@ function Welcome({
         </div>
       )}
 
-      <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(min(170px,100%),1fr))]" role="radiogroup" aria-label="Mode">
+      <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(min(132px,100%),1fr))]" role="radiogroup" aria-label="Mode">
         {info?.modes.map((m) => (
           <button
             key={m.key}

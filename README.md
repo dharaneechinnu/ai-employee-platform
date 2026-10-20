@@ -4,7 +4,7 @@ A platform where business teams (developers, operations, sales, HR) create and m
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, a guided welcome tour, any AI provider (Claude, ChatGPT, Gemini or your own open-source model server), MCP tool servers, and a personal ChatGPT-style assistant with agent orchestration for students, professionals and researchers. 210 tests passing, 92 API operations, 27 built-in agent tools plus any tools an MCP server offers. Full React frontend with dark and light themes.
+> **Status:** backend built through Phase 7, plus one-click Google and Microsoft connections and approve-from-email/Slack, voice typing, a guided welcome tour, any AI provider (Claude, ChatGPT, Gemini or your own open-source model server), MCP tool servers, and a personal ChatGPT-style assistant with agent orchestration for students, professionals and researchers. 223 tests passing, 92 API operations, 38 built-in agent tools plus any tools an MCP server offers. Full React frontend with dark and light themes.
 >
 > 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos).
 
@@ -209,6 +209,20 @@ Every answer says which AI wrote it and why ("best of your AIs for coding"), and
 
 ![What Automatic sends to each connected AI](docs/screenshots/28-providers-strengths.png)
 
+### 22. For developers: GitHub tools and a Code mode
+
+Connect **GitHub** with a fine-grained personal access token, limited to the repositories you choose, and the assistant and your AI Employees get 11 developer tools:
+
+| Reads (run on their own) | Changes (ask you first) |
+|---|---|
+| See repositories · Search code · Read a file or folder · See issues and pull requests · Read an issue or PR with its comments · **Review a PR's diff** · See recent commits · **Check CI**: which job and step failed | Comment on an issue or PR · Open an issue · **Propose a code change**: new branch, files written, pull request opened |
+
+The rule is simple: **the default branch is never written.** A change always arrives as a pull request for a person to review and merge. There is no merge tool, and deleting a repository or force-pushing are blocked platform-wide. The chat's **Code** mode makes the assistant a senior pair programmer: it reads before it suggests, keeps diffs minimal, flags edge cases, tests and security issues, and says what it couldn't verify.
+
+![The GitHub connection and its tools, each with its permission](docs/screenshots/29-github-tools.png)
+
+![Code mode for developers](docs/screenshots/30-code-mode.png)
+
 ## Stack
 
 | Layer | Technology |
@@ -268,7 +282,7 @@ already works and is tested.
 
 ```bash
 docker compose up --build        # all five services
-make test                        # 210 tests
+make test                        # 223 tests
 make lint                        # ruff + mypy strict
 ```
 
@@ -299,7 +313,7 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 | Check | Result |
 |---|---|
-| Tests | 210 passing: unit, tenant isolation, and integration against real Postgres |
+| Tests | 223 passing: unit, tenant isolation, and integration against real Postgres |
 | Types | mypy **strict**, zero errors |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
 | Migrations | 16 (the newest, 0016, verified forward *and* backward) |

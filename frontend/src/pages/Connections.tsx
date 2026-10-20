@@ -42,6 +42,10 @@ const APP_ICONS: Record<string, IconName> = {
   Drive: "folder",
   OneDrive: "folder",
   Database: "database",
+  Code: "terminal",
+  Issues: "tasks",
+  "Pull requests": "tree",
+  Actions: "check",
 };
 
 const BRAND: Record<string, { mark: string; gradient: string }> = {
@@ -49,6 +53,7 @@ const BRAND: Record<string, { mark: string; gradient: string }> = {
   microsoft: { mark: "M", gradient: "linear-gradient(135deg,#F25022,#7FBA00 40%,#00A4EF 70%,#FFB900)" },
   email: { mark: "@", gradient: "linear-gradient(135deg,var(--accent),var(--spark))" },
   database: { mark: "DB", gradient: "linear-gradient(135deg,#336791,#5B8FC7)" },
+  github: { mark: "GH", gradient: "linear-gradient(135deg,#24292f,#57606a)" },
 };
 
 function BrandTile({ kind, size = 48 }: { kind: string; size?: number }) {

@@ -52,6 +52,7 @@ const DESTINATIONS: { match: RegExp; name: string; icon: IconName; away: boolean
   { match: /calendar/, name: "Calendar", icon: "calendar", away: true },
   { match: /drive|onedrive/, name: "Files", icon: "folder", away: true },
   { match: /^run_query$|^list_tables$|^describe_table$/, name: "Your database", icon: "database", away: true },
+  { match: /^github_/, name: "GitHub", icon: "terminal", away: true },
   { match: /^get_webpage$/, name: "The web", icon: "link", away: true },
   { match: /^recall$|^remember$/, name: "Company memory", icon: "memory", away: false },
   { match: /^delegate_to_specialist$/, name: "A specialist", icon: "employees", away: false },
@@ -83,6 +84,11 @@ const VERBS: Record<string, string> = {
   recall: "remembers what the company knows",
   remember: "writes something down to keep",
   delegate_to_specialist: "hands part of the job to a specialist",
+  github_search_code: "searches the code",
+  github_read_file: "reads a file in the repository",
+  github_pr_diff: "reviews the pull request's changes",
+  github_ci_status: "checks why CI passed or failed",
+  github_propose_change: "proposes the change as a pull request",
 };
 
 export function buildStages(

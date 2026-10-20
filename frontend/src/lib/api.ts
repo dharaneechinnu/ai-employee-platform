@@ -393,7 +393,7 @@ export interface ApprovalLinkView {
 
 // ---------------------------------------------------------- assistant
 
-export type ChatMode = "general" | "study" | "work" | "research";
+export type ChatMode = "general" | "study" | "work" | "research" | "code";
 
 export interface ChatModeInfo {
   key: ChatMode;

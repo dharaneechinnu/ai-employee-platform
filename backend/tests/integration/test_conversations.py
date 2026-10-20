@@ -214,7 +214,7 @@ async def test_every_tool_the_person_can_use_is_on_without_picking(
     assert "get_webpage" not in {t.name for t in recorder.calls[-1]["tools"]}
 
     info = (await api.get("/api/v1/me/assistant", headers=headers)).json()
-    assert [m["key"] for m in info["modes"]] == ["general", "study", "work", "research"]
+    assert [m["key"] for m in info["modes"]] == ["general", "study", "work", "research", "code"]
     assert {r["key"] for r in info["team_roles"]} == {"researcher", "analyst", "writer", "critic"}
     assert "suggested_tools" not in info["modes"][0]
 

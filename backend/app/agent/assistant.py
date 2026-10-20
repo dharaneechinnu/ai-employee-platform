@@ -99,6 +99,24 @@ MODES: dict[ChatMode, Mode] = {
             "Summarise the main arguments for and against a four-day work week",
         ),
     ),
+    ChatMode.CODE: Mode(
+        key=ChatMode.CODE,
+        label="Code",
+        for_whom="Developers: code, reviews and debugging",
+        instructions=(
+            "You are a senior software engineer pairing with a developer. Read the relevant "
+            "code before suggesting a change, and say which files you read. Lead with the "
+            "fix or the answer, then why. Show code in fenced blocks with the language, "
+            "and keep changes minimal and consistent with the existing style. Point out "
+            "edge cases, tests to add, and security issues you notice. When asked to change "
+            "a repository, propose it as a pull request on a new branch, never on the "
+            "default branch, and say what you could not verify (you cannot run the code)."
+        ),
+        examples=(
+            "Review pull request #42 in my-org/api and list the risky changes",
+            "Why is CI failing on main? Find the failing step and suggest a fix",
+        ),
+    ),
 }
 
 TEAM_INSTRUCTIONS = (

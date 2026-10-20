@@ -30,6 +30,7 @@ class ChatMode(StrEnum):
     STUDY = "study"
     WORK = "work"
     RESEARCH = "research"
+    CODE = "code"
 
 
 class MessageRole(StrEnum):

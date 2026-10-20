@@ -35,6 +35,18 @@ export const TOOL_LABELS: Record<string, string> = {
   recall: "Look up company memory",
   remember: "Save to company memory",
   delegate_to_specialist: "Ask another AI Employee",
+  github_list_repos: "See GitHub repositories",
+  github_search_code: "Search code on GitHub",
+  github_read_file: "Read a file on GitHub",
+  github_list_issues: "See issues and pull requests",
+  github_read_issue: "Read an issue or pull request",
+  github_pr_diff: "Review a pull request's changes",
+  github_list_commits: "See recent commits",
+  github_ci_status: "Check CI (GitHub Actions)",
+  github_comment: "Comment on GitHub",
+  github_create_issue: "Open a GitHub issue",
+  github_propose_change: "Propose a code change (pull request)",
+  ask_specialist: "Ask a specialist",
 };
 
 export function humanise(id: string): string {
@@ -81,6 +93,7 @@ export const PACK_LABELS: Record<string, string> = {
   web: "Web",
   memory: "Memory",
   delegation: "Teamwork",
+  github: "GitHub",
 };
 
 export function packLabel(pack: string): string {

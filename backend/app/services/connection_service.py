@@ -78,9 +78,15 @@ class DatabaseConfig(BaseModel):
     username: str = Field(min_length=1, max_length=100)
 
 
+class GithubConfig(BaseModel):
+    """Nothing to fill in: the token says who you are and which
+    repositories it may reach."""
+
+
 MANUAL_CONFIGS: dict[ConnectionKind, type[BaseModel]] = {
     ConnectionKind.EMAIL: EmailConfig,
     ConnectionKind.DATABASE: DatabaseConfig,
+    ConnectionKind.GITHUB: GithubConfig,
 }
 
 # Fields are described here rather than in the frontend, so adding a
@@ -118,6 +124,17 @@ CATALOGUE: dict[ConnectionKind, dict[str, Any]] = {
         "apps": ["Email"],
         "fields": _EMAIL_FIELDS,
         "secret_label": "App password",
+    },
+    ConnectionKind.GITHUB: {
+        "display_name": "GitHub",
+        "description": (
+            "Read code, issues and pull requests, check CI, and propose changes as pull "
+            "requests. Use a fine-grained token limited to the repositories you choose."
+        ),
+        "auth": "manual",
+        "apps": ["Code", "Issues", "Pull requests", "Actions"],
+        "fields": [],
+        "secret_label": "Personal access token",
     },
     ConnectionKind.DATABASE: {
         "display_name": "PostgreSQL",
@@ -581,6 +598,9 @@ class ConnectionService:
                 await _test_email(conn.config, decrypt(conn.credential_enc, scope=self.owner_id))
             elif conn.kind is ConnectionKind.DATABASE:
                 await _test_database(conn.config, decrypt(conn.credential_enc, scope=self.owner_id))
+            elif conn.kind is ConnectionKind.GITHUB:
+                login = await _test_github(decrypt(conn.credential_enc, scope=self.owner_id))
+                conn.config = {**(conn.config or {}), "account": login}
             conn.status = STATUS_CONNECTED
             conn.last_error = None
         except Exception as exc:  # noqa: BLE001 - the reason is shown to the admin
@@ -658,6 +678,20 @@ def _check_hosts(config: dict[str, Any]) -> None:
         host = config.get(key)
         if host and _is_private_address(str(host)):
             raise ValidationError(f"{key} must be a public address.")
+
+
+async def _test_github(token: str) -> str:
+    """Who the token belongs to: proves it works, and names the account."""
+    async with _client() as http:
+        resp = await http.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+        )
+    if resp.status_code == 401:
+        raise ValidationError("GitHub refused the token. Check it has not expired.")
+    if resp.status_code >= 400:
+        raise ValidationError(f"GitHub answered {resp.status_code}.")
+    return str(resp.json().get("login") or "")
 
 
 async def _test_email(config: dict[str, Any], password: str) -> None:

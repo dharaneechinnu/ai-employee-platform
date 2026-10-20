@@ -3,6 +3,7 @@
 from app.agent.tools.packs import (
     delegation,
     email,
+    github,
     google,
     memory,
     microsoft,
@@ -10,4 +11,4 @@ from app.agent.tools.packs import (
     web,
 )
 
-__all__ = ["delegation", "email", "google", "memory", "microsoft", "sql", "web"]
+__all__ = ["delegation", "email", "github", "google", "memory", "microsoft", "sql", "web"]
