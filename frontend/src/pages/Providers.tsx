@@ -14,8 +14,18 @@ import {
   statusTone,
   useToast,
 } from "../components/ui";
-import { ApiError, api, type ConnectedProvider, type ProviderOption } from "../lib/api";
+import { ApiError, api, type AutoModelResult, type ConnectedProvider, type ProviderOption } from "../lib/api";
 import { formatDateTime } from "../lib/labels";
+
+/** What auto-select found, in a sentence a person can act on. */
+function autoModelMessage(found: AutoModelResult | null): string {
+  if (!found) return "Key saved. Test it to make sure it works.";
+  if (found.selected) return `Key saved. Using ${found.selected}, which your key can reach.`;
+  const first = found.tried[0]?.reason;
+  return first
+    ? `Key saved, but no model answered: ${first} Pick one yourself, or check the key.`
+    : "Key saved. Test it to make sure it works.";
+}
 
 /**
  * Phase 3. Bring your own key: each company pays its own model costs.
@@ -24,7 +34,7 @@ import { formatDateTime } from "../lib/labels";
  * writes. The last four characters are all the UI gets back.
  */
 const FREE_TIER = ["gemini", "groq"];
-const ORDER = ["gemini", "groq", "openai", "anthropic", "deepseek", "mistral", "openrouter", "custom"];
+const ORDER = ["gemini", "groq", "openai", "anthropic", "deepseek", "mistral", "sarvam", "openrouter", "custom"];
 // Any open-source model, on the company's own server: vLLM, Ollama,
 // LM Studio and LiteLLM all speak the OpenAI format.
 const CUSTOM = "custom";
@@ -63,17 +73,28 @@ export default function Providers() {
     setError(null);
     setSaving(true);
     try {
+      const typedModel = model.trim();
       await api.post(`/me/providers`, {
         provider_key: selected,
         api_key: apiKey,
-        model: model || null,
+        model: typedModel || null,
         ...(selected === CUSTOM ? { base_url: baseUrl, label: label || null } : {}),
       });
       setApiKey("");
       setModel("");
       setBaseUrl("");
       setLabel("");
-      toast("Key saved. Test it to make sure it works.");
+      if (typedModel) {
+        toast("Key saved. Test it to make sure it works.");
+      } else {
+        // No model named: ask the provider what this key can use and
+        // switch to one that really answers, so a free key does not
+        // start on a model it cannot reach.
+        const found = await api
+          .post<AutoModelResult>(`/me/providers/${selected}/auto-model`)
+          .catch(() => null);
+        toast(autoModelMessage(found));
+      }
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not connect that.");
@@ -111,7 +132,7 @@ export default function Providers() {
 
   const chosen = available.find((p) => p.key === selected);
   const custom = selected === CUSTOM;
-  const ready = custom ? Boolean(baseUrl && model) : Boolean(apiKey);
+  const ready = custom ? Boolean(baseUrl) : Boolean(apiKey);
 
   return (
     <>
@@ -342,6 +363,21 @@ function ModelChoice({
     }
   }
 
+  async function pickBest() {
+    setSaving(true);
+    try {
+      const found = await api.post<AutoModelResult>(`/me/providers/${provider.provider_key}/auto-model`);
+      toast(autoModelMessage(found), found.selected ? "ok" : "bad");
+      if (found.selected) setValue(found.selected);
+      setEditing(false);
+      onSaved();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not check the models.", "bad");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function save(model: string | null) {
     setSaving(true);
     try {
@@ -387,6 +423,9 @@ function ModelChoice({
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={!value || saving} onClick={() => void save(value)}>
           {saving ? "Saving…" : "Save"}
+        </Button>
+        <Button size="sm" variant="ghost" icon="sparkle" disabled={saving} onClick={() => void pickBest()}>
+          Pick the best for my key
         </Button>
         {!options && (
           <Button size="sm" variant="ghost" disabled={loading} onClick={() => void loadOptions()}>

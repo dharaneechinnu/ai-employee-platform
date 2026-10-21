@@ -56,6 +56,15 @@ class SupportedProvider(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     default_model: Mapped[str | None] = mapped_column(String(100))
     docs_url: Mapped[str | None] = mapped_column(String(500))
 
+    # How to talk to it, as data, so a new provider is a row rather than
+    # a release. `api_format` picks the adapter: "openai" (the format
+    # most providers speak), "anthropic" or "gemini". `base_url` is where
+    # it lives; `auth_header` is an extra header that carries the key
+    # for providers that want one besides `Authorization: Bearer`.
+    api_format: Mapped[str] = mapped_column(String(20), nullable=False, default="openai")
+    base_url: Mapped[str | None] = mapped_column(String(500))
+    auth_header: Mapped[str | None] = mapped_column(String(60))
+
 
 class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """One company's key for one provider.

@@ -25,13 +25,28 @@ from app.agent.providers.openai_compatible import BASE_URLS, OpenAICompatiblePro
 CUSTOM_PROVIDER = "custom"
 
 
-def build_provider(provider_key: str, api_key: str, *, base_url: str | None = None) -> LLMProvider:
-    """Pick the adapter for a provider key."""
-    if provider_key == "gemini":
+def build_provider(
+    provider_key: str,
+    api_key: str,
+    *,
+    base_url: str | None = None,
+    api_format: str | None = None,
+    auth_header: str | None = None,
+) -> LLMProvider:
+    """Pick the adapter from the provider's wire format.
+
+    The format, address and auth header come from the provider's catalog
+    row, so a provider added there works with no code change. Without
+    one (an older caller) the key alone decides, as it always did.
+    """
+    fmt = api_format or (provider_key if provider_key in ("gemini", "anthropic") else "openai")
+    if fmt == "gemini":
         return GeminiProvider(api_key)
-    if provider_key == "anthropic":
+    if fmt == "anthropic":
         return AnthropicProvider(api_key)
-    return OpenAICompatibleProvider(api_key, provider_key=provider_key, base_url=base_url)
+    return OpenAICompatibleProvider(
+        api_key, provider_key=provider_key, base_url=base_url, auth_header=auth_header
+    )
 
 
 __all__ = [

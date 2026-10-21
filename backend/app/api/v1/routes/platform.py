@@ -25,13 +25,14 @@ from app.api.v1.deps import SessionDep
 from app.core.errors import AuthError, NotFoundError
 from app.core.security import decode_access_token
 from app.db.models.identity import PlatformAdmin, PlatformAdminAudit, User
-from app.db.models.provider import ProviderConfig
+from app.db.models.provider import ProviderConfig, SupportedProvider
 from app.db.models.task import Task
 from app.db.repositories.identity_repo import PlatformAdminRepository
 from app.services.platform_service import (
     OAuthAppView,
     PlatformService,
 )
+from app.services.provider_catalog import ProviderCatalog
 
 router = APIRouter(prefix="/platform", tags=["platform admin"])
 
@@ -459,3 +460,77 @@ async def set_company_connection_access(
     return [
         ConnectionAccessRow(**asdict(row)) for row in await service.connection_access(owner_id)
     ]
+
+
+# --------------------------------------------------- the AI provider catalog
+
+
+class ProviderRow(BaseModel):
+    key: str
+    display_name: str
+    base_url: str | None
+    api_format: str
+    auth_header: str | None
+    default_model: str | None
+    docs_url: str | None
+    trains_on_data: bool
+    enabled: bool
+
+
+class SaveProviderRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=100)
+    base_url: str = Field(min_length=8, max_length=500)
+    # "openai" is what most providers speak; "anthropic" and "gemini" are their own formats.
+    api_format: str = Field(default="openai", max_length=20)
+    # Only for a provider that wants the key under its own header too.
+    auth_header: str | None = Field(default=None, max_length=60)
+    default_model: str | None = Field(default=None, max_length=100)
+    docs_url: str | None = Field(default=None, max_length=500)
+    trains_on_data: bool = False
+
+
+class SetProviderEnabledRequest(BaseModel):
+    enabled: bool
+
+
+def _provider_row(p: SupportedProvider) -> ProviderRow:
+    return ProviderRow(
+        key=p.key,
+        display_name=p.display_name,
+        base_url=p.base_url,
+        api_format=p.api_format,
+        auth_header=p.auth_header,
+        default_model=p.default_model,
+        docs_url=p.docs_url,
+        trains_on_data=p.trains_on_data,
+        enabled=p.enabled,
+    )
+
+
+@router.get("/providers", response_model=list[ProviderRow], summary="The AI provider catalog")
+async def list_providers(admin: AdminDep, session: SessionDep) -> list[ProviderRow]:
+    return [_provider_row(p) for p in await ProviderCatalog(session).all()]
+
+
+@router.put(
+    "/providers/{key}",
+    response_model=ProviderRow,
+    summary="Add a provider, or change one, without a release",
+)
+async def save_provider(
+    key: str, body: SaveProviderRequest, admin: AdminDep, session: SessionDep
+) -> ProviderRow:
+    row = await ProviderCatalog(session).save(admin_id=admin.id, key=key, **body.model_dump())
+    await session.commit()
+    return _provider_row(row)
+
+
+@router.patch("/providers/{key}", response_model=ProviderRow, summary="Pause or resume a provider")
+async def set_provider_enabled(
+    key: str, body: SetProviderEnabledRequest, admin: AdminDep, session: SessionDep
+) -> ProviderRow:
+    row = await ProviderCatalog(session).set_enabled(
+        admin_id=admin.id, key=key, enabled=body.enabled
+    )
+    await session.commit()
+    return _provider_row(row)

@@ -57,10 +57,15 @@ class OpenAICompatibleProvider(LLMProvider):
         *,
         provider_key: str = "openai",
         base_url: str | None = None,
+        auth_header: str | None = None,
         timeout_s: float = 60.0,
     ) -> None:
         super().__init__(api_key, timeout_s=timeout_s)
         self.provider_key = provider_key
+        # Some providers want the key under their own header as well as
+        # `Authorization: Bearer`. It comes from the provider's catalog
+        # row, so a new one needs no code.
+        self.auth_header = auth_header
         self.base_url = base_url or BASE_URLS.get(provider_key, BASE_URLS["openai"])
 
     @staticmethod
@@ -137,7 +142,12 @@ class OpenAICompatibleProvider(LLMProvider):
 
     def _headers(self) -> dict[str, str]:
         # A self-hosted server often has no key at all.
-        return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        if not self.api_key:
+            return {}
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        if self.auth_header:
+            headers[self.auth_header] = self.api_key
+        return headers
 
     async def list_models(self) -> list[str]:
         async with httpx.AsyncClient(timeout=self.timeout_s) as client:

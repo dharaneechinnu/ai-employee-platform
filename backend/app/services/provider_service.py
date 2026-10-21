@@ -12,6 +12,7 @@ it is called only by the worker, immediately before a provider call.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -21,7 +22,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.providers import CUSTOM_PROVIDER, build_provider
-from app.agent.providers.base import LLMError, LLMProvider
+from app.agent.providers.base import (
+    LLMError,
+    LLMProvider,
+    ProviderAuthError,
+    ProviderModelNotFoundError,
+    ProviderRateLimitError,
+)
+from app.agent.providers.models import try_order
 from app.agent.routing import (
     Candidate,
     Choice,
@@ -77,6 +85,29 @@ def split_model(model: str) -> tuple[str, str]:
         provider_key, _, name = model.partition(":")
         return provider_key, name
     return "gemini", model
+
+
+# How many models to try before giving up, and how long each may take.
+MAX_MODEL_TRIES = 4
+PROBE_SECONDS = 15.0
+
+
+@dataclass(slots=True, frozen=True)
+class Endpoint:
+    """Where a provider is and how it is spoken to."""
+
+    base_url: str | None
+    api_format: str
+    auth_header: str | None
+
+
+@dataclass(slots=True)
+class ModelTry:
+    """One model auto-select tried, and what happened."""
+
+    model: str
+    ok: bool
+    reason: str | None
 
 
 @dataclass(slots=True)
@@ -163,8 +194,8 @@ class ProviderService:
             # self-hosted server often has none.
             if not base_url:
                 raise ValidationError("Add your server's address, like https://llm.example.com/v1.")
-            if not model:
-                raise ValidationError("Add the model name your server runs, like llama-3.3-70b.")
+            # The model is optional here: if the server lists its models
+            # we find one for the person, and if not they are asked to type it.
             base_url = check_service_url(base_url, what="server")
             label = (label or "").strip()[:100] or None
         else:
@@ -219,7 +250,7 @@ class ProviderService:
         mysterious task failure three days later."""
         config = await self._config(provider_key)
         supported = await self._supported(provider_key)
-        provider = self._build(config)
+        provider = await self._provider(config)
 
         try:
             await provider.check(config.model or supported.default_model or "gpt-4o-mini")
@@ -248,16 +279,83 @@ class ProviderService:
         return config
 
     async def list_models(self, provider_key: str) -> list[str]:
-        """Ask the provider which models this key can use."""
-        provider = self._build(await self._config(provider_key))
+        """Ask the provider which models this key can use, chat models
+        only: embedding, speech and moderation models cannot answer."""
+        config = await self._config(provider_key)
+        supported = await self._supported(provider_key)
+        provider = await self._provider(config)
         try:
-            return (await provider.list_models())[:300]
+            ids = await provider.list_models()
         except LLMError as exc:
             raise ValidationError(f"Could not load the model list: {exc.message[:300]}") from exc
+        return try_order(ids, config.model or supported.default_model)[:300]
 
-    def _build(self, config: ProviderConfig) -> LLMProvider:
+    async def auto_select(
+        self, provider_key: str, *, max_tries: int = MAX_MODEL_TRIES
+    ) -> tuple[ProviderConfig, list[ModelTry]]:
+        """Find a model this key can actually use, and switch to it.
+
+        A model list says what exists, not what this plan may call, and
+        a hardcoded default goes stale. So: list the key's chat models,
+        most likely first, and make one tiny real call to each until one
+        answers. A bad key stops it at once; a model the plan cannot
+        reach just moves on to the next.
+        """
+        config = await self._config(provider_key)
+        supported = await self._supported(provider_key)
+        provider = await self._provider(config)
+        current = config.model or supported.default_model
+
+        try:
+            ids = await provider.list_models()
+        except LLMError:
+            # No list (or no access to it): the default is all we have to try.
+            ids = []
+        order = try_order(ids, current)[:max_tries] or ([current] if current else [])
+
+        tried: list[ModelTry] = []
+        for model in order:
+            try:
+                await asyncio.wait_for(provider.check(model), timeout=PROBE_SECONDS)
+            except ProviderAuthError as exc:
+                config.status = ConnectionStatus.FAILED
+                config.last_error = exc.message[:500]
+                tried.append(ModelTry(model, False, "The provider rejected this key."))
+                return config, tried
+            except ProviderRateLimitError:
+                # Reachable, just busy right now: the model exists for this key.
+                tried.append(ModelTry(model, True, "Works, but is rate limited at the moment."))
+                self._adopt(config, model, working=False)
+                return config, tried
+            except ProviderModelNotFoundError:
+                tried.append(ModelTry(model, False, "Not available on this key's plan."))
+            except (LLMError, TimeoutError) as exc:
+                tried.append(
+                    ModelTry(model, False, getattr(exc, "message", "Did not answer in time.")[:160])
+                )
+            else:
+                tried.append(ModelTry(model, True, None))
+                self._adopt(config, model, working=True)
+                return config, tried
+        return config, tried
+
+    @staticmethod
+    def _adopt(config: ProviderConfig, model: str, *, working: bool) -> None:
+        config.model = model
+        config.status = ConnectionStatus.WORKING if working else ConnectionStatus.UNTESTED
+        config.last_error = None
+        config.last_tested_at = datetime.now(UTC)
+
+    async def _provider(self, config: ProviderConfig) -> LLMProvider:
         api_key = decrypt(config.api_key_enc, scope=self.owner_id)
-        return build_provider(config.provider_key, api_key, base_url=config.base_url)
+        endpoint = await self.resolve_endpoint(config.provider_key)
+        return build_provider(
+            config.provider_key,
+            api_key,
+            base_url=endpoint.base_url,
+            api_format=endpoint.api_format,
+            auth_header=endpoint.auth_header,
+        )
 
     async def resolve_api_key(self, provider_key: str) -> str:
         """Decrypt a key for an outbound call.
@@ -268,9 +366,19 @@ class ProviderService:
         """
         return decrypt((await self._config(provider_key)).api_key_enc, scope=self.owner_id)
 
-    async def resolve_base_url(self, provider_key: str) -> str | None:
-        """Where the company's own server lives; None for every hosted provider."""
-        return (await self._config(provider_key)).base_url
+    async def resolve_endpoint(self, provider_key: str) -> Endpoint:
+        """How to reach this provider: the person's own address if they
+        gave one (their own server), otherwise what the catalog row says.
+        Read from data, so a provider added there needs no code."""
+        config = await self._config(provider_key)
+        row = await self.session.scalar(
+            select(SupportedProvider).where(SupportedProvider.key == provider_key)
+        )
+        return Endpoint(
+            base_url=config.base_url or (row.base_url if row else None),
+            api_format=row.api_format if row else "openai",
+            auth_header=row.auth_header if row else None,
+        )
 
     async def disconnect(self, provider_key: str) -> None:
         await self.session.delete(await self._config(provider_key))

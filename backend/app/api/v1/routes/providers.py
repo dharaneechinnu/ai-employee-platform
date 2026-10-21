@@ -153,6 +153,36 @@ async def set_model(
     return ConnectedProviderResponse(**asdict(match))
 
 
+class ModelTryResponse(BaseModel):
+    model: str
+    ok: bool
+    reason: str | None
+
+
+class AutoModelResponse(BaseModel):
+    provider: ConnectedProviderResponse
+    # The model it settled on, or None when none of those tried worked.
+    selected: str | None
+    tried: list[ModelTryResponse]
+
+
+@router.post(
+    "/providers/{provider_key}/auto-model",
+    response_model=AutoModelResponse,
+    summary="Find a model this key can use and switch to it",
+)
+async def auto_model(provider_key: str, ctx: ContextDep, session: SessionDep) -> AutoModelResponse:
+    service = ProviderService(session, ctx.owner_id)
+    _config, tried = await service.auto_select(provider_key)
+    await session.flush()
+    match = next(c for c in await service.connected() if c.provider_key == provider_key)
+    return AutoModelResponse(
+        provider=ConnectedProviderResponse(**asdict(match)),
+        selected=next((t.model for t in tried if t.ok), None),
+        tried=[ModelTryResponse(model=t.model, ok=t.ok, reason=t.reason) for t in tried],
+    )
+
+
 @router.get(
     "/providers/{provider_key}/models",
     response_model=list[str],
