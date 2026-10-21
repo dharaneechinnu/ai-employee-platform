@@ -226,6 +226,7 @@ export function TextArea({
   badge,
   inputRef,
   onKeyDown,
+  disabled,
 }: {
   label: string;
   value: string;
@@ -236,6 +237,7 @@ export function TextArea({
   badge?: ReactNode;
   inputRef?: React.Ref<HTMLTextAreaElement>;
   onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="flex flex-col gap-2">
@@ -249,6 +251,7 @@ export function TextArea({
         rows={rows}
         placeholder={placeholder}
         onKeyDown={onKeyDown}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         className="field"
       />

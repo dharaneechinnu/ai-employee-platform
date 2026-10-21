@@ -34,14 +34,16 @@ from app.agent.routing import (
 )
 from app.agent.team import AskSpecialist, Team, specialist_policy
 from app.agent.tools.base import ToolContext
+from app.agent.tools.packs.builder import ProposeAgent
 from app.core.crypto import SecretUnreadableError
 from app.core.errors import NotFoundError
 from app.core.observability import get_logger
-from app.db.models.conversation import Conversation
+from app.db.models.conversation import ChatMode, Conversation
 from app.db.models.identity import User
 from app.db.models.policy import Approval, ApprovalStatus, RunCheckpoint
 from app.db.models.task import LLMCall, Run, RunStatus, Task, TaskStatus
 from app.db.session import get_sessionmaker
+from app.services.agent_service import AgentService
 from app.services.approval_service import ApprovalService
 from app.services.connection_service import ConnectionService
 from app.services.conversation_service import ConversationService
@@ -229,9 +231,13 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         )
 
         resolver = await PolicyService(session, task.owner_id).resolver()
+        building = chat.mode is ChatMode.BUILDER
+        team_on = chat.team and not building
 
         def check_policy(tool_name: str) -> tuple[str, str]:
-            if tool_name == AskSpecialist.name and chat.team:
+            if tool_name == ProposeAgent.name:
+                return "auto", "it only shows a draft; nothing is created until the person agrees"
+            if tool_name == AskSpecialist.name and team_on:
                 # Specialists can only read; their own steps are checked one by one.
                 return "auto", "team mode is on for this conversation"
             decision = resolver.evaluate(tool_name)
@@ -269,12 +275,22 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             return bool(fresh)
 
         tools = assistant.chat_tools(resolver, set(grants))
+        agent_row = await AgentService(session, task.owner_id).for_chat(chat.agent_id)
+        offered = None
+        if building:
+            # The builder can only show a draft; everything it might
+            # give the new agent is listed in its prompt, not callable.
+            offered, tools = tools, [ProposeAgent]
+        elif agent_row is not None and agent_row.tools is not None:
+            # An agent can only narrow what Permissions already allow.
+            allowed = set(agent_row.tools)
+            tools = [t for t in tools if t.name in allowed]
         # The memory tools need the run's session. What they remember
         # belongs to the person.
         context_config: dict[str, Any] = {"_session": session}
 
         team: Team | None = None
-        if chat.team:
+        if team_on:
             # Orchestration: the lead may hand parts to specialists, who
             # use the same AI and the conversation's read-only tools.
             async def emit(type_: str, **payload: Any) -> None:
@@ -321,8 +337,10 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         system_prompt = assistant.system_prompt(
             chat.mode,
             person=(person.full_name or None) if person else None,
-            team=chat.team,
+            team=team_on,
             tool_names=[t.name for t in tools],
+            persona=(agent_row.name, agent_row.instructions) if agent_row else None,
+            offered=offered,
         )
 
         outcome = await loop.run(system_prompt=system_prompt, task=task.input, history=history)
@@ -400,6 +418,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             model=f"{provider_key}:{model}",
             tools_used=_tools_used(outcome.events, team.roles_used if team else []),
             model_reason=reason,
+            draft=_draft(outcome.events),
         )
 
 
@@ -414,6 +433,7 @@ async def _finish(
     model: str | None = None,
     tools_used: list[str] | None = None,
     model_reason: str | None = None,
+    draft: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run.status = status
     run.stop_cause = stop_cause
@@ -437,6 +457,7 @@ async def _finish(
                 error=None if completed else _chat_error(status, stop_cause, error),
                 tools_used=tools_used,
                 model_reason=model_reason,
+                draft=draft,
             )
 
     await session.commit()
@@ -460,6 +481,17 @@ def _chat_error(status: RunStatus, stop_cause: str, error: str | None) -> str:
     if sentence and error:
         return f"{sentence} ({error[:300]})"
     return sentence or error or "Something went wrong before I could answer."
+
+
+def _draft(events: list[AgentEvent]) -> dict[str, Any] | None:
+    """The agent the builder last proposed in this turn, if it did."""
+    drafts = [
+        e.payload.get("arguments")
+        for e in events
+        if e.type == "tool_call" and e.payload.get("tool") == ProposeAgent.name
+    ]
+    last = drafts[-1] if drafts else None
+    return dict(last) if isinstance(last, dict) else None
 
 
 def _tools_used(events: list[AgentEvent], roles: list[str]) -> list[str]:
@@ -498,10 +530,16 @@ async def _options(providers: ProviderService, choices: list[Choice]) -> list[Op
         except SecretUnreadableError as exc:
             unreadable = exc
             continue
-        base_url = await providers.resolve_base_url(choice.provider_key)
+        endpoint = await providers.resolve_endpoint(choice.provider_key)
         options.append(
             Option(
-                provider=build_provider(choice.provider_key, api_key, base_url=base_url),
+                provider=build_provider(
+                    choice.provider_key,
+                    api_key,
+                    base_url=endpoint.base_url,
+                    api_format=endpoint.api_format,
+                    auth_header=endpoint.auth_header,
+                ),
                 provider_key=choice.provider_key,
                 model=choice.model,
             )

@@ -210,6 +210,9 @@ class AskSpecialist(Tool):
             role=role.key,
             ok=outcome.completed,
             steps=outcome.steps,
+            prompt_tokens=outcome.prompt_tokens,
+            output_tokens=outcome.output_tokens,
+            cost_usd=_cost(label, outcome.prompt_tokens, outcome.output_tokens),
         )
         if not outcome.completed:
             return ToolResult.failure(
@@ -218,6 +221,17 @@ class AskSpecialist(Tool):
                 "Carry on without that part, or do it yourself.",
             )
         return ToolResult.success({"specialist": role.label, "answer": outcome.output or ""})
+
+
+def _cost(label: str | None, prompt_tokens: int, output_tokens: int) -> float:
+    """Estimated cost of one specialist, for the flow view. `label` is
+    "provider:model"; without one the lead's cost line covers it."""
+    if not label or ":" not in label:
+        return 0.0
+    from app.services.task_service import estimate_cost
+
+    provider_key, model = label.split(":", 1)
+    return float(estimate_cost(provider_key, model, prompt_tokens, output_tokens))
 
 
 def specialist_policy(resolver: Any) -> Callable[[str], tuple[str, str]]:

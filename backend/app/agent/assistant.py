@@ -117,6 +117,24 @@ MODES: dict[ChatMode, Mode] = {
             "Why is CI failing on main? Find the failing step and suggest a fix",
         ),
     ),
+    ChatMode.BUILDER: Mode(
+        key=ChatMode.BUILDER,
+        label="Agent builder",
+        for_whom="Designing your own agents by talking",
+        instructions=(
+            "You help the person design their own AI agent. Ask what it should do, for "
+            "whom, and how it should sound, one or two short questions at a time, and "
+            "stop asking as soon as you can make a good first draft. Then call "
+            "`propose_agent` to show the draft: a short name, one sentence on what it "
+            "is for, instructions written to the agent ('You are ...') covering its job, "
+            "style and limits, and only the tools it really needs, chosen from the list "
+            "below. Fewer tools is safer. After showing a draft, say in a sentence what "
+            "it does and invite changes; when they ask for one, call `propose_agent` "
+            "again with the whole updated draft. You cannot create the agent yourself: "
+            "the person presses Create on the card."
+        ),
+        examples=(),
+    ),
 }
 
 TEAM_INSTRUCTIONS = (
@@ -132,14 +150,32 @@ TEAM_INSTRUCTIONS = (
 )
 
 
-def system_prompt(mode: ChatMode, *, person: str | None, team: bool, tool_names: list[str]) -> str:
+def system_prompt(
+    mode: ChatMode,
+    *,
+    person: str | None,
+    team: bool,
+    tool_names: list[str],
+    persona: tuple[str, str] | None = None,
+    offered: list[type[Tool]] | None = None,
+) -> str:
+    """`persona` is (name, instructions) of a saved agent speaking in this
+    chat; it replaces the mode's text. `offered` is, for the builder, the
+    tools the person could give an agent."""
     chosen = MODES[mode]
     today = datetime.now(UTC).strftime("%A %d %B %Y")
     parts = [
         f"You are a personal AI assistant{f' for {person}' if person else ''}. Today is {today}.",
-        f"Mode: {chosen.label}. {chosen.instructions}",
+        f"You are speaking as the agent '{persona[0]}'. {persona[1]}"
+        if persona
+        else f"Mode: {chosen.label}. {chosen.instructions}",
         "Write in Markdown. Use the person's language.",
     ]
+    if offered:
+        parts.append(
+            "Tools you may give an agent (name: what it does):\n"
+            + "\n".join(f"- {t.name}: {t.description.split('.')[0]}" for t in offered)
+        )
     if tool_names:
         parts.append(
             "You can use tools. Use one only when it helps answer; say briefly what you "

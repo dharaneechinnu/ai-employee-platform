@@ -4,6 +4,7 @@ Every model must be imported here so Alembic autogenerate and the
 tenant-isolation test can see it.
 """
 
+from app.db.models.agent import Agent
 from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.db.models.conversation import ChatMode, Conversation, ConversationMessage, MessageRole
 from app.db.models.identity import (
@@ -60,6 +61,7 @@ from app.db.models.task import (
 
 __all__ = [
     "VECTOR_TABLES",
+    "Agent",
     "Approval",
     "ApprovalStatus",
     "Base",

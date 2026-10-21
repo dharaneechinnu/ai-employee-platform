@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,6 +52,7 @@ class ConversationItem(BaseModel):
     model: str
     routing: Preference
     team: bool
+    agent_id: uuid.UUID | None = None
     updated_at: datetime
 
 
@@ -65,6 +67,8 @@ class MessageResponse(BaseModel):
     model_reason: str | None = None
     error: str | None
     tools_used: list[str] = []
+    # On an agent-builder reply: the agent it proposed.
+    draft: dict[str, Any] | None = None
     created_at: datetime
 
 
@@ -86,6 +90,7 @@ class CreateConversationRequest(BaseModel):
     # With "auto": what Automatic aims for when it picks an AI.
     routing: Preference = Preference.BALANCED
     team: bool = False
+    agent_id: uuid.UUID | None = None
 
 
 class UpdateConversationRequest(BaseModel):
@@ -94,6 +99,8 @@ class UpdateConversationRequest(BaseModel):
     model: str | None = Field(default=None, max_length=200)
     routing: Preference | None = None
     team: bool | None = None
+    # Present and null means "no agent"; absent means unchanged.
+    agent_id: uuid.UUID | None = None
 
 
 class SendRequest(BaseModel):
@@ -113,6 +120,7 @@ async def _full(service: ConversationService, conversation: Conversation) -> Con
         model=conversation.model,
         routing=Preference(conversation.routing),
         team=conversation.team,
+        agent_id=conversation.agent_id,
         updated_at=conversation.updated_at,
         messages=[
             MessageResponse.model_validate(m) for m in await service.messages(conversation.id)
@@ -135,6 +143,7 @@ async def assistant_info(ctx: ContextDep) -> AssistantInfo:
                 examples=list(m.examples),
             )
             for m in MODES.values()
+            if m.key is not ChatMode.BUILDER
         ],
         team_roles=[RoleInfo(key=r.key, label=r.label) for r in ROLES.values()],
     )
@@ -157,7 +166,11 @@ async def create_conversation(
 ) -> ConversationResponse:
     service = ConversationService(session, ctx.owner_id)
     conversation = await service.create(
-        mode=body.mode, model=body.model, team=body.team, routing=body.routing
+        mode=body.mode,
+        model=body.model,
+        team=body.team,
+        routing=body.routing,
+        agent_id=body.agent_id,
     )
     await session.commit()
     return await _full(service, conversation)
@@ -194,6 +207,8 @@ async def update_conversation(
         model=body.model,
         team=body.team,
         routing=body.routing,
+        agent_id=body.agent_id,
+        set_agent="agent_id" in body.model_fields_set,
     )
     await session.commit()
     return await _full(service, conversation)

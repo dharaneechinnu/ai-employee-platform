@@ -31,6 +31,8 @@ class ChatMode(StrEnum):
     WORK = "work"
     RESEARCH = "research"
     CODE = "code"
+    # Not a way of chatting: the AI Agents tab's chat for making agents.
+    BUILDER = "builder"
 
 
 class MessageRole(StrEnum):
@@ -55,6 +57,11 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Orchestration: the assistant may split the work between
     # specialists (researcher, analyst, writer, critic) and combine it.
     team: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # A saved agent speaking as the persona of this chat; its
+    # instructions replace the mode's.
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL")
+    )
     # No tool list: tools are the platform's side, not the person's.
     # Every tool they can use is on (see `chat_tools`), and their
     # Permissions decide what runs, asks, or is blocked.
@@ -88,6 +95,9 @@ class ConversationMessage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # On a reply: the tools it used and the specialists it asked, in
     # order, so the chat can say "Used: …" without loading the run.
     tools_used: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    # On a builder reply: the agent it proposed, shown as a card with
+    # Create / Edit / Discard. Nothing exists until the person creates it.
+    draft: Mapped[dict[str, object] | None] = mapped_column(JSONB)
 
     __table_args__ = (
         Index("ix_conversation_messages_conversation", "conversation_id", "created_at"),

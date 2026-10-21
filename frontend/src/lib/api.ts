@@ -358,6 +358,7 @@ export interface ConversationItem {
   model: string;
   routing: "balanced" | "quality" | "cost" | "private";
   team: boolean;
+  agent_id: string | null;
   updated_at: string;
 }
 
@@ -374,6 +375,8 @@ export interface ChatMessage {
   error: string | null;
   /** On a reply: tools it used, and "specialist:<role>" for each specialist asked. */
   tools_used: string[];
+  /** On an agent-builder reply: the agent it proposed. Nothing exists until Create. */
+  draft?: AgentDraft | null;
   created_at: string;
 }
 
@@ -387,4 +390,77 @@ export interface ModelOption {
   display_name: string;
   model: string;
   status: string;
+}
+
+
+// ------------------------------------------------------------- agents
+
+export interface AgentDraft {
+  name: string;
+  description: string;
+  instructions: string;
+  tools: string[] | null;
+}
+
+export interface AgentUsage {
+  runs: number;
+  prompt_tokens: number;
+  output_tokens: number;
+  /** Estimated: with your own keys we never see the invoice. A decimal string. */
+  cost_usd: string;
+}
+
+export interface Agent extends AgentDraft {
+  id: string;
+  handle: string;
+  model: string;
+  routing: "balanced" | "quality" | "cost" | "private";
+  created_at: string;
+  usage: AgentUsage;
+}
+
+export interface AgentStarter {
+  key: string;
+  kind: "mode" | "specialist";
+  name: string;
+  description: string;
+  instructions: string;
+}
+
+export interface AgentToolInfo {
+  name: string;
+  pack: string;
+  description: string;
+  side_effect: "read" | "write" | "destructive";
+  needs_app: string | null;
+}
+
+export interface AgentRunRow {
+  run_id: string;
+  conversation_id: string;
+  title: string;
+  agent_id: string | null;
+  status: string;
+  cost_usd: string;
+  prompt_tokens: number;
+  output_tokens: number;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface AgentsOverview {
+  agents: Agent[];
+  starters: AgentStarter[];
+  assistant_usage: AgentUsage;
+  tools: AgentToolInfo[];
+  recent_runs: AgentRunRow[];
+  limit: number;
+}
+
+/** The result of "find a model this key can use". */
+export interface AutoModelResult {
+  provider: ConnectedProvider;
+  /** The model it switched to, or null when none of those tried answered. */
+  selected: string | null;
+  tried: { model: string; ok: boolean; reason: string | null }[];
 }

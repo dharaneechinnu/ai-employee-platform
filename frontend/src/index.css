@@ -1872,3 +1872,150 @@ html[data-dock='bottom'] .chat-shell {
 .prose-table th { background: var(--raised); font-weight: 600; }
 .prose-table tr:last-child td { border-bottom: 0; }
 .result-prose hr { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
+
+/* ------------------------------------------------------------ AI Agents
+   Plain CSS, outside any layer, so none of it can be tree-shaken away. */
+.agent-idea {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--raised);
+  padding: 7px 14px;
+  font-size: 13.5px;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.agent-idea:hover:not(:disabled) { border-color: var(--accent-line); background: var(--accent-soft); }
+.agent-draft {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 16px;
+  background: var(--sunken);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  animation: agent-rise 0.25s ease-out;
+}
+.agent-draft.is-old { opacity: 0.6; box-shadow: none; border-color: var(--line); }
+.agent-draft.is-made { border-color: var(--ok); }
+.agent-draft-name {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--line);
+  font-family: var(--font-display, inherit);
+  font-size: 20px;
+  font-weight: 600;
+  padding: 2px 0;
+  color: var(--text);
+}
+.agent-draft-line {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 14px;
+  padding: 2px 0;
+  color: var(--muted);
+}
+.agent-draft-name:focus, .agent-draft-line:focus { outline: none; border-bottom-color: var(--accent); }
+.agent-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  padding: 3px 9px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+.agent-tool.is-on { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+.agent-glyph {
+  display: grid;
+  place-items: center;
+  height: 38px;
+  width: 38px;
+  flex: none;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+@keyframes agent-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* The tree */
+.tree-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--sunken);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.tree-node b { color: var(--text); font-size: 14px; }
+.tree-node svg { color: var(--dim); }
+.tree-node.is-lead { border-color: var(--accent); background: var(--accent-soft); }
+.tree-node.is-lead b, .tree-node.is-lead svg { color: var(--accent-text); }
+.tree-node.is-agent { border-color: var(--accent-line); }
+.tree-node.is-agent.is-ran { border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
+.tree-node.is-starter { border-style: dashed; opacity: 0.75; }
+button.tree-node:not(:disabled):hover { border-color: var(--accent); }
+.tree-line { stroke: var(--line); }
+.tree-line.is-live { stroke: var(--accent); stroke-dasharray: 8 6; animation: tree-flow 1.2s linear infinite; }
+.tree-line.is-idle { stroke-dasharray: 3 5; }
+@keyframes tree-flow { to { stroke-dashoffset: -28; } }
+
+/* Flow and cost */
+.flow-pick {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 8px 12px;
+  text-align: left;
+}
+.flow-pick:hover { background: var(--raised); }
+.flow-pick[aria-pressed="true"] { border-color: var(--accent-line); background: var(--accent-soft); }
+.flow-track {
+  position: relative;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--raised);
+}
+.flow-bar {
+  position: absolute;
+  top: 7px;
+  height: 12px;
+  border-radius: 6px;
+  opacity: 0.55;
+  transform-origin: left;
+  animation: flow-grow 0.6s ease-out;
+}
+.flow-bar.is-failed { background: var(--bad) !important; }
+.flow-tick {
+  position: absolute;
+  top: 4px;
+  height: 18px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--text);
+}
+.flow-tick.is-think { background: var(--dim); height: 10px; top: 8px; }
+.flow-tick.is-tool { background: var(--text); }
+.flow-tick.is-blocked { background: var(--bad); }
+.flow-tick.static-tick { position: static; margin: 0; display: inline-block; height: 12px; }
+.flow-split { display: flex; height: 14px; overflow: hidden; border-radius: 7px; background: var(--raised); gap: 2px; }
+.flow-split > span { display: block; height: 100%; }
+@keyframes flow-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .tree-line.is-live, .flow-bar, .agent-draft { animation: none; }
+}

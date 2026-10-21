@@ -21,6 +21,7 @@ from app.agent.providers.base import Message, Role
 from app.agent.routing import Preference
 from app.core.errors import NotFoundError, ValidationError
 from app.core.observability import get_logger
+from app.db.models.agent import Agent
 from app.db.models.conversation import ChatMode, Conversation, ConversationMessage, MessageRole
 from app.db.models.task import TERMINAL_STATUSES, Run, Task, TaskStatus
 from app.services.provider_service import AUTO_MODEL, ProviderService, split_model
@@ -56,7 +57,8 @@ class ConversationService:
     async def conversations(self) -> list[Conversation]:
         result = await self.session.scalars(
             select(Conversation)
-            .where(Conversation.owner_id == self.owner_id)
+            # The builder's chats belong to the AI Agents tab, not the list.
+            .where(Conversation.owner_id == self.owner_id, Conversation.mode != ChatMode.BUILDER)
             .order_by(Conversation.updated_at.desc())
             .limit(MAX_CONVERSATIONS)
         )
@@ -79,13 +81,19 @@ class ConversationService:
         model: str = AUTO_MODEL,
         team: bool = False,
         routing: Preference = Preference.BALANCED,
+        agent_id: uuid.UUID | None = None,
     ) -> Conversation:
+        agent = await self._agent(agent_id)
+        if agent is not None:
+            # An agent brings its own preferred AI.
+            model, routing = agent.model, Preference(agent.routing)
         conversation = Conversation(
             owner_id=self.owner_id,
             mode=mode,
             model=await self._check_model(model),
             routing=routing.value,
             team=team,
+            agent_id=agent.id if agent else None,
         )
         self.session.add(conversation)
         await self.session.flush()
@@ -100,6 +108,8 @@ class ConversationService:
         model: str | None = None,
         team: bool | None = None,
         routing: Preference | None = None,
+        agent_id: uuid.UUID | None = None,
+        set_agent: bool = False,
     ) -> Conversation:
         """Any setting can change mid-conversation. Switching the model
         is the point: history is plain text, so the next reply simply
@@ -115,6 +125,12 @@ class ConversationService:
             conversation.team = team
         if routing is not None:
             conversation.routing = routing.value
+        if set_agent:
+            agent = await self._agent(agent_id)
+            conversation.agent_id = agent.id if agent else None
+            if agent is not None:
+                conversation.model = await self._check_model(agent.model)
+                conversation.routing = agent.routing
         # Set here rather than left to the database, so the value is
         # known without reloading the row.
         conversation.updated_at = datetime.now(UTC)
@@ -238,6 +254,7 @@ class ConversationService:
         error: str | None,
         tools_used: list[str] | None = None,
         model_reason: str | None = None,
+        draft: dict[str, object] | None = None,
     ) -> ConversationMessage:
         assert task.conversation_id is not None
         reply = ConversationMessage(
@@ -250,6 +267,7 @@ class ConversationService:
             model_reason=(model_reason or "")[:300] or None,
             error=error,
             tools_used=tools_used or [],
+            draft=draft,
             created_at=datetime.now(UTC),
         )
         self.session.add(reply)
@@ -260,6 +278,18 @@ class ConversationService:
         return reply
 
     # --- checks -----------------------------------------------------
+
+    async def _agent(self, agent_id: uuid.UUID | None) -> Agent | None:
+        if agent_id is None:
+            return None
+        agent = await self.session.scalar(
+            select(Agent).where(
+                Agent.id == agent_id, Agent.owner_id == self.owner_id, Agent.archived.is_(False)
+            )
+        )
+        if agent is None:
+            raise NotFoundError("No such agent.")
+        return agent
 
     async def _check_model(self, model: str) -> str:
         model = model.strip() or AUTO_MODEL

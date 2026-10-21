@@ -13,6 +13,7 @@ import PlatformAdmin from "./pages/PlatformAdmin";
 import Policies from "./pages/Policies";
 import Product from "./pages/Product";
 import Providers from "./pages/Providers";
+import Agents from "./pages/Agents";
 import Chat from "./pages/Chat";
 
 /** After signing in, go where the person was heading (an approval
@@ -57,6 +58,7 @@ export default function App() {
         <Route path="/connections" element={<Connections />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/:id" element={<Chat />} />
+        <Route path="/agents" element={<Agents />} />
         {/* Old bookmarks and links. Tasks and AI Employees were folded
             into the assistant, which lives in chat. */}
         <Route path="/tasks" element={<Navigate to="/chat" replace />} />

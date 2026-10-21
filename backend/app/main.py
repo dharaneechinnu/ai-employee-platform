@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import (
+    agents,
     approval_links,
     auth,
     connections,
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     app.include_router(approval_links.router, prefix=settings.api_v1_prefix)
     app.include_router(speech.router, prefix=settings.api_v1_prefix)
     app.include_router(mcp.router, prefix=settings.api_v1_prefix)
+    app.include_router(agents.router, prefix=settings.api_v1_prefix)
     app.include_router(conversations.router, prefix=settings.api_v1_prefix)
 
     return app
