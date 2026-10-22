@@ -195,3 +195,29 @@ async def test_a_chat_that_never_pauses_works_with_the_graph_loop(
     done = (await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)).json()
     assert done["status"] == "completed"
     assert await count(session, GraphCheckpoint) == 0
+
+
+async def test_saved_state_left_by_a_crashed_run_is_swept_up(
+    api: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import update
+
+    from app.agent.checkpoint import purge_stale
+
+    use_loop(monkeypatch, graph=True)
+    await paused_run(api, session)  # a live pause, newer than the cutoff
+    assert await purge_stale(session) == 0
+    await session.commit()
+    assert await count(session, GraphCheckpoint) > 0
+
+    old = datetime.now(UTC) - timedelta(days=4)
+    await session.execute(update(GraphCheckpoint).values(created_at=old))
+    await session.execute(update(GraphCheckpointWrite).values(created_at=old))
+    await session.commit()
+
+    assert await purge_stale(session) > 0
+    await session.commit()
+    assert await count(session, GraphCheckpoint) == 0
+    assert await count(session, GraphCheckpointWrite) == 0

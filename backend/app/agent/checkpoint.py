@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator, Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -233,6 +234,24 @@ class SqlCheckpointSaver(BaseCheckpointSaver[str]):
 
     def put_writes(self, *args: Any, **kwargs: Any) -> None:
         raise NotImplementedError("SqlCheckpointSaver is async only; use ainvoke.")
+
+
+# An approval expires after 24 hours (see `ApprovalService`), so no paused run is
+# older than this. Anything older was left behind by a worker that died mid-run.
+STALE_AFTER = timedelta(days=3)
+
+
+async def purge_stale(session: AsyncSession) -> int:
+    """Remove saved state left behind by runs that crashed. Returns the
+    number of saved checkpoints removed."""
+    cutoff = datetime.now(UTC) - STALE_AFTER
+    await session.execute(
+        delete(GraphCheckpointWrite).where(GraphCheckpointWrite.created_at < cutoff)
+    )
+    result = await session.execute(
+        delete(GraphCheckpoint).where(GraphCheckpoint.created_at < cutoff)
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 async def drop_threads(session: AsyncSession, thread_ids: Sequence[str]) -> None:
