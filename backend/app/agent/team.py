@@ -178,6 +178,80 @@ def specialist_tools(tools: list[type[Tool]], role: SpecialistRole) -> list[type
     return [t for t in allowed if t.name in (role.tools or ()) or t.pack in role.packs]
 
 
+@dataclass(slots=True)
+class SpecialistResult:
+    role: SpecialistRole
+    ok: bool
+    answer: str
+    stop_cause: str
+
+
+async def run_specialist(
+    team: Team, ctx: ToolContext, role_key: str, task: str
+) -> SpecialistResult:
+    """Run one specialist to the end and report it to the run's event log.
+
+    Shared by the `ask_specialist` tool and the supervisor graph, so a
+    specialist behaves, and is shown and costed, the same way however it
+    was started. The caller checks the per-turn limit.
+    """
+    from app.agent.loop import AgentEvent, AgentLoop, Budget
+
+    role = ROLES[role_key]
+    team.calls += 1
+    sid = f"s{team.calls}"
+    team.roles_used.append(role.key)
+    provider, model, label = (
+        team.provider_for(role.key) if team.provider_for else (team.provider, team.model, None)
+    )
+    await team.emit("specialist_started", id=sid, role=role.key, task=task[:400], model=label)
+
+    async def forward(event: AgentEvent) -> None:
+        if event.type in ("tool_call", "tool_result", "tool_blocked", "llm_call"):
+            await team.emit(
+                "specialist_step",
+                id=sid,
+                role=role.key,
+                kind=event.type,
+                tool=event.payload.get("tool"),
+                ok=event.payload.get("ok"),
+            )
+
+    # The specialist's own context: the lead's connected apps, but
+    # not the team itself or the lead's database session.
+    config = {k: v for k, v in (ctx.config or {}).items() if k not in ("_team", "_session")}
+    loop = AgentLoop(
+        provider=provider,
+        model=model,
+        tools=specialist_tools(team.tools, role),
+        tool_context=replace(ctx, config=config),
+        budget=Budget(max_steps=SPECIALIST_MAX_STEPS, max_seconds=SPECIALIST_SECONDS),
+        temperature=0.3,
+        on_event=forward,
+        check_policy=team.check_policy,
+    )
+    outcome = await loop.run(system_prompt=role.instructions, task=task)
+    team.prompt_tokens += outcome.prompt_tokens
+    team.output_tokens += outcome.output_tokens
+
+    await team.emit(
+        "specialist_finished",
+        id=sid,
+        role=role.key,
+        ok=outcome.completed,
+        steps=outcome.steps,
+        prompt_tokens=outcome.prompt_tokens,
+        output_tokens=outcome.output_tokens,
+        cost_usd=_cost(label, outcome.prompt_tokens, outcome.output_tokens),
+    )
+    return SpecialistResult(
+        role=role,
+        ok=outcome.completed,
+        answer=outcome.output or "",
+        stop_cause=outcome.stop_cause,
+    )
+
+
 class AskSpecialistArgs(BaseModel):
     role: RoleKey = Field(
         description="researcher, analyst, writer, critic, developer or generalist"
@@ -208,8 +282,6 @@ class AskSpecialist(Tool):
     timeout_s = SPECIALIST_SECONDS + 20
 
     async def run(self, ctx: ToolContext, args: AskSpecialistArgs) -> ToolResult:  # type: ignore[override]
-        from app.agent.loop import AgentEvent, AgentLoop, Budget
-
         team: Team | None = (ctx.config or {}).get("_team")
         if team is None:
             return ToolResult.failure("unavailable", "Specialists are not available here.")
@@ -220,62 +292,14 @@ class AskSpecialist(Tool):
                 "Finish with what you have.",
             )
 
-        role = ROLES[args.role]
-        team.calls += 1
-        sid = f"s{team.calls}"
-        team.roles_used.append(role.key)
-        provider, model, label = (
-            team.provider_for(role.key) if team.provider_for else (team.provider, team.model, None)
-        )
-        await team.emit(
-            "specialist_started", id=sid, role=role.key, task=args.task[:400], model=label
-        )
-
-        async def forward(event: AgentEvent) -> None:
-            if event.type in ("tool_call", "tool_result", "tool_blocked", "llm_call"):
-                await team.emit(
-                    "specialist_step",
-                    id=sid,
-                    role=role.key,
-                    kind=event.type,
-                    tool=event.payload.get("tool"),
-                    ok=event.payload.get("ok"),
-                )
-
-        # The specialist's own context: the lead's connected apps, but
-        # not the team itself or the lead's database session.
-        config = {k: v for k, v in (ctx.config or {}).items() if k not in ("_team", "_session")}
-        loop = AgentLoop(
-            provider=provider,
-            model=model,
-            tools=specialist_tools(team.tools, role),
-            tool_context=replace(ctx, config=config),
-            budget=Budget(max_steps=SPECIALIST_MAX_STEPS, max_seconds=SPECIALIST_SECONDS),
-            temperature=0.3,
-            on_event=forward,
-            check_policy=team.check_policy,
-        )
-        outcome = await loop.run(system_prompt=role.instructions, task=args.task)
-        team.prompt_tokens += outcome.prompt_tokens
-        team.output_tokens += outcome.output_tokens
-
-        await team.emit(
-            "specialist_finished",
-            id=sid,
-            role=role.key,
-            ok=outcome.completed,
-            steps=outcome.steps,
-            prompt_tokens=outcome.prompt_tokens,
-            output_tokens=outcome.output_tokens,
-            cost_usd=_cost(label, outcome.prompt_tokens, outcome.output_tokens),
-        )
-        if not outcome.completed:
+        result = await run_specialist(team, ctx, args.role, args.task)
+        if not result.ok:
             return ToolResult.failure(
                 "specialist_failed",
-                f"The {role.label.lower()} could not finish ({outcome.stop_cause}). "
+                f"The {result.role.label.lower()} could not finish ({result.stop_cause}). "
                 "Carry on without that part, or do it yourself.",
             )
-        return ToolResult.success({"specialist": role.label, "answer": outcome.output or ""})
+        return ToolResult.success({"specialist": result.role.label, "answer": result.answer})
 
 
 def _cost(label: str | None, prompt_tokens: int, output_tokens: int) -> float:

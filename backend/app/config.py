@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     # calls, so two concurrent tasks will exceed a free-tier rate limit.
     # See HLD part 2 and LLD part 8.
     slow_mode: bool = True
+
+    # Team mode as a supervisor graph (router, helpers side by side, review
+    # loop) instead of the lead calling `ask_specialist` itself. Off until it
+    # has been tried with a real model.
+    agent_supervisor: bool = False
     worker_max_jobs: int = 10
 
     @property

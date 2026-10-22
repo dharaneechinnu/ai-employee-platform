@@ -322,6 +322,79 @@ async def test_team_mode_runs_specialists_in_parallel_and_combines_them(
     assert task["run"]["prompt_tokens"] == 200 + 100 + 100 + 100
 
 
+async def test_supervised_team_mode_routes_runs_helpers_and_combines_them(
+    api: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the supervisor on, a router picks the helpers, they work, and the
+    lead answers from what they found. The lead is not offered
+    `ask_specialist`, because the graph already did that part."""
+    import json
+    from types import SimpleNamespace
+
+    import app.workers.jobs.agent_run as job
+    from app.agent.supervisor import ROUTER_PROMPT
+
+    seen: list[str] = []
+    lead_tools: list[set[str]] = []
+
+    class Supervised(LLMProvider):
+        provider_key = "gemini"
+
+        async def complete(self, **kwargs: Any) -> LLMReply:  # type: ignore[override]
+            messages: list[Message] = kwargs["messages"]
+            system = messages[0].content or ""
+            if system == ROUTER_PROMPT:
+                seen.append("router")
+                text = json.dumps(
+                    {
+                        "helpers": [{"role": "researcher", "task": "Find trial results"}],
+                        "report": False,
+                    }
+                )
+            elif system.startswith("You are a researcher"):
+                seen.append("researcher")
+                text = "Finding: four-day weeks kept output steady."
+            else:
+                seen.append("lead")
+                lead_tools.append({t.name for t in kwargs.get("tools") or []})
+                text = f"Answer from the team: {messages[-1].content}"
+            return LLMReply(
+                message=Message(role=Role.ASSISTANT, content=text),
+                stop_reason=StopReason.END_TURN,
+                usage=Usage(100, 20),
+                model=kwargs["model"],
+            )
+
+        async def check(self, model: str) -> None:
+            return None
+
+    monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: Supervised(api_key))
+    monkeypatch.setattr(job, "get_settings", lambda: SimpleNamespace(agent_supervisor=True))
+    headers = await _person(api, session)
+    cid = (await api.post(URL, json={"mode": "research", "team": True}, headers=headers)).json()[
+        "id"
+    ]
+
+    done = await _say(api, headers, cid, "Is a four-day work week a good idea?")
+    reply = done["messages"][1]["content"]
+    assert "four-day weeks kept output steady" in reply
+    assert seen == ["router", "researcher", "lead"]
+    assert "ask_specialist" not in lead_tools[0]
+    assert done["messages"][1]["tools_used"] == ["specialist:researcher"]
+
+    trace = (
+        await api.get(f"/api/v1/me/runs/{done['turn']['run_id']}/trace", headers=headers)
+    ).json()["events"]
+    types = [e["type"] for e in trace]
+    assert "supervisor_plan" in types
+    assert types.count("specialist_started") == 1
+    assert types.count("specialist_finished") == 1
+
+    task = (await api.get(f"/api/v1/me/tasks/{done['turn']['task_id']}", headers=headers)).json()
+    # Router, researcher and lead are all counted.
+    assert task["run"]["prompt_tokens"] == 300
+
+
 async def test_with_team_mode_off_there_is_no_specialist_tool(
     api: AsyncClient, session: AsyncSession, recorder: type[Recorder]
 ) -> None:

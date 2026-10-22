@@ -33,11 +33,13 @@ from app.agent.routing import (
     parse_kind,
     rank,
 )
+from app.agent.supervisor import run_supervised
 from app.agent.team import AskSpecialist, Team, specialist_policy
 from app.agent.tools.base import ToolContext
 from app.agent.tools.packs.builder import ProposeAgent, ProposeAgentArgs
 from app.agent.tools.packs.sheets import sheet_ids_in
 from app.agent.tools.registry import registry
+from app.config import get_settings
 from app.core.crypto import SecretUnreadableError
 from app.core.errors import NotFoundError
 from app.core.observability import get_logger
@@ -213,6 +215,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         # watching, so nothing may wait for a person to approve it.
         unattended = task.agent_id is not None
         team_on = chat.team and not unattended
+        # Team mode as a graph (router, helpers, review) rather than the lead
+        # calling `ask_specialist` itself. See `agent/supervisor.py`.
+        supervised = team_on and get_settings().agent_supervisor
 
         check_policy = policy_check(resolver, unattended=unattended, team_on=team_on)
 
@@ -275,7 +280,8 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 ),
             )
             context_config["_team"] = team
-            tools = [*tools, AskSpecialist]
+            if not supervised:
+                tools = [*tools, AskSpecialist]
 
         loop = AgentLoop(
             provider=provider,
@@ -305,7 +311,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         system_prompt = assistant.system_prompt(
             chat.mode,
             person=(person.full_name or None) if person else None,
-            team=team_on,
+            team=team_on and not supervised,
             tool_names=[t.name for t in tools],
             persona=(
                 (agent_row.name, _with_sheets(agent_row, sheet_ids, tools)) if agent_row else None
@@ -313,9 +319,14 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             offered=offered,
         )
 
-        outcome = await run_in_graph(
-            loop, system_prompt=system_prompt, task=task.input, history=history
-        )
+        if supervised and team is not None:
+            outcome = await run_supervised(
+                loop, team, system_prompt=system_prompt, task=task.input, history=history
+            )
+        else:
+            outcome = await run_in_graph(
+                loop, system_prompt=system_prompt, task=task.input, history=history
+            )
         if team is not None:
             # The specialists' model calls are part of this turn's cost.
             outcome.prompt_tokens += team.prompt_tokens

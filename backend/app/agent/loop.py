@@ -157,6 +157,14 @@ class AgentLoop:
         self._events: list[AgentEvent] = []
         self._tools_unsupported = False
 
+    @property
+    def resuming(self) -> bool:
+        """True when this run continues one that paused for approval."""
+        return self._resume_from is not None or self._approved_call is not None
+
+    async def cancel_requested(self) -> bool:
+        return bool(self._is_cancelled and await self._is_cancelled())
+
     async def _emit(self, type_: str, **payload: Any) -> None:
         event = AgentEvent(type=type_, payload=payload)
         self._events.append(event)
