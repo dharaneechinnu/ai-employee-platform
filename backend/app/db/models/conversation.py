@@ -31,8 +31,6 @@ class ChatMode(StrEnum):
     WORK = "work"
     RESEARCH = "research"
     CODE = "code"
-    # Not a way of chatting: the AI Agents tab's chat for making agents.
-    BUILDER = "builder"
 
 
 class MessageRole(StrEnum):
@@ -95,8 +93,8 @@ class ConversationMessage(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # On a reply: the tools it used and the specialists it asked, in
     # order, so the chat can say "Used: …" without loading the run.
     tools_used: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    # On a builder reply: the agent it proposed, shown as a card with
-    # Create / Edit / Discard. Nothing exists until the person creates it.
+    # On a reply that designed an agent: the draft, shown as a card with
+    # Create / Edit. Nothing exists until the person creates it.
     draft: Mapped[dict[str, object] | None] = mapped_column(JSONB)
 
     __table_args__ = (

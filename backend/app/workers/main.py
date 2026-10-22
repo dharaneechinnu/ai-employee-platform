@@ -14,7 +14,7 @@ from arq import cron
 
 from app.config import get_settings
 from app.core.observability import configure_logging, get_logger
-from app.workers.jobs import expire_approvals, ping, run_task
+from app.workers.jobs import dispatch_due_agents, expire_approvals, ping, run_task
 from app.workers.queue import redis_settings as redis_settings_fn
 
 log = get_logger(__name__)
@@ -44,6 +44,8 @@ class WorkerSettings:
     # nothing waits for ever on a request nobody will answer.
     cron_jobs: ClassVar[list[Any]] = [
         cron(expire_approvals, minute=set(range(0, 60, 5)), run_at_startup=True),
+        # Every minute: start the agents whose scheduled time has come.
+        cron(dispatch_due_agents, run_at_startup=True),
     ]
 
     on_startup = startup

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import { Icon, type IconName } from "../components/icons";
+import DraftCard from "../components/agents/DraftCard";
 import Prose from "../components/Prose";
 import ProposedAction from "../components/ProposedAction";
 import RunFlow from "../components/RunFlow";
@@ -78,6 +79,7 @@ function greeting(name: string | null | undefined): string {
 export default function Chat() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { me } = useAuth();
   const toast = useToast();
 
@@ -93,6 +95,15 @@ export default function Chat() {
   const [listOpen, setListOpen] = useState(false);
 
   useEffect(() => setListOpen(false), [id]);
+
+  // "New agent" on the AI Agents page lands here with the start of a request.
+  useEffect(() => {
+    const prefill = (location.state as { prefill?: string } | null)?.prefill;
+    if (prefill) {
+      setText(prefill);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location, navigate]);
 
   const loadList = useCallback(async () => {
     setList(await api.get<ConversationItem[]>("/me/conversations"));
@@ -377,6 +388,9 @@ function Thread({ conversation, onSettled }: { conversation: Conversation; onSet
     conversation.messages.filter((m) => m.role === "assistant" && m.task_id).map((m) => [m.task_id!, m]),
   );
 
+  // Only the newest draft can be created; earlier ones are history.
+  const newestDraft = conversation.messages.filter((m) => m.draft).at(-1)?.id;
+
   return (
     <div className="flex flex-col gap-7 py-8">
       {conversation.messages
@@ -387,7 +401,7 @@ function Thread({ conversation, onSettled }: { conversation: Conversation; onSet
             <div key={m.id} className="flex flex-col gap-4">
               <div className="chat-user">{m.content}</div>
               {reply ? (
-                <Reply message={reply} team={conversation.team} />
+                <Reply message={reply} team={conversation.team} latestDraft={reply.id === newestDraft} />
               ) : live && live.task_id === m.task_id ? (
                 <LiveTurn turn={live} onSettled={onSettled} />
               ) : null}
@@ -399,8 +413,17 @@ function Thread({ conversation, onSettled }: { conversation: Conversation; onSet
   );
 }
 
-function Reply({ message, team }: { message: ChatMessage; team: boolean }) {
+function Reply({
+  message,
+  team,
+  latestDraft,
+}: {
+  message: ChatMessage;
+  team: boolean;
+  latestDraft: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  const [madeAs, setMadeAs] = useState<string | null>(null);
   return (
     <div className="chat-reply">
       <div className="flex items-center gap-2 text-[12.5px] text-dim">
@@ -419,6 +442,14 @@ function Reply({ message, team }: { message: ChatMessage; team: boolean }) {
         <div className="chat-answer">
           <Prose text={message.content} />
         </div>
+      )}
+      {message.draft && (
+        <DraftCard
+          draft={message.draft}
+          isLatest={latestDraft}
+          createdAs={madeAs}
+          onCreated={(agent) => setMadeAs(agent.name)}
+        />
       )}
       {message.tools_used.length > 0 && <UsedLine names={message.tools_used} />}
       {message.task_id && (

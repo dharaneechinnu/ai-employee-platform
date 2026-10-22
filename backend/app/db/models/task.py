@@ -93,6 +93,11 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     # Set by the cancel endpoint; the loop checks it between steps.
     cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Set when an agent's schedule (or its Run now button) started this
+    # task. Nobody is watching such a run, so it cannot wait for approval.
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL")
+    )
 
     __table_args__ = (
         Index("ix_tasks_org_status_created", "owner_id", "status", "created_at"),

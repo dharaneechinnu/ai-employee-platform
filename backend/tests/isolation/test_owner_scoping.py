@@ -30,6 +30,10 @@ GLOBAL_TABLES: dict[str, str] = {
         "the per-company half is the refresh token in connections, which is scoped"
     ),
     "policy_defaults": "platform-wide starting values, overridden per company",
+    "platform_service_access": (
+        "which parts of an app (Gmail, Drive, Sheets; read or edit) the platform allows "
+        "at all; the per-company half is org_service_access, which is scoped"
+    ),
 }
 
 

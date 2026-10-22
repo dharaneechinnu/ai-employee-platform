@@ -17,6 +17,7 @@ from typing import ClassVar
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.services import EDIT, LEVELS, SERVICES
 from app.config import get_settings
 from app.core.crypto import encrypt
 from app.core.errors import ConflictError, InvalidCredentialsError, NotFoundError
@@ -27,6 +28,7 @@ from app.db.models.policy import ConnectionKind
 from app.db.models.provider import OrgConnectionAccess, PlatformOAuthApp
 from app.db.repositories.identity_repo import PlatformAdminRepository, UserRepository
 from app.services.oauth_providers import get_oauth_provider, resolve_client
+from app.services.service_access_service import ServiceAccessService
 
 log = get_logger(__name__)
 
@@ -67,7 +69,6 @@ class ConnectionAccessView:
     # False when no ruling exists and the company simply inherits.
     overridden: bool
     note: str | None
-
 
 
 class PlatformService:
@@ -176,9 +177,7 @@ class PlatformService:
         rows = await self.session.scalars(select(User).order_by(User.created_at))
         return list(rows.all())
 
-    async def set_active(
-        self, *, admin_id: uuid.UUID, owner_id: uuid.UUID, active: bool
-    ) -> User:
+    async def set_active(self, *, admin_id: uuid.UUID, owner_id: uuid.UUID, active: bool) -> User:
         """Suspend or restore an account.
 
         Their work is untouched: a suspended person cannot sign in,
@@ -429,3 +428,108 @@ class PlatformService:
             target_id=str(owner_id),
             detail=kind,
         )
+
+    # --- service access: which parts of an app, read or edit ----------------
+
+    async def service_matrix(self) -> list[ServiceAccessView]:
+        """What the platform allows for every part of every app."""
+        platform = await ServiceAccessService(self.session).platform_matrix()
+        return [
+            ServiceAccessView(
+                service=sid,
+                app=SERVICES[sid].app,
+                name=SERVICES[sid].name,
+                level=level,
+                allowed=allowed,
+            )
+            for (sid, level), allowed in platform.items()
+        ]
+
+    async def set_platform_service(
+        self, *, admin_id: uuid.UUID, service: str, level: str, allowed: bool
+    ) -> None:
+        await ServiceAccessService(self.session).set_platform(
+            service, level, allowed, admin_id=admin_id
+        )
+        self.admins.record_audit(
+            admin_id=admin_id,
+            action="service_allowed" if allowed else "service_blocked",
+            target_type="platform",
+            detail=f"{service}:{level}",
+        )
+
+    async def company_services(self, owner_id: uuid.UUID) -> list[CompanyServiceView]:
+        """Per service and level: what this company gets, and whether that
+        is its own ruling or inherited from the platform."""
+        await self._person(owner_id)
+        rules = ServiceAccessService(self.session, owner_id)
+        snapshot = await rules.snapshot()
+        out: list[CompanyServiceView] = []
+        for sid, svc in SERVICES.items():
+            for level in LEVELS:
+                if level == EDIT and not svc.has_edit:
+                    continue
+                own = snapshot.company.get((sid, level))
+                decision = snapshot.decide(sid, level)
+                out.append(
+                    CompanyServiceView(
+                        service=sid,
+                        app=svc.app,
+                        name=svc.name,
+                        level=level,
+                        allowed=decision.allowed,
+                        overridden=own is not None,
+                        note=own.note if own else None,
+                    )
+                )
+        return out
+
+    async def set_company_service(
+        self,
+        *,
+        admin_id: uuid.UUID,
+        owner_id: uuid.UUID,
+        service: str,
+        level: str,
+        allowed: bool | None,
+        note: str | None = None,
+    ) -> None:
+        """`allowed=None` removes the company's ruling, so it inherits the
+        platform's again."""
+        await self._person(owner_id)
+        await ServiceAccessService(self.session, owner_id).set_company(
+            owner_id, service, level, allowed, note=note, admin_id=admin_id
+        )
+        self.admins.record_audit(
+            admin_id=admin_id,
+            action=(
+                "service_inherited"
+                if allowed is None
+                else "service_allowed"
+                if allowed
+                else "service_blocked"
+            ),
+            target_type="organization",
+            target_id=str(owner_id),
+            detail=f"{service}:{level}",
+        )
+
+
+@dataclass(slots=True)
+class ServiceAccessView:
+    service: str
+    app: str
+    name: str
+    level: str
+    allowed: bool
+
+
+@dataclass(slots=True)
+class CompanyServiceView:
+    service: str
+    app: str
+    name: str
+    level: str
+    allowed: bool
+    overridden: bool
+    note: str | None

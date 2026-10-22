@@ -92,10 +92,7 @@ class ApprovalService:
             .where(Approval.owner_id == self.owner_id, Approval.status == ApprovalStatus.PENDING)
             .order_by(Approval.created_at)
         )
-        return [
-            PendingApproval(approval=a, task_title=t.title)
-            for a, t in rows.all()
-        ]
+        return [PendingApproval(approval=a, task_title=t.title) for a, t in rows.all()]
 
     async def get(self, approval_id: uuid.UUID) -> Approval:
         approval = await self.session.scalar(

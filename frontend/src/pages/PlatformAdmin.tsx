@@ -9,13 +9,14 @@ import {
   Input,
   SearchBox,
   Spinner,
+  Switch,
   Tabs,
   ThemeToggle,
   relativeTime,
   statusTone,
   useToast,
 } from "../components/ui";
-import { ApiError, type Person } from "../lib/api";
+import { ApiError, type CompanyServiceRow, type Person, type ServiceAccessRow } from "../lib/api";
 import { AuthStage } from "./Login";
 
 /**
@@ -358,7 +359,10 @@ function People({ onSignOut }: { onSignOut: () => void }) {
         {view === "audit" ? (
           <AuditLog entries={audit} />
         ) : view === "connections" ? (
-          <OAuthApps apps={apps} onSaved={setApps} />
+          <>
+            <OAuthApps apps={apps} onSaved={setApps} />
+            <ServiceAccess />
+          </>
         ) : !people ? (
           error ? <ErrorNote message={error} /> : <Spinner />
         ) : (
@@ -674,11 +678,192 @@ function PersonPanel({
         )}
       </div>
 
+      <CompanyServices personId={detail.id} />
+
       <p className="flex items-center gap-2 border-t border-line pt-3 text-[13px] text-dim">
         <Icon name="lock" size={14} className="text-accent-text" />
         Counts, health and settings only. Their tasks, memory and API keys are not readable from
         here.
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------- service access
+
+/** Services in the order first seen, each with its read and edit rows. */
+function groupServices<T extends ServiceAccessRow>(rows: T[]) {
+  const order: string[] = [];
+  const byService = new Map<string, { name: string; app: string; read?: T; edit?: T }>();
+  for (const row of rows) {
+    if (!byService.has(row.service)) {
+      byService.set(row.service, { name: row.name, app: row.app });
+      order.push(row.service);
+    }
+    byService.get(row.service)![row.level] = row;
+  }
+  return order.map((id) => ({ id, ...byService.get(id)! }));
+}
+
+/**
+ * Which parts of each app (Gmail, Drive, Sheets, Calendar) the platform
+ * allows at all, for reading and for editing. Closing Read closes Edit.
+ */
+function ServiceAccess() {
+  const toast = useToast();
+  const [rows, setRows] = useState<ServiceAccessRow[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    void call<ServiceAccessRow[]>("/service-access")
+      .then(setRows)
+      .catch(() => toast("Could not load service access.", "bad"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function set(row: ServiceAccessRow, allowed: boolean) {
+    const key = `${row.service}:${row.level}`;
+    setBusy(key);
+    try {
+      setRows(await call<ServiceAccessRow[]>(`/service-access/${row.service}/${row.level}`, { allowed }, "PUT"));
+      toast(`${row.name} ${row.level === "edit" ? "editing" : "reading"} ${allowed ? "allowed" : "closed"} for everyone.`, allowed ? "ok" : "info");
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not change that.", "bad");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="card flex flex-col gap-3 p-5">
+      <div>
+        <h2 className="font-display text-[17px] font-semibold">Service access</h2>
+        <p className="text-[13px] text-muted">
+          What the platform allows for each part of an app. A person can still be set differently from their own panel.
+        </p>
+      </div>
+      {!rows ? (
+        <Spinner rows={3} />
+      ) : (
+        <div className="flex flex-col divide-y divide-line">
+          {groupServices(rows).map((svc) => (
+            <div key={svc.id} className="flex flex-wrap items-center gap-x-5 gap-y-1.5 py-2.5 text-[13px]">
+              <span className="min-w-[160px] flex-1 font-medium">{svc.name}</span>
+              {(["read", "edit"] as const).map((level) => {
+                const row = svc[level];
+                return row ? (
+                  <label key={level} className="flex items-center gap-2">
+                    <Switch
+                      checked={row.allowed}
+                      label={`${svc.name} ${level}`}
+                      disabled={busy === `${row.service}:${row.level}`}
+                      onChange={(next) => void set(row, next)}
+                    />
+                    {level === "edit" ? "Edit" : "Read"}
+                  </label>
+                ) : (
+                  <span key={level} className="w-[88px] text-xs text-dim">
+                    {level === "edit" ? "read only" : ""}
+                  </span>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** One person's rulings on those same parts: their own, or inherited. */
+function CompanyServices({ personId }: { personId: string }) {
+  const toast = useToast();
+  const [rows, setRows] = useState<CompanyServiceRow[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRows(null);
+    void call<CompanyServiceRow[]>(`/people/${personId}/services`)
+      .then(setRows)
+      .catch(() => toast("Could not load this person's service access.", "bad"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personId]);
+
+  async function set(row: CompanyServiceRow, allowed: boolean | null) {
+    const key = `${row.service}:${row.level}`;
+    setBusy(key);
+    try {
+      setRows(
+        await call<CompanyServiceRow[]>(
+          `/people/${personId}/services/${row.service}/${row.level}`,
+          {
+            allowed,
+            note: allowed === false ? `${row.name} is not available on your plan.` : null,
+          },
+          "PUT",
+        ),
+      );
+      toast(
+        allowed === null
+          ? `${row.name} follows the platform again.`
+          : `${row.name} ${row.level === "edit" ? "editing" : "reading"} ${allowed ? "opened" : "closed"} for this person.`,
+        allowed === false ? "info" : "ok",
+      );
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not change that.", "bad");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-line pt-3">
+      <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-dim">
+        Parts of each app this person may use
+      </span>
+      {!rows ? (
+        <Spinner rows={1} />
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {rows.map((row) => {
+            const key = `${row.service}:${row.level}`;
+            return (
+              <div key={key} className="flex flex-wrap items-center gap-2.5 text-[13px]">
+                <span className="min-w-[150px] font-medium">
+                  {row.name} <span className="font-normal text-dim">{row.level === "edit" ? "edit" : "read"}</span>
+                </span>
+                <Chip tone={row.allowed ? "ok" : "bad"}>{row.allowed ? "open" : "closed"}</Chip>
+                <span className="text-xs text-dim">
+                  {row.overridden ? "ruling for this person" : "follows the platform"}
+                </span>
+                <span className="ml-auto flex gap-1.5">
+                  <Button
+                    size="sm"
+                    variant={row.allowed ? "ghost" : "ok"}
+                    disabled={busy === key || (row.allowed && !row.overridden)}
+                    onClick={() => void set(row, true)}
+                  >
+                    Open
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger-ghost"
+                    disabled={busy === key || !row.allowed}
+                    onClick={() => void set(row, false)}
+                  >
+                    Close
+                  </Button>
+                  {row.overridden && (
+                    <Button size="sm" variant="ghost" disabled={busy === key} onClick={() => void set(row, null)}>
+                      Use default
+                    </Button>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AgentTree from "../components/agents/AgentTree";
-import Builder from "../components/agents/Builder";
 import FlowCost from "../components/agents/FlowCost";
+import ReadinessList from "../components/agents/ReadinessList";
+import ScheduleEditor from "../components/agents/ScheduleEditor";
 import { Icon } from "../components/icons";
 import {
   Button,
@@ -14,24 +15,37 @@ import {
   PageBody,
   PageHeader,
   Spinner,
+  StatusChip,
   Tabs,
   TextArea,
+  relativeTime,
   useToast,
 } from "../components/ui";
 import { fmtCost } from "../lib/agents";
-import { ApiError, api, type Agent, type AgentStarter, type AgentsOverview, type Conversation } from "../lib/api";
+import {
+  ApiError,
+  api,
+  type Agent,
+  type AgentSchedule,
+  type AgentStarter,
+  type AgentsOverview,
+  type Readiness,
+  type RunNowResult,
+} from "../lib/api";
 
-type Tab = "build" | "agents" | "tree" | "flow";
+type Tab = "agents" | "tree" | "flow";
+
+const START_A_REQUEST = "I want an agent that ";
 
 /**
- * AI Agents: make helpers by talking, manage them, see how they work
- * together and what they cost. Chat stays the home screen; this is
- * where the helpers it can use are designed.
+ * AI Agents: manage the helpers you have made, see how they work
+ * together and what they cost. Agents are made in Chat, by describing
+ * one; this is where they are scheduled, run, paused and edited.
  */
 export default function Agents() {
   const toast = useToast();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("build");
+  const [tab, setTab] = useState<Tab>("agents");
   const [data, setData] = useState<AgentsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -49,10 +63,23 @@ export default function Agents() {
     void load();
   }, [load]);
 
+  // A run that is going is worth watching: pick up its result when it ends.
+  const running = data?.agents.some((a) => a.last_status === "running") ?? false;
+  useEffect(() => {
+    if (!running) return;
+    const timer = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(timer);
+  }, [running, load]);
+
+  function describeInChat() {
+    navigate("/chat", { state: { prefill: START_A_REQUEST } });
+  }
+
   async function chatWith(agent: Agent) {
     try {
-      const chat = await api.post<Conversation>("/me/conversations", { agent_id: agent.id });
-      navigate(`/chat/${chat.id}`);
+      // The agent's own chat: its runs and what you say to it are in one place.
+      const chat = await api.post<{ conversation_id: string }>(`/me/agents/${agent.id}/chat`, {});
+      navigate(`/chat/${chat.conversation_id}`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : "Could not start a chat.");
     }
@@ -82,8 +109,8 @@ export default function Agents() {
   return (
     <>
       <PageHeader title="AI Agents">
-        <Button icon="plus" size="sm" onClick={() => setTab("build")}>
-          New agent
+        <Button icon="plus" size="sm" onClick={describeInChat}>
+          New agent in Chat
         </Button>
       </PageHeader>
       <PageBody>
@@ -92,7 +119,6 @@ export default function Agents() {
           value={tab}
           onChange={setTab}
           items={[
-            { key: "build", label: "Build by chat" },
             { key: "agents", label: "My agents", count: data?.agents.length },
             { key: "tree", label: "Agent tree" },
             { key: "flow", label: "Flow and cost" },
@@ -101,21 +127,15 @@ export default function Agents() {
         <ErrorNote message={error} />
         {!data && !error && <Spinner rows={4} />}
 
-        {data && tab === "build" && (
-          <Builder
-            tools={data.tools}
-            onCreated={() => {
-              void load();
-            }}
-          />
-        )}
-
         {data && tab === "agents" && (
           <div className="flex flex-col gap-6">
             {data.agents.length === 0 ? (
-              <Empty message="No agents yet." hint="Describe one in the Build tab and it will show up here.">
-                <Button icon="plus" onClick={() => setTab("build")}>
-                  Build one by chat
+              <Empty
+                message="No agents yet."
+                hint="Describe one in Chat, for example: I want an agent that finds Chennai developer events every night and updates my sheet."
+              >
+                <Button icon="chat" onClick={describeInChat}>
+                  Describe one in Chat
                 </Button>
               </Empty>
             ) : (
@@ -132,37 +152,13 @@ export default function Agents() {
                         }}
                       />
                     ) : (
-                      <Card className="flex h-full flex-col gap-3 p-4">
-                        <div className="flex items-start gap-3">
-                          <span className="agent-glyph" aria-hidden="true">
-                            {agent.name.charAt(0).toUpperCase()}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <h3 className="truncate font-display text-[16px] font-semibold">{agent.name}</h3>
-                            <p className="text-[13.5px] text-muted">{agent.description || "No description."}</p>
-                          </div>
-                        </div>
-                        <p className="text-[12.5px] text-dim">
-                          {agent.tools === null
-                            ? "Uses every tool you allow"
-                            : agent.tools.length === 0
-                              ? "Talks only, no tools"
-                              : `Tools: ${agent.tools.join(", ")}`}
-                          {" · "}
-                          {agent.usage.runs} run{agent.usage.runs === 1 ? "" : "s"} · {fmtCost(agent.usage.cost_usd)}
-                        </p>
-                        <div className="mt-auto flex flex-wrap gap-2">
-                          <Button size="sm" icon="chat" onClick={() => void chatWith(agent)}>
-                            Chat with it
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditing(agent.id)}>
-                            Edit
-                          </Button>
-                          <HoldButton variant="danger-ghost" onConfirm={() => void remove(agent)}>
-                            Hold to remove
-                          </HoldButton>
-                        </div>
-                      </Card>
+                      <AgentCard
+                        agent={agent}
+                        onChat={() => void chatWith(agent)}
+                        onEdit={() => setEditing(agent.id)}
+                        onRemove={() => void remove(agent)}
+                        onChanged={load}
+                      />
                     )}
                   </li>
                 ))}
@@ -213,6 +209,182 @@ export default function Agents() {
   );
 }
 
+// ----------------------------------------------------------------- one agent
+
+function AgentCard({
+  agent,
+  onChat,
+  onEdit,
+  onRemove,
+  onChanged,
+}: {
+  agent: Agent;
+  onChat: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [showReadiness, setShowReadiness] = useState(false);
+
+  const scheduled = agent.schedule !== null;
+  const attention = agent.last_status === "needs_attention";
+
+  // A scheduled agent is checked as the card opens, so a broken link is
+  // seen here and not discovered at the next run.
+  const check = useCallback(async () => {
+    try {
+      setReadiness(await api.get<Readiness>(`/me/agents/${agent.id}/readiness`));
+    } catch {
+      setReadiness(null);
+    }
+  }, [agent.id]);
+
+  useEffect(() => {
+    if (scheduled || (agent.tools?.length ?? 0) > 0) void check();
+  }, [check, scheduled, agent.tools]);
+
+  const broken = readiness !== null && !readiness.ok;
+
+  async function act(path: string, done: string) {
+    setBusy(true);
+    try {
+      await api.post(`/me/agents/${agent.id}/${path}`, {});
+      toast(done);
+      await onChanged();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "That did not work. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runNow() {
+    setBusy(true);
+    try {
+      const result = await api.post<RunNowResult>(`/me/agents/${agent.id}/run`, {});
+      if (result.status === "started" && result.conversation_id) {
+        // Its output is written into its own chat, which also shows live.
+        navigate(`/chat/${result.conversation_id}`);
+        return;
+      } else if (result.status === "busy") toast("It is still running its last job.");
+      else {
+        setReadiness(result.readiness);
+        setShowReadiness(true);
+        toast("It could not start. See what needs fixing on its card.");
+      }
+      await onChanged();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not start it.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="flex h-full flex-col gap-3 p-4">
+      <div className="flex items-start gap-3">
+        <span className="agent-glyph" aria-hidden="true">
+          {agent.name.charAt(0).toUpperCase()}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-display text-[16px] font-semibold">{agent.name}</h3>
+          <p className="text-[13.5px] text-muted">{agent.description || "No description."}</p>
+        </div>
+        {agent.last_status && <StatusChip status={agent.last_status} />}
+      </div>
+
+      <p className="text-[12.5px] text-dim">
+        {agent.tools === null
+          ? "Uses every tool you allow"
+          : agent.tools.length === 0
+            ? "Talks only, no tools"
+            : `Tools: ${agent.tools.join(", ")}`}
+        {" · "}
+        {agent.usage.runs} run{agent.usage.runs === 1 ? "" : "s"} · {fmtCost(agent.usage.cost_usd)}
+      </p>
+
+      {scheduled && (
+        <div className="flex flex-col gap-1 rounded-xl border border-line bg-raised px-3 py-2 text-[13px]">
+          <span className="flex items-center gap-2 font-medium">
+            <Icon name="calendar" size={14} className="text-dim" />
+            {agent.schedule_text}
+            {!agent.schedule_enabled && <span className="text-ask-text">· paused</span>}
+          </span>
+          <span className="text-dim">
+            {agent.schedule_enabled && agent.next_run_at ? `Next run ${relativeTime(agent.next_run_at)}` : "Not scheduled right now"}
+            {agent.last_run_at ? ` · last run ${relativeTime(agent.last_run_at)}` : ""}
+          </span>
+        </div>
+      )}
+
+      {agent.last_summary && (
+        <p className={`text-[13px] ${attention || agent.last_status === "failed" ? "text-bad-text" : "text-muted"}`}>
+          {agent.last_summary.length > 220 ? `${agent.last_summary.slice(0, 220)}…` : agent.last_summary}
+        </p>
+      )}
+
+      {(broken || showReadiness) && readiness && (
+        <ReadinessList
+          readiness={{ ...readiness, checks: readiness.checks.filter((c) => !c.ok) }}
+          loading={false}
+          onRecheck={() => void check()}
+        />
+      )}
+      {!broken && readiness && scheduled && (
+        <button
+          type="button"
+          className="self-start text-[12.5px] text-ok-text underline-offset-2 hover:underline"
+          onClick={() => setShowReadiness((s) => !s)}
+        >
+          Everything it needs is ready
+        </button>
+      )}
+
+      <div className="mt-auto flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          icon="arrow"
+          disabled={busy || (agent.tools?.length ?? 0) === 0}
+          title={(agent.tools?.length ?? 0) === 0 ? "Pick its tools first (Edit)" : "Run it now; the result is saved in its chat"}
+          onClick={() => void runNow()}
+        >
+          Run now
+        </Button>
+        {scheduled &&
+          (agent.schedule_enabled ? (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void act("pause", "Paused.")}>
+              Pause
+            </Button>
+          ) : (
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void act("resume", "Resumed.")}>
+              Resume
+            </Button>
+          ))}
+        {agent.run_conversation_id && (
+          <Link to={`/chat/${agent.run_conversation_id}`} className="btn btn-sm btn-ghost">
+            Results
+          </Link>
+        )}
+        <Button size="sm" variant="ghost" icon="chat" onClick={onChat}>
+          Chat
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onEdit}>
+          Edit
+        </Button>
+        <HoldButton variant="danger-ghost" onConfirm={onRemove}>
+          Hold to remove
+        </HoldButton>
+      </div>
+    </Card>
+  );
+}
+
+// --------------------------------------------------------------- editing
+
 function Editor({
   agent,
   data,
@@ -227,6 +399,8 @@ function Editor({
   const [description, setDescription] = useState(agent.description);
   const [instructions, setInstructions] = useState(agent.instructions);
   const [tools, setTools] = useState<string[] | null>(agent.tools);
+  const [schedule, setSchedule] = useState<AgentSchedule | null>(agent.schedule);
+  const [sheet, setSheet] = useState(agent.scope.sheet_ids[0] ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -239,7 +413,15 @@ function Editor({
     setBusy(true);
     setError(null);
     try {
-      await api.patch(`/me/agents/${agent.id}`, { name, description, instructions, tools });
+      // `schedule` is always sent: null is how it is switched off.
+      await api.patch(`/me/agents/${agent.id}`, {
+        name,
+        description,
+        instructions,
+        tools,
+        schedule,
+        scope: { sheet_ids: sheet.trim() ? [sheet.trim()] : [] },
+      });
       toast("Saved.");
       await onDone(true);
     } catch (err) {
@@ -253,7 +435,7 @@ function Editor({
     <Card className="flex flex-col gap-3 p-4">
       <Input label="Name" value={name} onChange={setName} />
       <Input label="What it is for" value={description} onChange={setDescription} />
-      <TextArea label="Instructions" value={instructions} onChange={setInstructions} rows={7} />
+      <TextArea label="Instructions" value={instructions} onChange={setInstructions} rows={9} />
       <div className="flex flex-col gap-1.5">
         <span className="label">Tools it may use</span>
         <div className="flex flex-wrap gap-1.5">
@@ -273,9 +455,29 @@ function Editor({
           ))}
         </div>
       </div>
+      <div className="rounded-xl border border-line bg-panel p-3">
+        <ScheduleEditor value={schedule} onChange={setSchedule} />
+        {schedule && tools === null && (
+          <p className="mt-2 text-[13px] text-bad-text">An agent that runs on its own needs a list of tools.</p>
+        )}
+      </div>
+      <label className="flex flex-col gap-1.5">
+        <span className="label">The one spreadsheet it may write to</span>
+        <input
+          className="field"
+          placeholder="Paste the sheet's address"
+          value={sheet}
+          onChange={(e) => setSheet(e.target.value)}
+        />
+      </label>
       <ErrorNote message={error} />
       <div className="flex gap-2">
-        <Button size="sm" icon="check" disabled={busy || !name.trim() || instructions.trim().length < 10} onClick={() => void save()}>
+        <Button
+          size="sm"
+          icon="check"
+          disabled={busy || !name.trim() || instructions.trim().length < 10 || (schedule !== null && tools === null)}
+          onClick={() => void save()}
+        >
           Save
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void onDone(false)}>

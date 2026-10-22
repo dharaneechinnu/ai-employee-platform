@@ -41,6 +41,7 @@ from app.core.crypto import decrypt, encrypt
 from app.core.errors import ValidationError
 from app.core.observability import get_logger
 from app.core.signed import sign
+from app.db.models.agent import Agent
 from app.db.models.identity import User
 from app.db.models.notification import NotificationSettings
 from app.db.models.policy import Approval
@@ -314,6 +315,27 @@ class NotificationService:
                 ],
             )
             await self._try_slack(webhook, shared)
+
+    async def agent_run_finished(self, agent: Agent, *, status: str, summary: str) -> None:
+        """Tell the person how a run of one of their agents went, or that
+        it could not start. Sent on whichever channels they have on."""
+        row = await self.settings()
+        subject = {
+            "completed": f"{agent.name} finished",
+            "failed": f"{agent.name} could not finish",
+            "needs_attention": f"{agent.name} needs you to fix something",
+        }.get(status, f"{agent.name}: {status}")
+        lines = [summary[:600]] if summary else []
+        buttons = [("Open AI Agents", _app_url("/agents"), "primary")]
+
+        if row.email_enabled and get_settings().email_notifications_available:
+            for admin in await self._admins():
+                await self._try_email(
+                    admin.email, Message(subject=subject, lines=lines, buttons=buttons)
+                )
+        webhook = self._webhook(row)
+        if webhook:
+            await self._try_slack(webhook, Message(subject=subject, lines=lines, buttons=buttons))
 
     # --- helpers -------------------------------------------------------
 

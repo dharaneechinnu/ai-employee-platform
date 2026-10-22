@@ -53,9 +53,7 @@ async def test_claude_and_your_own_server_are_on_the_menu(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     _acme, headers = await _company(api, session)
-    menu = (
-        await api.get("/api/v1/me/providers/available", headers=headers)
-    ).json()
+    menu = (await api.get("/api/v1/me/providers/available", headers=headers)).json()
     keys = {p["key"]: p for p in menu}
     assert keys["anthropic"]["default_model"] == "claude-opus-5-5"
     assert "custom" in keys and "mistral" in keys

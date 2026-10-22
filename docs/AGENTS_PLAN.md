@@ -1,5 +1,18 @@
 # Custom agents, created in chat
 
+> **Update, October 2026.** The Build tab is gone: agents are made in Chat. Say
+> "I want an agent that ..." and the assistant asks what it needs, then shows a
+> draft card with a readiness check (is each app connected, allowed by the
+> platform, granted by you, permitted on your Permissions page). Create stays
+> off until every link passes. Agents can run on a schedule you choose, in your
+> time zone; a worker job starts them, re-checks the links first, and tells you
+> when something broke. The AI Agents page only manages them: schedule, run now,
+> pause, edit, tree, cost. Permissions are split by service (Gmail, Drive, Sheets,
+> Calendar) and level (read, edit) at the platform, company, connection and agent
+> levels. Not built yet: effort-based model choice, failure-based retry and
+> escalation, usage and quality monitoring, and Excel through Microsoft 365.
+
+
 Status: **planned, not built.** Decisions are settled; the phases below are the order to build in.
 
 ## What we are building

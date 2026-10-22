@@ -13,6 +13,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from app.agent.tools.base import SideEffect, Tool, ToolContext, ToolResult
+from app.agent.tools.packs._http import html_to_text
 from app.agent.tools.registry import register
 from app.core.urls import is_private_address as _is_private_address
 
@@ -70,7 +71,12 @@ class GetWebpage(Tool):
                 "http_error", f"That page returned status {response.status_code}."
             )
 
-        text = response.text[:MAX_CHARS]
+        text = response.text
+        if "html" in response.headers.get("content-type", "").lower():
+            # Readable text, not markup: small models spend their whole
+            # context on tags otherwise.
+            text = html_to_text(text)
+        text = text[:MAX_CHARS]
         return ToolResult.success(
             {"url": str(response.url), "status": response.status_code, "content": text}
         )

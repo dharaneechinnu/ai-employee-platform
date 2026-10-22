@@ -67,7 +67,7 @@ class MessageResponse(BaseModel):
     model_reason: str | None = None
     error: str | None
     tools_used: list[str] = []
-    # On an agent-builder reply: the agent it proposed.
+    # On a reply that designed an agent: the draft shown as a card.
     draft: dict[str, Any] | None = None
     created_at: datetime
 
@@ -143,7 +143,6 @@ async def assistant_info(ctx: ContextDep) -> AssistantInfo:
                 examples=list(m.examples),
             )
             for m in MODES.values()
-            if m.key is not ChatMode.BUILDER
         ],
         team_roles=[RoleInfo(key=r.key, label=r.label) for r in ROLES.values()],
     )

@@ -11,14 +11,16 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.routing import Preference
+from app.agent.schedule import Schedule, next_run
 from app.core.errors import ConflictError, NotFoundError, ValidationError
-from app.db.models.agent import MAX_AGENTS, Agent
+from app.db.models.agent import DEFAULT_RUN_STEPS, MAX_AGENTS, MAX_RUN_STEPS, Agent
 from app.db.models.conversation import Conversation
 from app.db.models.task import Run, Task
 from app.services.conversation_service import ConversationService
@@ -69,6 +71,9 @@ class AgentService:
         model: str = AUTO_MODEL,
         routing: Preference = Preference.BALANCED,
         tools: list[str] | None = None,
+        schedule: Schedule | None = None,
+        scope: dict[str, object] | None = None,
+        max_steps: int = DEFAULT_RUN_STEPS,
     ) -> Agent:
         active = await self.session.scalar(
             select(func.count())
@@ -86,7 +91,10 @@ class AgentService:
             model=await self._check_model(model),
             routing=routing.value,
             tools=self._check_tools(tools),
+            scope=self._check_scope(scope),
+            max_steps=self._check_steps(max_steps),
         )
+        self.apply_schedule(agent, schedule)
         self.session.add(agent)
         await self.session.flush()
         return agent
@@ -102,6 +110,10 @@ class AgentService:
         routing: Preference | None = None,
         tools: list[str] | None = None,
         set_tools: bool = False,
+        schedule: Schedule | None = None,
+        set_schedule: bool = False,
+        scope: dict[str, object] | None = None,
+        max_steps: int | None = None,
     ) -> Agent:
         agent = await self.get(agent_id)
         if name is not None:
@@ -116,6 +128,45 @@ class AgentService:
             agent.routing = routing.value
         if set_tools:
             agent.tools = self._check_tools(tools)
+        if scope is not None:
+            agent.scope = self._check_scope(scope)
+        if max_steps is not None:
+            agent.max_steps = self._check_steps(max_steps)
+        if set_schedule:
+            self.apply_schedule(agent, schedule)
+        elif agent.schedule_enabled and agent.tools is None:
+            raise ValidationError("A scheduled agent needs its list of tools, not 'everything'.")
+        await self.session.flush()
+        return agent
+
+    # --- running on its own ----------------------------------------
+
+    @staticmethod
+    def apply_schedule(agent: Agent, schedule: Schedule | None) -> None:
+        """Set or clear when the agent runs by itself. A new schedule
+        starts switched on, so the next run is the next matching time."""
+        if schedule is None:
+            agent.schedule, agent.schedule_enabled, agent.next_run_at = None, False, None
+            return
+        if agent.tools is None:
+            # An unattended run must be limited to named tools: with no
+            # list it would have every tool the person has ever connected.
+            raise ValidationError("A scheduled agent needs its list of tools, not 'everything'.")
+        agent.schedule = schedule.model_dump()
+        agent.schedule_enabled = True
+        agent.next_run_at = next_run(schedule, datetime.now(UTC))
+
+    async def pause(self, agent_id: uuid.UUID) -> Agent:
+        agent = await self.get(agent_id)
+        agent.schedule_enabled, agent.next_run_at = False, None
+        await self.session.flush()
+        return agent
+
+    async def resume(self, agent_id: uuid.UUID) -> Agent:
+        agent = await self.get(agent_id)
+        if not agent.schedule:
+            raise ValidationError("This agent has no schedule. Set a time first.")
+        self.apply_schedule(agent, Schedule.model_validate(agent.schedule))
         await self.session.flush()
         return agent
 
@@ -123,6 +174,7 @@ class AgentService:
         """Remove it from use. Chats that used it keep reading fine."""
         agent = await self.get(agent_id)
         agent.archived = True
+        agent.schedule_enabled, agent.next_run_at = False, None
         # Free the handle for a new agent with the same name.
         agent.handle = f"{agent.handle[:28]}~{uuid.uuid4().hex[:6]}"
         await self.session.execute(
@@ -196,6 +248,25 @@ class AgentService:
         while f"{base}-{n}" in taken:
             n += 1
         return f"{base}-{n}"
+
+    @staticmethod
+    def _check_scope(scope: dict[str, object] | None) -> dict[str, object]:
+        """Only the one key is understood: the spreadsheets it may write to."""
+        ids = (scope or {}).get("sheet_ids") or []
+        if not isinstance(ids, list):
+            raise ValidationError("sheet_ids must be a list.")
+        from app.agent.tools.packs.sheets import spreadsheet_id
+
+        cleaned = [spreadsheet_id(str(i)) for i in ids]
+        if any(c is None for c in cleaned):
+            raise ValidationError("A spreadsheet must be given as its address or its id.")
+        return {"sheet_ids": list(dict.fromkeys(c for c in cleaned if c))}
+
+    @staticmethod
+    def _check_steps(steps: int) -> int:
+        if not 5 <= steps <= MAX_RUN_STEPS:
+            raise ValidationError(f"Steps per run must be between 5 and {MAX_RUN_STEPS}.")
+        return steps
 
     @staticmethod
     def _check_tools(tools: list[str] | None) -> list[str] | None:

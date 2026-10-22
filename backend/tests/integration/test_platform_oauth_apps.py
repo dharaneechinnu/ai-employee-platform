@@ -68,9 +68,7 @@ async def test_registering_an_app_unlocks_the_button_for_a_company(
     company = {"Authorization": f"Bearer {acme.admin_token}"}
 
     async def google_configured() -> bool:
-        listing = await api.get(
-            "/api/v1/me/connections/available", headers=company
-        )
+        listing = await api.get("/api/v1/me/connections/available", headers=company)
         return next(a for a in listing.json() if a["kind"] == "google")["configured"]
 
     assert await google_configured() is False
@@ -86,9 +84,7 @@ async def test_registering_an_app_unlocks_the_button_for_a_company(
     assert await google_configured() is True
 
     # And the button now leads somewhere real.
-    start = await api.post(
-        "/api/v1/me/connections/oauth/google/start", headers=company
-    )
+    start = await api.post("/api/v1/me/connections/oauth/google/start", headers=company)
     assert start.status_code == 200
     assert CLIENT_ID in start.json()["authorize_url"]
 

@@ -22,6 +22,7 @@ import {
   type AvailableConnection,
   type ConnectionItem,
   type McpServer,
+  type ServiceInfo,
   type ToolEntry,
 } from "../lib/api";
 import { effectLabel, learnToolLabels, toolLabel } from "../lib/labels";
@@ -199,6 +200,7 @@ export default function Connections() {
   const [busy, setBusy] = useState<string | null>(null);
   const [manual, setManual] = useState<AvailableConnection | null>(null);
   const [ownApp, setOwnApp] = useState<AvailableConnection | null>(null);
+  const [sharing, setSharing] = useState<AvailableConnection | null>(null);
   const [tools, setTools] = useState<Record<string, ToolEntry>>({});
   const [servers, setServers] = useState<McpServer[]>([]);
 
@@ -232,16 +234,19 @@ export default function Connections() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function startOAuth(option: AvailableConnection) {
+  /** Sends the person to the provider, asking only for what they chose. */
+  async function startOAuth(option: AvailableConnection, services: Record<string, "read" | "edit">) {
     setBusy(option.kind);
     try {
       const { authorize_url } = await api.post<{ authorize_url: string }>(
         `/me/connections/oauth/${option.kind}/start`,
+        { services },
       );
       window.location.assign(authorize_url);
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Could not start the sign-in.", "bad");
       setBusy(null);
+      // Rethrown so the share step can show it where the person is looking.
+      throw err;
     }
   }
 
@@ -329,7 +334,7 @@ export default function Connections() {
                     onTest={() => void test(item)}
                     onToggle={(on) => void toggle(item, on)}
                     onRemove={() => void remove(item)}
-                    onReconnect={oauth ? () => void startOAuth(option) : undefined}
+                    onReconnect={oauth ? () => setSharing(option) : undefined}
                   />
                 ))}
 
@@ -352,9 +357,9 @@ export default function Connections() {
                         variant={items.length ? "ghost" : "brand"}
                         icon="link"
                         disabled={!option.configured || !option.allowed || busy === option.kind}
-                        onClick={() => void startOAuth(option)}
+                        onClick={() => setSharing(option)}
                       >
-                        {busy === option.kind ? "Opening sign-in…" : items.length ? "Connect another account" : `Connect ${option.display_name}`}
+                        {busy === option.kind ? "Opening sign-in…" : items.length ? "Change what is shared" : `Connect ${option.display_name}`}
                       </Button>
                     ) : (
                       <Button
@@ -412,6 +417,13 @@ export default function Connections() {
           />
         )}
 
+        {sharing && (
+          <ShareStep
+            option={sharing}
+            onClose={() => setSharing(null)}
+            onStart={(services) => startOAuth(sharing, services)}
+          />
+        )}
         {manual && <ManualForm option={manual} onClose={() => setManual(null)} onSaved={() => { setManual(null); void load(); }} />}
         {ownApp && (
           <OwnAppForm
@@ -538,6 +550,162 @@ function ConnectedRow({
         </div>
       )}
     </div>
+  );
+}
+
+/** What a new connection asks for when the person has not chosen. */
+const SHARE_DEFAULTS: Record<string, Record<string, "read" | "edit">> = {
+  google: { "google.gmail": "edit", "google.calendar": "edit", "google.drive": "read" },
+  microsoft: { "microsoft.mail": "edit", "microsoft.calendar": "edit", "microsoft.files": "read" },
+};
+
+const SHARE_HINTS: Record<string, string> = {
+  "google.sheets": "Needed for agents that update a spreadsheet.",
+};
+
+/**
+ * "What do you want to share?" Before the sign-in, the person picks
+ * which parts of the app to hand over, and whether each may be changed
+ * or only looked at. Only those permissions are requested.
+ */
+function ShareStep({
+  option,
+  onClose,
+  onStart,
+}: {
+  option: AvailableConnection;
+  onClose: () => void;
+  onStart: (services: Record<string, "read" | "edit">) => Promise<void>;
+}) {
+  const [services, setServices] = useState<ServiceInfo[] | null>(null);
+  const [picked, setPicked] = useState<Record<string, "read" | "edit">>({});
+  const [error, setError] = useState<string | null>(null);
+  const [going, setGoing] = useState(false);
+
+  useEffect(() => {
+    void api
+      .get<ServiceInfo[]>(`/me/connections/services`)
+      .then((all) => {
+        const mine = all.filter((s) => s.app === option.kind);
+        setServices(mine);
+        // Start from what is held now when reconnecting, else from the defaults.
+        const start: Record<string, "read" | "edit"> = {};
+        const connected = mine.some((s) => s.granted);
+        for (const s of mine) {
+          const level = connected
+            ? s.granted?.edit
+              ? "edit"
+              : s.granted?.read
+                ? "read"
+                : undefined
+            : SHARE_DEFAULTS[option.kind]?.[s.id];
+          if (!level) continue;
+          if (level === "edit" && !s.allowed.edit) {
+            if (s.allowed.read) start[s.id] = "read";
+          } else if (s.allowed[level]) start[s.id] = level;
+        }
+        setPicked(start);
+      })
+      .catch(() => setError("Could not load what can be shared."));
+  }, [option.kind]);
+
+  function set(id: string, level: "read" | "edit" | null) {
+    setPicked((current) => {
+      const next = { ...current };
+      if (level === null) delete next[id];
+      else next[id] = level;
+      return next;
+    });
+  }
+
+  async function go() {
+    setError(null);
+    setGoing(true);
+    try {
+      await onStart(picked);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not start the sign-in.");
+      setGoing(false);
+    }
+  }
+
+  return (
+    <section className="card rise flex flex-col gap-4 border-dashed border-line2 p-5" data-coach="share-step">
+      <div className="flex items-center gap-3">
+        <BrandTile kind={option.kind} size={40} />
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-[17px] font-semibold">What do you want to share?</h2>
+          <p className="text-[13px] text-muted">
+            Tick what your assistant and agents may use in {option.display_name}. You can change this later.
+          </p>
+        </div>
+        <button type="button" className="icon-btn h-10 w-10" aria-label="Close" onClick={onClose}>
+          <Icon name="x" />
+        </button>
+      </div>
+
+      {!services ? (
+        error ? <ErrorNote message={error} /> : <Spinner rows={2} />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {services.map((s) => {
+            const level = picked[s.id];
+            const closed = !s.allowed.read;
+            return (
+              <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-line px-3.5 py-2.5">
+                <div className="min-w-[160px] flex-1">
+                  <span className="text-[14px] font-medium">{s.name}</span>
+                  {SHARE_HINTS[s.id] && <p className="text-xs text-dim">{SHARE_HINTS[s.id]}</p>}
+                  {closed && (
+                    <p className="flex items-start gap-1.5 text-xs text-ask-text">
+                      <Icon name="lock" size={12} className="mt-px shrink-0" />
+                      {s.note ?? "Turned off for you by the platform."}
+                    </p>
+                  )}
+                  {s.granted && (
+                    <span className="mt-1 flex gap-1.5">
+                      <Chip tone={s.granted.read ? "ok" : "mute"} dot={false}>
+                        {s.granted.edit ? "can change now" : s.granted.read ? "can look now" : "not shared now"}
+                      </Chip>
+                    </span>
+                  )}
+                </div>
+                <label className="flex items-center gap-2 text-[13px]">
+                  <input
+                    type="checkbox"
+                    checked={!!level}
+                    disabled={closed}
+                    onChange={(e) => set(s.id, e.target.checked ? "read" : null)}
+                  />
+                  Read
+                </label>
+                {s.can_edit && (
+                  <label className="flex items-center gap-2 text-[13px]">
+                    <input
+                      type="checkbox"
+                      checked={level === "edit"}
+                      disabled={!s.allowed.edit}
+                      onChange={(e) => set(s.id, e.target.checked ? "edit" : level ? "read" : null)}
+                    />
+                    Edit
+                  </label>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <ErrorNote message={services ? error : null} />
+      <div className="flex flex-wrap items-center gap-3">
+        <Button icon="link" disabled={going || !services || Object.keys(picked).length === 0} onClick={() => void go()}>
+          {going ? "Opening sign-in…" : `Continue to ${option.display_name}`}
+        </Button>
+        <span className="text-[13px] text-dim">
+          Edit includes read. Only what you tick is asked of {option.display_name}.
+        </span>
+      </div>
+    </section>
   );
 }
 

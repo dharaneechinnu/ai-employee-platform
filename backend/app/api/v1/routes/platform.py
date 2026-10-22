@@ -190,9 +190,7 @@ AdminDep = Annotated[PlatformAdmin, Depends(get_platform_admin)]
 
 @router.post("/auth/login", response_model=PlatformTokenResponse, summary="Admin sign in")
 async def platform_login(body: PlatformLoginRequest, session: SessionDep) -> PlatformTokenResponse:
-    token = await PlatformService(session).login(
-        email=body.email, password=body.password
-    )
+    token = await PlatformService(session).login(email=body.email, password=body.password)
     return PlatformTokenResponse(access_token=token)
 
 
@@ -350,9 +348,7 @@ async def list_oauth_apps(admin: AdminDep, session: SessionDep) -> list[OAuthApp
     every company's Connections page are disabled, and nothing inside
     the product could previously turn them on.
     """
-    return [
-        OAuthAppRow(**asdict(app)) for app in await PlatformService(session).oauth_apps()
-    ]
+    return [OAuthAppRow(**asdict(app)) for app in await PlatformService(session).oauth_apps()]
 
 
 @router.put(
@@ -457,9 +453,103 @@ async def set_company_connection_access(
         note=body.note,
     )
     await session.commit()
+    return [ConnectionAccessRow(**asdict(row)) for row in await service.connection_access(owner_id)]
+
+
+# ------------------------------------------- which parts of an app, read or edit
+
+
+class ServiceAccessRow(BaseModel):
+    service: str
+    app: str
+    name: str
+    level: str  # "read" or "edit"
+    allowed: bool
+
+
+class CompanyServiceRow(ServiceAccessRow):
+    # True when this company has its own ruling rather than inheriting.
+    overridden: bool
+    note: str | None
+
+
+class SetServiceAccessRequest(BaseModel):
+    allowed: bool
+
+
+class SetCompanyServiceRequest(BaseModel):
+    # None removes the company's ruling so it inherits the platform's.
+    allowed: bool | None = None
+    note: str | None = Field(default=None, max_length=300)
+
+
+@router.get(
+    "/service-access",
+    response_model=list[ServiceAccessRow],
+    summary="What the platform allows for each part of each app",
+)
+async def service_access(admin: AdminDep, session: SessionDep) -> list[ServiceAccessRow]:
+    return [ServiceAccessRow(**asdict(r)) for r in await PlatformService(session).service_matrix()]
+
+
+@router.put(
+    "/service-access/{service}/{level}",
+    response_model=list[ServiceAccessRow],
+    summary="Allow or block one part of an app, for everyone",
+)
+async def set_service_access(
+    service: str,
+    level: str,
+    body: SetServiceAccessRequest,
+    admin: AdminDep,
+    session: SessionDep,
+) -> list[ServiceAccessRow]:
+    platform = PlatformService(session)
+    await platform.set_platform_service(
+        admin_id=admin.id, service=service, level=level, allowed=body.allowed
+    )
+    await session.commit()
+    return [ServiceAccessRow(**asdict(r)) for r in await platform.service_matrix()]
+
+
+@router.get(
+    "/people/{owner_id}/services",
+    response_model=list[CompanyServiceRow],
+    summary="Which parts of each app this company may use",
+)
+async def company_services(
+    owner_id: uuid.UUID, admin: AdminDep, session: SessionDep
+) -> list[CompanyServiceRow]:
     return [
-        ConnectionAccessRow(**asdict(row)) for row in await service.connection_access(owner_id)
+        CompanyServiceRow(**asdict(r))
+        for r in await PlatformService(session).company_services(owner_id)
     ]
+
+
+@router.put(
+    "/people/{owner_id}/services/{service}/{level}",
+    response_model=list[CompanyServiceRow],
+    summary="Allow or block one part of an app for one company",
+)
+async def set_company_service(
+    owner_id: uuid.UUID,
+    service: str,
+    level: str,
+    body: SetCompanyServiceRequest,
+    admin: AdminDep,
+    session: SessionDep,
+) -> list[CompanyServiceRow]:
+    platform = PlatformService(session)
+    await platform.set_company_service(
+        admin_id=admin.id,
+        owner_id=owner_id,
+        service=service,
+        level=level,
+        allowed=body.allowed,
+        note=body.note,
+    )
+    await session.commit()
+    return [CompanyServiceRow(**asdict(r)) for r in await platform.company_services(owner_id)]
 
 
 # --------------------------------------------------- the AI provider catalog

@@ -48,9 +48,7 @@ async def test_search_finds_a_stored_memory(api: AsyncClient, session: AsyncSess
         "Our staging database is called acme_staging",
         "Error ERR_4021 means the payment gateway timed out",
     ]:
-        await api.post(
-            "/api/v1/me/memory", json={"content": content}, headers=headers
-        )
+        await api.post("/api/v1/me/memory", json={"content": content}, headers=headers)
 
     found = await api.post(
         "/api/v1/me/memory/search",
@@ -132,7 +130,6 @@ async def test_memory_never_crosses_person_boundaries(
     assert found.json() == []
 
 
-
 async def test_switching_provider_requires_reembedding_and_search_refuses(
     api: AsyncClient, session: AsyncSession
 ) -> None:
@@ -193,9 +190,7 @@ async def test_switching_back_restores_search_without_reembedding(
     config = await api.get("/api/v1/me/embedding-config", headers=headers)
     assert config.json()["memories_needing_reembedding"] == 0
 
-    found = await api.post(
-        "/api/v1/me/memory/search", json={"query": "node 20"}, headers=headers
-    )
+    found = await api.post("/api/v1/me/memory/search", json={"query": "node 20"}, headers=headers)
     assert found.status_code == 200
     assert found.json()
 
@@ -242,10 +237,6 @@ async def test_reembedding_moves_vectors_to_the_new_model(
     after = await api.get("/api/v1/me/embedding-config", headers=headers)
     assert after.json()["memories_needing_reembedding"] == 0
 
-    found = await api.post(
-        "/api/v1/me/memory/search", json={"query": "node 20"}, headers=headers
-    )
+    found = await api.post("/api/v1/me/memory/search", json={"query": "node 20"}, headers=headers)
     assert found.status_code == 200
     assert found.json()
-
-

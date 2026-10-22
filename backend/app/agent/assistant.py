@@ -10,6 +10,7 @@ instead of re-explaining themselves every message.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -117,25 +118,59 @@ MODES: dict[ChatMode, Mode] = {
             "Why is CI failing on main? Find the failing step and suggest a fix",
         ),
     ),
-    ChatMode.BUILDER: Mode(
-        key=ChatMode.BUILDER,
-        label="Agent builder",
-        for_whom="Designing your own agents by talking",
-        instructions=(
-            "You help the person design their own AI agent. Ask what it should do, for "
-            "whom, and how it should sound, one or two short questions at a time, and "
-            "stop asking as soon as you can make a good first draft. Then call "
-            "`propose_agent` to show the draft: a short name, one sentence on what it "
-            "is for, instructions written to the agent ('You are ...') covering its job, "
-            "style and limits, and only the tools it really needs, chosen from the list "
-            "below. Fewer tools is safer. After showing a draft, say in a sentence what "
-            "it does and invite changes; when they ask for one, call `propose_agent` "
-            "again with the whole updated draft. You cannot create the agent yourself: "
-            "the person presses Create on the card."
-        ),
-        examples=(),
-    ),
 }
+
+# People ask for an agent in the ordinary chat, in their own words. These
+# instructions are added to a turn only when the talk is about agents, so a
+# normal chat stays cheap. They are written for small, fast models too: a
+# fixed outline to fill in, questions asked before guessing, and one worked
+# example to copy the shape of.
+AGENT_INTENT = re.compile(r"\b(agents?|automat\w*)\b", re.IGNORECASE)
+
+AGENT_BUILDER_INSTRUCTIONS = """\
+The person may want you to build an agent: a saved helper that does one job by itself, now \
+or on a schedule. If they are asking for that, follow these steps. If they are only asking \
+about agents, just answer.
+
+1. ASK FIRST. If any of these is missing, ask for all the missing ones in ONE short message \
+and wait: (a) what exactly it should do; (b) who it is for, and what to include and leave \
+out; (c) where the results go, for example which sheet; (d) when it should run, and in \
+which time zone. Never guess these. Do not ask about anything else.
+
+2. THEN CALL `propose_agent` ONCE with a complete draft. Write `instructions` to the agent \
+as "You are ...", using exactly these headings: Goal, Who it is for (Include / Exclude), \
+Where to look, Steps, Rules, Finish. Steps are numbered and concrete, and each names the \
+tool to use. Rules always include: never invent details, leave blank what is unknown, \
+never delete anything, skip duplicates. Finish says what to report back.
+
+3. `tools`: only names from the list below, as few as the job needs. Dates matter: add \
+`current_time`. Web research: `web_search` and `get_webpage`. A Google Sheet: `sheets_read` \
+and `sheets_append_rows`, plus `sheets_update_cells` if it must change existing rows. If \
+they want it to make its own sheet, add `sheets_create` (and leave `spreadsheet` out); it \
+creates the sheet on its first run and keeps using it.
+
+4. `schedule`: set it when they gave a time (frequency daily, weekdays or weekly; time as \
+HH:MM, 24-hour; days 0 Monday to 6 Sunday for weekly; an IANA time zone). `spreadsheet`: \
+the sheet's address if one is named.
+
+5. After the card appears, say in one sentence what the agent will do. Tell them to check \
+the connection list on the card and press Create. You cannot create it yourself.
+
+Example of good instructions, shortened:
+You are an events scout for a software developer in Chennai.
+Goal: keep the sheet "Chennai Developer Events" up to date with developer events in Chennai.
+Who it is for: a working developer who wants meetups, hackathons and conferences. Include: \
+developer-focused events open to everyone. Exclude: school events, college-only events, \
+sales webinars.
+Where to look: search "Chennai developer meetup <month>" for this month and the next two.
+Steps: 1. current_time to get today's date. 2. sheets_read the Events tab. 3. web_search, \
+then get_webpage on promising results. 4. For each event note name, date (YYYY-MM-DD), \
+time, venue, link, price. 5. Skip any event already in the sheet (same link, or same name \
+and date). 6. sheets_append_rows the new ones. 7. sheets_update_cells to correct a changed \
+date or venue.
+Rules: never invent details; leave unknown cells blank; never delete rows.
+Finish: report how many events were added and the next five by date.
+"""
 
 TEAM_INSTRUCTIONS = (
     "You lead a small team of specialists, reached with the `ask_specialist` tool: "
@@ -160,8 +195,8 @@ def system_prompt(
     offered: list[type[Tool]] | None = None,
 ) -> str:
     """`persona` is (name, instructions) of a saved agent speaking in this
-    chat; it replaces the mode's text. `offered` is, for the builder, the
-    tools the person could give an agent."""
+    chat; it replaces the mode's text. `offered` is set only when the talk
+    is about building an agent: the tools the person could give it."""
     chosen = MODES[mode]
     today = datetime.now(UTC).strftime("%A %d %B %Y")
     parts = [
@@ -171,7 +206,8 @@ def system_prompt(
         else f"Mode: {chosen.label}. {chosen.instructions}",
         "Write in Markdown. Use the person's language.",
     ]
-    if offered:
+    if offered is not None:
+        parts.append(AGENT_BUILDER_INSTRUCTIONS)
         parts.append(
             "Tools you may give an agent (name: what it does):\n"
             + "\n".join(f"- {t.name}: {t.description.split('.')[0]}" for t in offered)

@@ -101,9 +101,7 @@ async def test_a_closed_connection_cannot_be_created_anyway(
     acme = await seed_company(session, api, name="Acme", slug="acme")
     acme_admin = {"Authorization": f"Bearer {acme.admin_token}"}
 
-    allowed = await api.post(
-        "/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin
-    )
+    allowed = await api.post("/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin)
     assert allowed.status_code == 201
 
     await api.put(
@@ -112,9 +110,7 @@ async def test_a_closed_connection_cannot_be_created_anyway(
         headers=staff,
     )
 
-    refused = await api.post(
-        "/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin
-    )
+    refused = await api.post("/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin)
     # Forbidden, not unprocessable: the request is fine, the company is not.
     assert refused.status_code == 403
     assert "plan" in refused.text.lower()

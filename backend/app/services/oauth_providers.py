@@ -4,10 +4,12 @@ One OAuth app per provider is registered for the whole platform; each
 company then signs in through it with its own account. What we keep is
 that company's refresh token, encrypted with the company's key.
 
-Scopes are the narrowest that still let the tools do their job. Gmail's
-`gmail.modify` reads, drafts and sends but cannot permanently delete;
-Drive is read-only, so an employee can find a document but not change
-or remove one.
+Scopes are the narrowest that still let the tools do their job, and
+they follow the services the person chose when connecting (see
+`app/agent/services.py`): someone who shares only a sheet is asked for
+the Sheets permission and nothing else. With no choice made, the first
+version's set is requested: Gmail's `gmail.modify` reads, drafts and
+sends but cannot permanently delete; Drive is read-only.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from urllib.parse import urlencode
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.services import DEFAULT_GRANT, scopes_for_grant
 from app.config import Settings, get_settings
 from app.core.crypto import decrypt
 from app.db.models.policy import ConnectionKind
@@ -73,7 +76,9 @@ def _microsoft_base() -> str:
     return f"https://login.microsoftonline.com/{get_settings().microsoft_tenant}/oauth2/v2.0"
 
 
-def get_oauth_provider(kind: str) -> OAuthProvider | None:
+def get_oauth_provider(kind: str, grant: dict[str, str] | None = None) -> OAuthProvider | None:
+    """`grant` is {service: level} for the permissions to ask for; None
+    asks for the default set."""
     if kind == ConnectionKind.GOOGLE.value:
         return OAuthProvider(
             kind=ConnectionKind.GOOGLE,
@@ -85,9 +90,7 @@ def get_oauth_provider(kind: str) -> OAuthProvider | None:
                 "openid",
                 "email",
                 "profile",
-                "https://www.googleapis.com/auth/gmail.modify",
-                "https://www.googleapis.com/auth/calendar.events",
-                "https://www.googleapis.com/auth/drive.readonly",
+                *scopes_for_grant("google", grant or DEFAULT_GRANT["google"]),
             ),
             extra_params=(
                 ("access_type", "offline"),
@@ -109,10 +112,7 @@ def get_oauth_provider(kind: str) -> OAuthProvider | None:
                 "email",
                 "profile",
                 "User.Read",
-                "Mail.ReadWrite",
-                "Mail.Send",
-                "Calendars.ReadWrite",
-                "Files.Read.All",
+                *scopes_for_grant("microsoft", grant or DEFAULT_GRANT["microsoft"]),
             ),
             extra_params=(("prompt", "select_account"),),
         )

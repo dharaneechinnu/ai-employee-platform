@@ -168,9 +168,7 @@ async def test_one_person_cannot_read_or_cancel_anothers_task(
     # 404, not 403: whether somebody else's task exists is not theirs
     # to learn.
     assert (await api.get(f"/api/v1/me/tasks/{task_id}", headers=theirs)).status_code == 404
-    assert (
-        await api.post(f"/api/v1/me/tasks/{task_id}/cancel", headers=theirs)
-    ).status_code == 404
+    assert (await api.post(f"/api/v1/me/tasks/{task_id}/cancel", headers=theirs)).status_code == 404
 
     # And it is still queued: the refusal did not cancel it.
     mine = await api.get(f"/api/v1/me/tasks/{task_id}", headers=headers)

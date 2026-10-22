@@ -1,8 +1,9 @@
 """Agents: made by talking, owned by one person, never wider than Permissions.
 
 The model is stubbed, because what is being tested is the platform around
-it: that the builder can only show a draft, that nothing exists until the
-person creates it, and that an agent narrows a chat and never widens it.
+it: that designing an agent in Chat can only show a draft, that nothing
+exists until the person creates it, and that an agent narrows a chat and
+never widens it.
 """
 
 from __future__ import annotations
@@ -170,31 +171,59 @@ async def test_one_person_cannot_see_or_change_anothers_agent(
     assert chat.status_code == 404
 
 
-async def test_the_builder_shows_a_draft_and_creates_nothing(
+async def test_chat_shows_a_draft_when_asked_for_an_agent_and_creates_nothing(
     api: AsyncClient, session: AsyncSession, scripted: None
 ) -> None:
     headers = await _person(api, session)
-    chat = await api.post(CONVERSATIONS, json={"mode": "builder"}, headers=headers)
+    chat = await api.post(CONVERSATIONS, json={}, headers=headers)
     cid = chat.json()["id"]
 
     task_id = await _say(api, headers, cid, "Make me an agent that writes a Friday digest")
     assert (await _run(task_id))["status"] == "completed"
 
-    # The builder can only show a draft: that is its one tool.
-    assert Scripted.seen[0]["tools"] == ["propose_agent"]
+    # The ordinary chat gains one tool, and keeps its others.
+    offered = Scripted.seen[0]["tools"]
+    assert "propose_agent" in offered
+    assert "get_webpage" in offered
+    # The builder's steps and the tool list reached the model.
+    assert "ASK FIRST" in Scripted.seen[0]["system"]
+    assert "sheets_append_rows" in Scripted.seen[0]["system"]
 
     messages = (await api.get(f"{CONVERSATIONS}/{cid}", headers=headers)).json()["messages"]
     reply = messages[-1]
     assert reply["draft"]["name"] == "Friday Digest"
+    assert reply["draft"]["schedule"] is None
 
-    # Showing it created nothing, and the builder's chat is not in the normal list.
+    # Showing it created nothing. It is an ordinary chat, so it is in the list.
     assert (await api.get(f"{AGENTS}/overview", headers=headers)).json()["agents"] == []
-    assert (await api.get(CONVERSATIONS, headers=headers)).json() == []
+    assert len((await api.get(CONVERSATIONS, headers=headers)).json()) == 1
 
     # Pressing Create is what makes it.
     made = await api.post(AGENTS, json=reply["draft"], headers=headers)
-    assert made.status_code == 201
+    assert made.status_code == 201, made.text
     assert made.json()["tools"] == ["fetch_url"]
+
+
+async def test_chat_that_is_not_about_agents_is_left_alone(
+    api: AsyncClient, session: AsyncSession, scripted: None
+) -> None:
+    headers = await _person(api, session)
+    chat = await api.post(CONVERSATIONS, json={}, headers=headers)
+    await _run(await _say(api, headers, chat.json()["id"], "What is a mutual fund SIP?"))
+
+    assert "propose_agent" not in Scripted.seen[0]["tools"]
+    assert "ASK FIRST" not in Scripted.seen[0]["system"]
+
+
+async def test_a_saved_agent_cannot_design_another(
+    api: AsyncClient, session: AsyncSession, scripted: None
+) -> None:
+    headers = await _person(api, session)
+    agent = (await api.post(AGENTS, json=_new(), headers=headers)).json()
+    chat = await api.post(CONVERSATIONS, json={"agent_id": agent["id"]}, headers=headers)
+    await _run(await _say(api, headers, chat.json()["id"], "Make me an agent that sends mail"))
+
+    assert "propose_agent" not in Scripted.seen[0]["tools"]
 
 
 async def test_a_chat_with_an_agent_uses_its_instructions_and_only_its_tools(
@@ -202,9 +231,7 @@ async def test_a_chat_with_an_agent_uses_its_instructions_and_only_its_tools(
 ) -> None:
     headers = await _person(api, session)
     agent = (
-        await api.post(
-            AGENTS, json=_new(tools=["recall"], name="Memory Tutor"), headers=headers
-        )
+        await api.post(AGENTS, json=_new(tools=["recall"], name="Memory Tutor"), headers=headers)
     ).json()
     chat = await api.post(CONVERSATIONS, json={"agent_id": agent["id"]}, headers=headers)
     assert chat.json()["agent_id"] == agent["id"]

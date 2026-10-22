@@ -46,10 +46,9 @@ async def test_unknown_email_gives_the_same_message_as_a_wrong_password(
     assert wrong_password.json()["detail"] == unknown_user.json()["detail"]
 
 
-
-
 async def test_requests_without_a_token_are_rejected(api: AsyncClient) -> None:
     assert (await api.get("/api/v1/auth/me")).status_code == 401
+
 
 async def _account_with_setup_link(session: AsyncSession, email: str) -> str:
     """Create an account the way a Platform Admin does, and return the
@@ -104,9 +103,7 @@ async def test_setting_a_password_from_the_link_signs_you_in(
     assert again.status_code == 200
 
 
-async def test_a_setup_link_cannot_be_used_twice(
-    api: AsyncClient, session: AsyncSession
-) -> None:
+async def test_a_setup_link_cannot_be_used_twice(api: AsyncClient, session: AsyncSession) -> None:
     raw = await _account_with_setup_link(session, "once@example.com")
 
     first = await api.post(

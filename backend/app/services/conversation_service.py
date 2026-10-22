@@ -57,8 +57,7 @@ class ConversationService:
     async def conversations(self) -> list[Conversation]:
         result = await self.session.scalars(
             select(Conversation)
-            # The builder's chats belong to the AI Agents tab, not the list.
-            .where(Conversation.owner_id == self.owner_id, Conversation.mode != ChatMode.BUILDER)
+            .where(Conversation.owner_id == self.owner_id)
             .order_by(Conversation.updated_at.desc())
             .limit(MAX_CONVERSATIONS)
         )

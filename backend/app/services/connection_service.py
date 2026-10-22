@@ -371,8 +371,79 @@ class ConnectionService:
                 "Ask whoever runs AI Employees for your organisation."
             )
 
-    async def _provider(self, kind: str) -> tuple[OAuthProvider, tuple[str, str]]:
-        provider = get_oauth_provider(kind)
+    async def _allowed_grant(self, kind: str, services: dict[str, str]) -> dict[str, str]:
+        """What the person asked to share, cut down to what the platform
+        and this company allow. Edit falls back to read when only read
+        is open; a service nothing allows is dropped."""
+        from app.agent.services import EDIT, LEVELS, READ, SERVICES
+        from app.services.service_access_service import ServiceAccessService
+
+        rules = await ServiceAccessService(self.session, self.owner_id).snapshot()
+        grant: dict[str, str] = {}
+        for sid, level in services.items():
+            service = SERVICES.get(sid)
+            if service is None or service.app != kind or level not in LEVELS:
+                continue
+            if level == EDIT and service.has_edit and rules.decide(sid, EDIT).allowed:
+                grant[sid] = EDIT
+            elif rules.decide(sid, READ).allowed:
+                grant[sid] = READ
+        if not grant:
+            raise ValidationError(
+                "Choose at least one thing to share, and one your platform allows."
+            )
+        return grant
+
+    async def services_view(self) -> list[dict[str, Any]]:
+        """Every service with what the platform allows and what the
+        person's connection has been granted, for the connect screen."""
+        from app.agent.services import EDIT, READ, SERVICES
+        from app.services.service_access_service import ServiceAccessService
+
+        rules = await ServiceAccessService(self.session, self.owner_id).snapshot()
+        rows = await self.session.scalars(
+            select(Connection)
+            .where(Connection.owner_id == self.owner_id, Connection.enabled.is_(True))
+            .order_by(Connection.updated_at.desc())
+        )
+        latest: dict[str, Connection] = {}
+        for conn in rows.all():
+            latest.setdefault(conn.kind.value, conn)
+        out: list[dict[str, Any]] = []
+        for service in SERVICES.values():
+            read, edit = rules.decide(service.id, READ), rules.decide(service.id, EDIT)
+            current = latest.get(service.app)
+            held = None
+            if current is not None:
+                from app.services.readiness_service import ReadinessService
+
+                scopes = ReadinessService._held_scopes(service.app, current)
+                held = (
+                    None
+                    if scopes is None
+                    else {
+                        "read": service.grants(READ, scopes),
+                        "edit": service.has_edit and service.grants(EDIT, scopes),
+                    }
+                )
+            out.append(
+                {
+                    "id": service.id,
+                    "app": service.app,
+                    "name": service.name,
+                    "can_edit": service.has_edit,
+                    "allowed": {"read": read.allowed, "edit": service.has_edit and edit.allowed},
+                    "note": next((d.note for d in (read, edit) if not d.allowed and d.note), None),
+                    "granted": held,
+                }
+            )
+        return out
+
+    async def _provider(
+        self, kind: str, services: dict[str, str] | None = None
+    ) -> tuple[OAuthProvider, tuple[str, str]]:
+        grant = await self._allowed_grant(kind, services) if services else None
+        provider = get_oauth_provider(kind, grant)
         if provider is None:
             raise ValidationError(f"'{kind}' does not support one-click connection.")
         client = await resolve_client(self.session, provider, self.owner_id)
@@ -384,8 +455,14 @@ class ConnectionService:
             )
         return provider, client
 
-    async def start_oauth(self, kind: str, *, user_id: uuid.UUID) -> str:
-        provider, (client_id, _) = await self._provider(kind)
+    async def start_oauth(
+        self, kind: str, *, user_id: uuid.UUID, services: dict[str, str] | None = None
+    ) -> str:
+        """`services` is {service: level} the person chose to share, for
+        example {"google.sheets": "edit"}. Only what the platform allows
+        is requested: asking for a permission nothing may use would put
+        a scary line on the consent screen for no reason."""
+        provider, (client_id, _) = await self._provider(kind, services)
         await self._require_allowed(provider.kind)
         # The state is signed, so the callback can trust which company
         # and person started this without a table of pending sign-ins.

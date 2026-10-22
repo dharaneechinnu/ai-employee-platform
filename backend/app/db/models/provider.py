@@ -177,6 +177,51 @@ class OrgConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
 
+class PlatformServiceAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Level 1 of service permissions: what the platform allows at all.
+
+    `service` is one part of an app ("google.sheets"); `level` is "read"
+    or "edit". No row means allowed, so adding this table changed
+    nothing for anyone already connected. A company's own ruling in
+    `org_service_access` beats this one, in either direction.
+    """
+
+    __tablename__ = "platform_service_access"
+    __table_args__ = (UniqueConstraint("service", "level", name="uq_platform_service_access"),)
+
+    service: Mapped[str] = mapped_column(String(50), nullable=False)
+    level: Mapped[str] = mapped_column(String(10), nullable=False)
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="SET NULL")
+    )
+
+
+class OrgServiceAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """A Platform Admin's ruling on one company and one service.
+
+    Same idea as `OrgConnectionAccess`, one level finer: "this company
+    may use Drive and Sheets but not Gmail", or "Drive is read only".
+    No row means inherit from the platform.
+    """
+
+    __tablename__ = "org_service_access"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "service", "level", name="uq_org_service_access"),
+    )
+
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    service: Mapped[str] = mapped_column(String(50), nullable=False)
+    level: Mapped[str] = mapped_column(String(10), nullable=False)
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    note: Mapped[str | None] = mapped_column(String(300))
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="SET NULL")
+    )
+
+
 class OrgOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """One company's own Google or Microsoft app registration.
 

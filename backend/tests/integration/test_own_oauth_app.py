@@ -53,9 +53,7 @@ async def _google(api: AsyncClient, owner_id: object, headers: dict[str, str]) -
 async def _client_id_in_use(api: AsyncClient, owner_id: object, headers: dict[str, str]) -> str:
     from urllib.parse import parse_qs, urlparse
 
-    start = await api.post(
-        "/api/v1/me/connections/oauth/google/start", headers=headers
-    )
+    start = await api.post("/api/v1/me/connections/oauth/google/start", headers=headers)
     query = parse_qs(urlparse(start.json()["authorize_url"]).query)
     return str(query["client_id"][0])
 
@@ -126,9 +124,7 @@ async def test_removing_our_own_app_falls_back_to_the_platforms(
     )
     assert await _client_id_in_use(api, acme.owner_id, headers) == OWN_ID
 
-    removed = await api.delete(
-        "/api/v1/me/connections/oauth-apps/google", headers=headers
-    )
+    removed = await api.delete("/api/v1/me/connections/oauth-apps/google", headers=headers)
     assert removed.status_code == 204
     assert await _client_id_in_use(api, acme.owner_id, headers) == PLATFORM_ID
 
@@ -169,5 +165,3 @@ async def test_the_secret_is_never_returned(api: AsyncClient, session: AsyncSess
     for body in (saved.json(), listing.json()):
         assert OWN_SECRET not in json.dumps(body)
     assert saved.json()["secret_last4"] == OWN_SECRET[-4:]
-
-

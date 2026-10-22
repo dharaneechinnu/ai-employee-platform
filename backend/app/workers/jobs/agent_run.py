@@ -34,13 +34,15 @@ from app.agent.routing import (
 )
 from app.agent.team import AskSpecialist, Team, specialist_policy
 from app.agent.tools.base import ToolContext
-from app.agent.tools.packs.builder import ProposeAgent
+from app.agent.tools.packs.builder import ProposeAgent, ProposeAgentArgs
+from app.agent.tools.packs.sheets import sheet_ids_in
+from app.agent.tools.registry import registry
 from app.core.crypto import SecretUnreadableError
 from app.core.errors import NotFoundError
 from app.core.observability import get_logger
-from app.db.models.conversation import ChatMode, Conversation
+from app.db.models.agent import Agent
+from app.db.models.conversation import Conversation
 from app.db.models.identity import User
-from app.db.models.policy import Approval, ApprovalStatus, RunCheckpoint
 from app.db.models.task import LLMCall, Run, RunStatus, Task, TaskStatus
 from app.db.session import get_sessionmaker
 from app.services.agent_service import AgentService
@@ -52,6 +54,7 @@ from app.services.notification_service import NotificationService, notify_safely
 from app.services.policy_service import PolicyService
 from app.services.provider_service import ProviderService
 from app.services.task_service import EventWriter, estimate_cost
+from app.workers.jobs.run_steps import claim_run, narrow_to_agent, policy_check, take_approved_call
 
 log = get_logger(__name__)
 
@@ -66,6 +69,10 @@ async def run_task(ctx: dict[str, Any], task_id: str) -> dict[str, Any]:
 # Lower than a task agent's default: a conversation wants a steady,
 # repeatable answer more than a surprising one.
 CHAT_TEMPERATURE = 0.4
+
+# A run nobody is watching may take longer than a chat turn, but must
+# end before the worker's own job timeout (900 s) cuts it off.
+UNATTENDED_SECONDS = 840.0
 
 
 async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, Any]:  # type: ignore[type-arg]
@@ -90,37 +97,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             return {"status": "failed", "reason": "conversation missing"}
         routing = Preference(chat.routing)
 
-        resuming = task.status is TaskStatus.AWAITING_APPROVAL
-        run = None
-
-        if resuming:
-            # Continue the paused run. A new row would orphan the
-            # checkpoint, which is keyed by run id, and the approved
-            # call would be lost.
-            run = await session.scalar(
-                select(Run)
-                .where(Run.task_id == task.id, Run.status == RunStatus.AWAITING_APPROVAL)
-                .order_by(Run.attempt.desc())
-                .limit(1)
-            )
-            if run is not None:
-                run.status = RunStatus.RUNNING
-                run.heartbeat_at = datetime.now(UTC)
-
-        if run is None:
-            run = Run(
-                owner_id=task.owner_id,
-                task_id=task.id,
-                attempt=1,
-                status=RunStatus.RUNNING,
-                started_at=datetime.now(UTC),
-                heartbeat_at=datetime.now(UTC),
-                worker_id=WORKER_ID,
-            )
-            session.add(run)
-
-        task.status = TaskStatus.RUNNING
-        await session.flush()
+        run = await claim_run(session, task, worker_id=WORKER_ID)
         await session.commit()
 
     # A fresh session for the run itself: the agent loop can take
@@ -231,36 +208,14 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         )
 
         resolver = await PolicyService(session, task.owner_id).resolver()
-        building = chat.mode is ChatMode.BUILDER
-        team_on = chat.team and not building
+        # Started by an agent's schedule or its Run now button: nobody is
+        # watching, so nothing may wait for a person to approve it.
+        unattended = task.agent_id is not None
+        team_on = chat.team and not unattended
 
-        def check_policy(tool_name: str) -> tuple[str, str]:
-            if tool_name == ProposeAgent.name:
-                return "auto", "it only shows a draft; nothing is created until the person agrees"
-            if tool_name == AskSpecialist.name and team_on:
-                # Specialists can only read; their own steps are checked one by one.
-                return "auto", "team mode is on for this conversation"
-            decision = resolver.evaluate(tool_name)
-            return decision.setting.value, decision.reason
+        check_policy = policy_check(resolver, unattended=unattended, team_on=team_on)
 
-        checkpoint = await session.get(RunCheckpoint, run_db.id)
-        approved_call = None
-        if checkpoint is not None:
-            approval = await session.scalar(
-                select(Approval)
-                .where(
-                    Approval.run_id == run_db.id,
-                    Approval.status == ApprovalStatus.APPROVED,
-                )
-                .order_by(Approval.decided_at.desc())
-                .limit(1)
-            )
-            if approval is not None:
-                approved_call = checkpoint.pending_tool_call
-                # Consume it, so a later pause in the same run does
-                # not replay this call a second time.
-                await session.delete(checkpoint)
-                await session.flush()
+        checkpoint, approved_call = await take_approved_call(session, run_db.id)
 
         # The company's connected apps, resolved once per run (and
         # again on resume, so a token refreshed while the run waited
@@ -277,17 +232,25 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         tools = assistant.chat_tools(resolver, set(grants))
         agent_row = await AgentService(session, task.owner_id).for_chat(chat.agent_id)
         offered = None
-        if building:
-            # The builder can only show a draft; everything it might
-            # give the new agent is listed in its prompt, not callable.
-            offered, tools = tools, [ProposeAgent]
-        elif agent_row is not None and agent_row.tools is not None:
-            # An agent can only narrow what Permissions already allow.
-            allowed = set(agent_row.tools)
-            tools = [t for t in tools if t.name in allowed]
+        if agent_row is not None:
+            tools = narrow_to_agent(tools, agent_row.tools)
+        elif agent_row is None and _talks_about_agents(task.input, history):
+            # Designing an agent. Only the ordinary assistant may: a saved
+            # agent or a scheduled run cannot create agents. Every tool is
+            # listed, connected or not, because the draft's checks are what
+            # tell the person which app still needs connecting.
+            offered = [*registry.all(), *resolver.extra_tools.values()]
+            tools = [*tools, ProposeAgent]
         # The memory tools need the run's session. What they remember
         # belongs to the person.
         context_config: dict[str, Any] = {"_session": session}
+        sheet_ids = sheet_ids_in(agent_row.scope) if agent_row else []
+        if agent_row is not None:
+            context_config["_agent_id"] = agent_row.id
+            if sheet_ids or unattended:
+                # Checked inside the sheet tools, so no instruction can lift it.
+                # A list that grows: a sheet the agent creates joins it.
+                context_config["allowed_sheet_ids"] = list(sheet_ids)
 
         team: Team | None = None
         if team_on:
@@ -324,7 +287,11 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 grants=grants,
                 config=context_config,
             ),
-            budget=Budget(max_steps=assistant.CHAT_MAX_STEPS),
+            budget=(
+                Budget(max_steps=agent_row.max_steps, max_seconds=UNATTENDED_SECONDS)
+                if unattended and agent_row is not None
+                else Budget(max_steps=assistant.CHAT_MAX_STEPS)
+            ),
             temperature=CHAT_TEMPERATURE,
             on_event=sink,
             is_cancelled=cancelled,
@@ -339,7 +306,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             person=(person.full_name or None) if person else None,
             team=team_on,
             tool_names=[t.name for t in tools],
-            persona=(agent_row.name, agent_row.instructions) if agent_row else None,
+            persona=(
+                (agent_row.name, _with_sheets(agent_row, sheet_ids, tools)) if agent_row else None
+            ),
             offered=offered,
         )
 
@@ -459,10 +428,32 @@ async def _finish(
                 model_reason=model_reason,
                 draft=draft,
             )
+            if task.agent_id is not None:
+                await _agent_ran(session, task, run=run, completed=status is RunStatus.COMPLETED)
 
     await session.commit()
     log.info("run_finished", run_id=str(run.id), status=str(status), cause=stop_cause)
     return {"status": str(status), "stop_cause": stop_cause, "run_id": str(run.id)}
+
+
+async def _agent_ran(session: Any, task: Task, *, run: Run, completed: bool) -> None:
+    """Record how an agent's own run went on the agent, and tell the person."""
+    agent = await session.get(Agent, task.agent_id)
+    if agent is None:
+        return
+    summary = (
+        (run.output or "")
+        if completed
+        else _chat_error(run.status, run.stop_cause or "", run.error_message)
+    )
+    agent.last_run_at = datetime.now(UTC)
+    agent.last_status = "completed" if completed else "failed"
+    agent.last_summary = summary.strip()[:1000] or None
+    await notify_safely(
+        NotificationService(session, task.owner_id).agent_run_finished(
+            agent, status=agent.last_status, summary=agent.last_summary or ""
+        )
+    )
 
 
 _STOP_MESSAGES = {
@@ -484,14 +475,44 @@ def _chat_error(status: RunStatus, stop_cause: str, error: str | None) -> str:
 
 
 def _draft(events: list[AgentEvent]) -> dict[str, Any] | None:
-    """The agent the builder last proposed in this turn, if it did."""
+    """The agent last proposed in this turn, if the assistant did. Checked
+    again here: a draft with a time that is not a time must not reach a
+    card the person could press Create on."""
     drafts = [
         e.payload.get("arguments")
         for e in events
         if e.type == "tool_call" and e.payload.get("tool") == ProposeAgent.name
     ]
     last = drafts[-1] if drafts else None
-    return dict(last) if isinstance(last, dict) else None
+    if not isinstance(last, dict):
+        return None
+    try:
+        return ProposeAgentArgs.model_validate(last).model_dump(mode="json")
+    except ValueError:
+        return None
+
+
+def _with_sheets(agent: Agent, sheet_ids: list[str], tools: list[Any]) -> str:
+    """The agent's instructions, plus which spreadsheet is its own. Said
+    here, not left to the person to paste, so a sheet it created last
+    night is the one it uses tonight."""
+    text = agent.instructions
+    if sheet_ids:
+        links = ", ".join(f"https://docs.google.com/spreadsheets/d/{i}" for i in sheet_ids)
+        text += f"\n\nYour spreadsheet: {links}. Use it. Do not create another."
+    elif any(t.name == "sheets_create" for t in tools):
+        text += (
+            "\n\nYou have no spreadsheet yet. Create one with sheets_create, with the tabs "
+            "and header rows your job needs, then keep using it."
+        )
+    return text
+
+
+def _talks_about_agents(text: str, history: list[Message] | None) -> bool:
+    """Whether this turn is about building an agent: the message, or the
+    last few turns it follows, mention one."""
+    recent = [m.content or "" for m in (history or [])[-6:]]
+    return any(assistant.AGENT_INTENT.search(t) for t in (text, *recent))
 
 
 def _tools_used(events: list[AgentEvent], roles: list[str]) -> list[str]:

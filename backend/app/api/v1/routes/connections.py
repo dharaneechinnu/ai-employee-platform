@@ -36,7 +36,6 @@ router = APIRouter(prefix="/me", tags=["connections"])
 callback_router = APIRouter(tags=["connections"])
 
 
-
 class AvailableConnectionResponse(BaseModel):
     kind: str
     display_name: str
@@ -101,6 +100,28 @@ class ToggleRequest(BaseModel):
     enabled: bool
 
 
+class OAuthStartRequest(BaseModel):
+    # {"google.sheets": "edit", "google.gmail": "read"}: what to share.
+    # Leave out for the default set.
+    services: dict[str, str] | None = None
+
+
+class ServiceLevels(BaseModel):
+    read: bool
+    edit: bool
+
+
+class ServiceResponse(BaseModel):
+    id: str
+    app: str
+    name: str
+    can_edit: bool
+    allowed: ServiceLevels
+    note: str | None = None
+    # What the current connection holds; None when not connected.
+    granted: ServiceLevels | None = None
+
+
 @router.get(
     "/connections/available",
     response_model=list[AvailableConnectionResponse],
@@ -128,9 +149,24 @@ async def list_connections(ctx: ContextDep, session: SessionDep) -> list[Connect
     response_model=OAuthStartResponse,
     summary="Begin a one-click connection",
 )
-async def oauth_start(kind: str, ctx: ContextDep, session: SessionDep) -> OAuthStartResponse:
-    url = await ConnectionService(session, ctx.owner_id).start_oauth(kind, user_id=ctx.user_id)
+async def oauth_start(
+    kind: str, ctx: ContextDep, session: SessionDep, body: OAuthStartRequest | None = None
+) -> OAuthStartResponse:
+    url = await ConnectionService(session, ctx.owner_id).start_oauth(
+        kind, user_id=ctx.user_id, services=body.services if body else None
+    )
     return OAuthStartResponse(authorize_url=url)
+
+
+@router.get(
+    "/connections/services",
+    response_model=list[ServiceResponse],
+    summary="The parts of each app, what is allowed and what is granted",
+)
+async def services(ctx: ContextDep, session: SessionDep) -> list[ServiceResponse]:
+    return [
+        ServiceResponse(**s) for s in await ConnectionService(session, ctx.owner_id).services_view()
+    ]
 
 
 @router.post(
@@ -240,9 +276,7 @@ async def oauth_callback(
     response_model=list[OwnOAuthAppResponse],
     summary="Our own sign-in apps",
 )
-async def list_own_oauth_apps(
-    ctx: ContextDep, session: SessionDep
-) -> list[OwnOAuthAppResponse]:
+async def list_own_oauth_apps(ctx: ContextDep, session: SessionDep) -> list[OwnOAuthAppResponse]:
     service = ConnectionService(session, ctx.owner_id)
     saved = await service.own_oauth_apps()
     out: list[OwnOAuthAppResponse] = []

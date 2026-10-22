@@ -65,6 +65,7 @@ ROOT_TABLES_TO_CLEAR = [
     # without this line one test's registered OAuth app is still there
     # for the next, and "did this create or replace?" silently flips.
     "platform_oauth_apps",
+    "platform_service_access",
     "platform_admins",
     # One line now, because everything a person owns hangs off
     # them: deleting the user cascades to their AI Employees,

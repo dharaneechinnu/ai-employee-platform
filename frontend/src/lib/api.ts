@@ -375,7 +375,7 @@ export interface ChatMessage {
   error: string | null;
   /** On a reply: tools it used, and "specialist:<role>" for each specialist asked. */
   tools_used: string[];
-  /** On an agent-builder reply: the agent it proposed. Nothing exists until Create. */
+  /** On a reply that designed an agent: the draft. Nothing exists until Create. */
   draft?: AgentDraft | null;
   created_at: string;
 }
@@ -395,11 +395,50 @@ export interface ModelOption {
 
 // ------------------------------------------------------------- agents
 
+export interface AgentSchedule {
+  frequency: "daily" | "weekdays" | "weekly";
+  /** 24-hour "HH:MM" in `timezone`. */
+  time: string;
+  /** Weekly only: 0 Monday to 6 Sunday. */
+  days: number[];
+  timezone: string;
+}
+
 export interface AgentDraft {
   name: string;
   description: string;
   instructions: string;
   tools: string[] | null;
+  /** When it runs by itself. Absent or null: only when someone chats with it. */
+  schedule?: AgentSchedule | null;
+  /** The address of the one spreadsheet it may write to. */
+  spreadsheet?: string | null;
+}
+
+/** One link in the chain behind an agent: is it ready, and how to fix it. */
+export interface ReadinessCheck {
+  ok: boolean;
+  layer: "app" | "platform" | "connection" | "permission" | "agent" | "setup";
+  title: string;
+  detail: string;
+  /** "connect:google", "reconnect:google[:service:level]", "permissions", "ask_admin", "choose_sheet". */
+  fix: string | null;
+  service: string | null;
+  level: string | null;
+  tool: string | null;
+}
+
+export interface Readiness {
+  ok: boolean;
+  checks: ReadinessCheck[];
+}
+
+export interface RunNowResult {
+  status: "started" | "needs_attention" | "busy";
+  message: string;
+  task_id: string | null;
+  conversation_id: string | null;
+  readiness: Readiness | null;
 }
 
 export interface AgentUsage {
@@ -410,13 +449,29 @@ export interface AgentUsage {
   cost_usd: string;
 }
 
-export interface Agent extends AgentDraft {
+export interface Agent {
   id: string;
+  name: string;
   handle: string;
+  description: string;
+  instructions: string;
+  tools: string[] | null;
   model: string;
   routing: "balanced" | "quality" | "cost" | "private";
   created_at: string;
   usage: AgentUsage;
+  schedule: AgentSchedule | null;
+  schedule_text: string | null;
+  schedule_enabled: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  /** "running", "completed", "failed" or "needs_attention". */
+  last_status: string | null;
+  last_summary: string | null;
+  /** The chat where its runs are written. */
+  run_conversation_id: string | null;
+  max_steps: number;
+  scope: { sheet_ids: string[] };
 }
 
 export interface AgentStarter {
@@ -463,4 +518,33 @@ export interface AutoModelResult {
   /** The model it switched to, or null when none of those tried answered. */
   selected: string | null;
   tried: { model: string; ok: boolean; reason: string | null }[];
+}
+
+
+// ---- service access
+
+/** One part of an app (Gmail, Sheets...), as the connect screen sees it. */
+export interface ServiceInfo {
+  id: string;
+  app: string;
+  name: string;
+  can_edit: boolean;
+  allowed: { read: boolean; edit: boolean };
+  note: string | null;
+  /** What the current connection holds; null when not connected. */
+  granted: { read: boolean; edit: boolean } | null;
+}
+
+/** Platform Admin: one part of an app at one level. */
+export interface ServiceAccessRow {
+  service: string;
+  app: string;
+  name: string;
+  level: "read" | "edit";
+  allowed: boolean;
+}
+
+export interface CompanyServiceRow extends ServiceAccessRow {
+  overridden: boolean;
+  note: string | null;
 }

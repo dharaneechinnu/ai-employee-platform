@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # "common" accepts work, school and personal Microsoft accounts.
     microsoft_tenant: str = "common"
 
+    # --- web search ----------------------------------------------------
+    # One search service for the whole platform (Brave Search API).
+    # Unset means the web_search tool says it is not set up, and an agent
+    # that needs it is told so before it is created.
+    brave_api_key: str | None = None
+
     # --- outgoing email (notifications) ------------------------------
     # Unset means email notifications are unavailable; Slack still works.
     smtp_host: str | None = None

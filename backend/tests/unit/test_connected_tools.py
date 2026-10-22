@@ -58,7 +58,8 @@ async def _run(name: str, ctx: ToolContext, args: dict[str, Any]) -> Any:
 def test_every_connected_tool_is_registered_with_a_side_effect() -> None:
     google = [t for t in registry.all() if t.requires_connection == "google"]
     microsoft = [t for t in registry.all() if t.requires_connection == "microsoft"]
-    assert len(google) == 8
+    # Eight for mail, calendar and Drive, and four for Sheets.
+    assert len(google) == 12
     assert len(microsoft) == 8
     sends = {t.name: t.side_effect.value for t in google + microsoft if "send" in t.name}
     assert sends == {"gmail_send": "destructive", "outlook_send": "destructive"}
