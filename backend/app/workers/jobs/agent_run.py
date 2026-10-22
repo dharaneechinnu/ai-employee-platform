@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.agent import assistant
+from app.agent.graph import run_in_graph
 from app.agent.loop import AgentEvent, AgentLoop, Budget, StopCause
 from app.agent.providers import build_provider
 from app.agent.providers.base import LLMError, Message, Role, Usage
@@ -312,7 +313,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             offered=offered,
         )
 
-        outcome = await loop.run(system_prompt=system_prompt, task=task.input, history=history)
+        outcome = await run_in_graph(
+            loop, system_prompt=system_prompt, task=task.input, history=history
+        )
         if team is not None:
             # The specialists' model calls are part of this turn's cost.
             outcome.prompt_tokens += team.prompt_tokens
