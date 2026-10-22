@@ -393,6 +393,9 @@ async def test_supervised_team_mode_routes_runs_helpers_and_combines_them(
     assert "supervisor_plan" in types
     assert types.count("specialist_started") == 1
     assert types.count("specialist_finished") == 1
+    summary = next(e for e in trace if e["type"] == "team_summary")["payload"]
+    assert summary["roles"]["researcher"]["calls"] == 1
+    assert summary["roles"]["researcher"]["finished"] == 1
 
     task = (await api.get(f"/api/v1/me/tasks/{done['turn']['task_id']}", headers=headers)).json()
     # Router, researcher and lead are all counted.

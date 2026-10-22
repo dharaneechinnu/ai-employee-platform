@@ -11,6 +11,16 @@ os.environ.setdefault("ENVIRONMENT", "test")
 os.environ["ALLOW_PRIVATE_URLS"] = "false"
 
 
+@pytest.fixture(autouse=True)
+def no_retry_waits(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A retry after a rate limit waits seconds; no test should."""
+
+    async def instant(seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr("app.agent.providers.fallback.pause", instant)
+
+
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
     """HTTP client wired directly to the ASGI app — no network, no server."""

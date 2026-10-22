@@ -33,14 +33,18 @@ from langgraph.types import Send
 
 from app.agent.loop import AgentLoop, RunOutcome
 from app.agent.providers.base import LLMError, Message, Role
-from app.agent.team import MAX_SPECIALIST_CALLS, ROLES, Team, run_specialist
+from app.agent.team import (
+    MAX_SPECIALIST_CALLS,
+    ROLES,
+    TEAM_TOKEN_BUDGET,
+    Team,
+    run_specialist,
+)
 
 MAX_REVIEW_ROUNDS = 2
 # Helpers the router may start in parallel. The writer and critic belong to
 # the report loop, so the router cannot pick them.
 PARALLEL_ROLES = ("researcher", "analyst", "developer", "generalist")
-# Past this many tokens spent by helpers and reviewers, no more are started.
-TEAM_TOKEN_BUDGET = 150_000
 MAX_FINDING_CHARS = 6000
 
 ROUTER_PROMPT = """\
@@ -158,7 +162,7 @@ def build_supervisor(loop: AgentLoop, team: Team) -> Any:
     ctx = loop.tool_context
 
     def over_budget() -> bool:
-        return team.prompt_tokens + team.output_tokens >= TEAM_TOKEN_BUDGET
+        return team.tokens_used >= TEAM_TOKEN_BUDGET
 
     async def router(state: SupervisorState) -> SupervisorState:
         # A run resumed after an approval has already had its team work.
@@ -211,7 +215,11 @@ def build_supervisor(loop: AgentLoop, team: Team) -> Any:
         task = f"Request: {state['request']}\n\nMaterial to turn into the report:\n{state['draft']}"
         if state.get("critique"):
             task += f"\n\nA reviewer found these problems. Fix them:\n{state['critique']}"
-        result = await run_specialist(team, ctx, "writer", task)
+        # The last revision goes to the strongest AI: the cheap one has had its chances.
+        last = state.get("round", 0) + 1 >= MAX_REVIEW_ROUNDS
+        result = await run_specialist(
+            team, ctx, "writer", task, stronger=last and bool(state.get("critique"))
+        )
         # A writer that failed leaves the lead's draft as the answer.
         # Only a finished writer's text counts: a failed one's "answer" is the error.
         draft = result.answer if result.ok and result.answer else state["draft"]
@@ -224,7 +232,9 @@ def build_supervisor(loop: AgentLoop, team: Team) -> Any:
         rounds = state.get("round", 0) + 1
         if not result.ok:
             return {"approved": True, "round": rounds}
-        await team.emit("review_round", round=rounds, approved=verdict(result.answer))
+        team.review_rounds = rounds
+        team.review_approved = verdict(result.answer)
+        await team.emit("review_round", round=rounds, approved=team.review_approved)
         return {
             "approved": verdict(result.answer),
             "critique": result.answer,

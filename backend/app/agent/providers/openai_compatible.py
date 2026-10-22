@@ -28,6 +28,7 @@ from app.agent.providers.base import (
     ToolCall,
     ToolSchema,
     Usage,
+    parse_retry_after,
 )
 
 # Base URLs per provider key. Adding a vendor that speaks this format is
@@ -172,7 +173,9 @@ class OpenAICompatibleProvider(LLMProvider):
             )
         if code == 429:
             raise ProviderRateLimitError(
-                f"{self.provider_key} rate limit reached: {detail}", status_code=429
+                f"{self.provider_key} rate limit reached: {detail}",
+                status_code=429,
+                retry_after=parse_retry_after(response.headers),
             )
         if code >= 500:
             raise ProviderUnavailableError(f"{self.provider_key} error: {detail}", status_code=code)

@@ -110,10 +110,26 @@ class LLMError(Exception):
 
     retryable: bool = False
 
-    def __init__(self, message: str, *, status_code: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        retry_after: float | None = None,
+    ):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        # Seconds the vendor asked us to wait (a rate limit's Retry-After).
+        self.retry_after = retry_after
+
+
+def parse_retry_after(headers: Any) -> float | None:
+    """Seconds from a Retry-After header, when it is the plain-number form."""
+    try:
+        return max(float(headers.get("retry-after")), 0.0)
+    except (TypeError, ValueError, AttributeError):
+        return None
 
 
 class ProviderRateLimitError(LLMError):

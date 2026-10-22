@@ -34,6 +34,7 @@ from app.agent.providers.base import (
     ToolCall,
     ToolSchema,
     Usage,
+    parse_retry_after,
 )
 
 BASE_URL = "https://api.anthropic.com/v1"
@@ -236,7 +237,11 @@ def _raise_for_status(response: httpx.Response) -> None:
     if code in (401, 403):
         raise ProviderAuthError(f"Claude rejected the API key: {detail}", status_code=code)
     if code == 429:
-        raise ProviderRateLimitError(f"Claude rate limit reached: {detail}", status_code=429)
+        raise ProviderRateLimitError(
+            f"Claude rate limit reached: {detail}",
+            status_code=429,
+            retry_after=parse_retry_after(response.headers),
+        )
     if code >= 500:  # includes 529, "overloaded"
         raise ProviderUnavailableError(f"Claude error: {detail}", status_code=code)
     raise ProviderRequestError(f"Claude rejected the request: {detail}", status_code=code)

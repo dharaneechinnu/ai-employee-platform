@@ -35,6 +35,7 @@ from app.agent.providers.base import (
     ToolCall,
     ToolSchema,
     Usage,
+    parse_retry_after,
 )
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -151,7 +152,11 @@ class GeminiProvider(LLMProvider):
                 f"Gemini rejected the API key: {detail}", status_code=response.status_code
             )
         if response.status_code == 429:
-            raise ProviderRateLimitError(f"Gemini rate limit reached: {detail}", status_code=429)
+            raise ProviderRateLimitError(
+                f"Gemini rate limit reached: {detail}",
+                status_code=429,
+                retry_after=parse_retry_after(response.headers),
+            )
         if response.status_code >= 500:
             raise ProviderUnavailableError(
                 f"Gemini error: {detail}", status_code=response.status_code

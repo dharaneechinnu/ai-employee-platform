@@ -20,12 +20,18 @@ other's errors:
 - Specialists see only the task text they were given, never the
   conversation, and never any secret.
 
+A specialist that could not finish (ran out of steps or time, or came
+back empty) is tried once more on the strongest of the person's AIs, if
+that is a different one from the first try. Each helper's results are
+kept in `Team.stats` and written out as a `team_summary` event.
+
 Every specialist's start, steps and finish are written to the run's
 event log, so the person can watch the team work live and replay it.
 """
 
 from __future__ import annotations
 
+import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal
@@ -37,6 +43,10 @@ from app.agent.tools.base import SideEffect, Tool, ToolContext, ToolResult
 MAX_SPECIALIST_CALLS = 6
 SPECIALIST_MAX_STEPS = 6
 SPECIALIST_SECONDS = 180.0
+# Past this many tokens spent by the team, no more helpers or retries start.
+TEAM_TOKEN_BUDGET = 150_000
+# A helper stopped for one of these did not finish the job: a stronger AI may.
+ESCALATE_CAUSES = {"max_steps", "timeout"}
 
 # Tools that share the run's database session. Parallel specialists
 # must not use one session at the same time, so these stay with the lead.
@@ -145,6 +155,21 @@ PolicyCheck = Callable[[str], tuple[str, str]]
 
 
 @dataclass(slots=True)
+class RoleStats:
+    """What one kind of helper cost and how it went, over a run."""
+
+    calls: int = 0
+    finished: int = 0
+    escalated: int = 0
+    steps: int = 0
+    prompt_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+    seconds: float = 0.0
+    models: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class Team:
     """What `ask_specialist` needs from the run that hosts it. Kept in
     the tool context, never shown to a model."""
@@ -157,10 +182,43 @@ class Team:
     # Role -> (provider, model, "provider:model"). None: every
     # specialist uses the lead's AI.
     provider_for: Callable[[str], tuple[Any, str, str]] | None = None
+    # Role -> the strongest AI for it, or None when that is the one already used.
+    escalate_for: Callable[[str], tuple[Any, str, str] | None] | None = None
     calls: int = 0
     prompt_tokens: int = 0
     output_tokens: int = 0
     roles_used: list[str] = field(default_factory=list)
+    stats: dict[str, RoleStats] = field(default_factory=dict)
+    # The writer/critic loop: rounds run, and whether the critic signed off.
+    review_rounds: int = 0
+    review_approved: bool | None = None
+
+    @property
+    def tokens_used(self) -> int:
+        return self.prompt_tokens + self.output_tokens
+
+    def summary(self) -> dict[str, Any]:
+        """Per-helper cost and outcome, for the run's event log."""
+        roles = {
+            key: {
+                "calls": s.calls,
+                "finished": s.finished,
+                "escalated": s.escalated,
+                "steps": s.steps,
+                "prompt_tokens": s.prompt_tokens,
+                "output_tokens": s.output_tokens,
+                "cost_usd": round(s.cost_usd, 6),
+                "seconds": round(s.seconds, 1),
+                "models": s.models,
+            }
+            for key, s in self.stats.items()
+        }
+        return {
+            "roles": roles,
+            "review_rounds": self.review_rounds,
+            "review_approved": self.review_approved,
+            "cost_usd": round(sum(s.cost_usd for s in self.stats.values()), 6),
+        }
 
 
 def specialist_tools(tools: list[type[Tool]], role: SpecialistRole) -> list[type[Tool]]:
@@ -186,25 +244,110 @@ class SpecialistResult:
     stop_cause: str
 
 
+def _unfinished(outcome: Any) -> bool:
+    """The helper stopped without a usable answer, in a way a stronger AI could fix."""
+    if outcome.stop_cause in ESCALATE_CAUSES:
+        return True
+    return bool(outcome.completed and not (outcome.output or "").strip())
+
+
+def _stronger(team: Team, role_key: str) -> tuple[Any, str, str] | None:
+    return team.escalate_for(role_key) if team.escalate_for else None
+
+
 async def run_specialist(
-    team: Team, ctx: ToolContext, role_key: str, task: str
+    team: Team, ctx: ToolContext, role_key: str, task: str, *, stronger: bool = False
 ) -> SpecialistResult:
     """Run one specialist to the end and report it to the run's event log.
 
     Shared by the `ask_specialist` tool and the supervisor graph, so a
     specialist behaves, and is shown and costed, the same way however it
-    was started. The caller checks the per-turn limit.
+    was started. The caller checks the per-turn limit. `stronger` starts it
+    on the strongest AI straight away (used for a last revision); otherwise
+    a helper that could not finish is retried once on it.
     """
-    from app.agent.loop import AgentEvent, AgentLoop, Budget
-
     role = ROLES[role_key]
     team.calls += 1
     sid = f"s{team.calls}"
     team.roles_used.append(role.key)
-    provider, model, label = (
-        team.provider_for(role.key) if team.provider_for else (team.provider, team.model, None)
+    stats = team.stats.setdefault(role.key, RoleStats())
+    stats.calls += 1
+
+    chosen = team.provider_for(role.key) if team.provider_for else (team.provider, team.model, None)
+    escalated = False
+    if stronger and (better := _stronger(team, role.key)):
+        chosen, escalated = better, True
+    await team.emit("specialist_started", id=sid, role=role.key, task=task[:400], model=chosen[2])
+
+    started = time.monotonic()
+    steps = prompt_tokens = output_tokens = 0
+    cost = 0.0
+    outcome = await _attempt(team, ctx, role, task, sid, chosen)
+    while True:
+        steps += outcome.steps
+        prompt_tokens += outcome.prompt_tokens
+        output_tokens += outcome.output_tokens
+        cost += _cost(chosen[2], outcome.prompt_tokens, outcome.output_tokens)
+        stats.models.append(chosen[2] or "")
+        if (
+            escalated
+            or not _unfinished(outcome)
+            or team.tokens_used >= TEAM_TOKEN_BUDGET
+            or not (better := _stronger(team, role.key))
+        ):
+            break
+        await team.emit(
+            "specialist_escalated",
+            id=sid,
+            role=role.key,
+            reason=outcome.stop_cause if not outcome.completed else "empty_answer",
+            model_from=chosen[2],
+            model_to=better[2],
+        )
+        chosen, escalated = better, True
+        outcome = await _attempt(team, ctx, role, task, sid, chosen)
+
+    seconds = time.monotonic() - started
+    stats.finished += 1 if outcome.completed else 0
+    stats.escalated += 1 if escalated else 0
+    stats.steps += steps
+    stats.prompt_tokens += prompt_tokens
+    stats.output_tokens += output_tokens
+    stats.cost_usd += cost
+    stats.seconds += seconds
+
+    await team.emit(
+        "specialist_finished",
+        id=sid,
+        role=role.key,
+        ok=outcome.completed,
+        steps=steps,
+        prompt_tokens=prompt_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost,
+        escalated=escalated,
+        seconds=round(seconds, 1),
     )
-    await team.emit("specialist_started", id=sid, role=role.key, task=task[:400], model=label)
+    return SpecialistResult(
+        role=role,
+        ok=outcome.completed,
+        answer=outcome.output or "",
+        stop_cause=outcome.stop_cause,
+    )
+
+
+async def _attempt(
+    team: Team,
+    ctx: ToolContext,
+    role: SpecialistRole,
+    task: str,
+    sid: str,
+    chosen: tuple[Any, str, str | None],
+) -> Any:
+    """One run of a specialist on one AI. Tokens are added to the team's total."""
+    from app.agent.loop import AgentEvent, AgentLoop, Budget
+
+    provider, model, _ = chosen
 
     async def forward(event: AgentEvent) -> None:
         if event.type in ("tool_call", "tool_result", "tool_blocked", "llm_call"):
@@ -233,23 +376,7 @@ async def run_specialist(
     outcome = await loop.run(system_prompt=role.instructions, task=task)
     team.prompt_tokens += outcome.prompt_tokens
     team.output_tokens += outcome.output_tokens
-
-    await team.emit(
-        "specialist_finished",
-        id=sid,
-        role=role.key,
-        ok=outcome.completed,
-        steps=outcome.steps,
-        prompt_tokens=outcome.prompt_tokens,
-        output_tokens=outcome.output_tokens,
-        cost_usd=_cost(label, outcome.prompt_tokens, outcome.output_tokens),
-    )
-    return SpecialistResult(
-        role=role,
-        ok=outcome.completed,
-        answer=outcome.output or "",
-        stop_cause=outcome.stop_cause,
-    )
+    return outcome
 
 
 class AskSpecialistArgs(BaseModel):

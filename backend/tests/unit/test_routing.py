@@ -134,7 +134,9 @@ async def test_fallback_moves_on_when_an_ai_is_rate_limited() -> None:
     assert provider.current.provider_key == "gemini"
 
     await provider.complete(messages=[], model="ignored")
-    assert busy.calls == 1  # it stays on the AI that works
+    # It was tried again twice after the rate limit (waiting each time) before
+    # the switch, and then it is left alone: the AI that works keeps the run.
+    assert busy.calls == 3
 
 
 async def test_fallback_does_not_retry_a_request_every_ai_would_reject() -> None:

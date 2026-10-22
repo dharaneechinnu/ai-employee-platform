@@ -196,7 +196,20 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 )
             )
 
-        provider = FallbackProvider(options, on_switch=on_switch)
+        async def on_retry(option: Option, exc: LLMError, attempt: int, delay: float) -> None:
+            await sink(
+                AgentEvent(
+                    type="model_retry",
+                    payload={
+                        "model": f"{option.provider_key}:{option.model}",
+                        "error": type(exc).__name__,
+                        "attempt": attempt,
+                        "wait_s": delay,
+                    },
+                )
+            )
+
+        provider = FallbackProvider(options, on_switch=on_switch, on_retry=on_retry)
         model = options[0].model
         await sink(
             AgentEvent(
@@ -267,6 +280,11 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             async def emit(type_: str, **payload: Any) -> None:
                 await sink(AgentEvent(type=type_, payload=payload))
 
+            team_router = (
+                TeamRouter(await providers.candidates(), options, routing)
+                if len(options) > 1
+                else None
+            )
             team = Team(
                 provider=provider,
                 model=model,
@@ -275,11 +293,8 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 emit=emit,
                 # With Automatic, each specialist gets the AI best at its
                 # role: long reading, careful reasoning, good writing.
-                provider_for=(
-                    _team_router(await providers.candidates(), options, routing)
-                    if len(options) > 1
-                    else None
-                ),
+                provider_for=team_router,
+                escalate_for=(team_router.stronger if team_router is not None else None),
             )
             context_config["_team"] = team
             if not supervised:
@@ -343,6 +358,8 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 loop, system_prompt=system_prompt, task=task.input, history=history
             )
         if team is not None:
+            if team.stats:
+                await sink(AgentEvent(type="team_summary", payload=team.summary()))
             # The specialists' model calls are part of this turn's cost.
             outcome.prompt_tokens += team.prompt_tokens
             outcome.output_tokens += team.output_tokens
@@ -640,19 +657,40 @@ async def _classify_with_ai(
     return parse_kind(reply.text)
 
 
-def _team_router(candidates: list[Candidate], options: list[Option], preference: Preference) -> Any:
+class TeamRouter:
     """For each specialist role, the person's AIs ranked for that role's
-    kind of work, behind one fallback provider."""
-    by_key = {o.provider_key: o for o in options}
-    cache: dict[str, tuple[FallbackProvider, str, str]] = {}
+    kind of work, behind one fallback provider. `stronger` is the same
+    ranked for quality alone, for a helper that failed on its first AI."""
 
-    def provider_for(role: str) -> tuple[FallbackProvider, str, str]:
-        if role not in cache:
-            ranked = rank(candidates, ROLE_KIND.get(role, TaskKind.GENERAL), preference)
-            ordered = [by_key[c.provider_key] for c in ranked if c.provider_key in by_key]
-            fallback = FallbackProvider(ordered or options)
-            first = fallback.current
-            cache[role] = (fallback, first.model, f"{first.provider_key}:{first.model}")
-        return cache[role]
+    def __init__(
+        self, candidates: list[Candidate], options: list[Option], preference: Preference
+    ) -> None:
+        self._candidates = candidates
+        self._options = options
+        self._by_key = {o.provider_key: o for o in options}
+        self._preference = preference
+        self._cache: dict[str, tuple[FallbackProvider, str, str]] = {}
+        self._strong: dict[str, tuple[FallbackProvider, str, str] | None] = {}
 
-    return provider_for
+    def _build(self, role: str, preference: Preference) -> tuple[FallbackProvider, str, str]:
+        ranked = rank(self._candidates, ROLE_KIND.get(role, TaskKind.GENERAL), preference)
+        ordered = [self._by_key[c.provider_key] for c in ranked if c.provider_key in self._by_key]
+        fallback = FallbackProvider(ordered or self._options)
+        first = fallback.current
+        return fallback, first.model, f"{first.provider_key}:{first.model}"
+
+    def __call__(self, role: str) -> tuple[FallbackProvider, str, str]:
+        if role not in self._cache:
+            self._cache[role] = self._build(role, self._preference)
+        return self._cache[role]
+
+    def stronger(self, role: str) -> tuple[FallbackProvider, str, str] | None:
+        """The best AI for this role, or None when it is the one already used."""
+        if role not in self._strong:
+            # Private stays private; anything else is "best answer, whatever it costs".
+            wanted = (
+                Preference.PRIVATE if self._preference is Preference.PRIVATE else Preference.QUALITY
+            )
+            best = self._build(role, wanted)
+            self._strong[role] = None if best[2] == self(role)[2] else best
+        return self._strong[role]
