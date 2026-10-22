@@ -1,3 +1,5 @@
+> **Superseded (Oct 2026).** This document describes the earlier company / AI Employees design. The product is now a personal multi-agent assistant. See `docs/AGENTS_PLAN.md` and the multi-agent build plan for the current design.
+
 # AI Employee Platform — Build Plan
 
 *Simple English version. We add one phase at a time, after we discuss it together.*

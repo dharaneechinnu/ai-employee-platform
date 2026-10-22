@@ -1,7 +1,7 @@
 [project]
 name = "ai-employee-platform"
 version = "0.1.0"
-description = "Platform where business teams create and manage their own AI Employees"
+description = "Personal multi-agent assistant platform: people connect their own AI models and apps, and build agents"
 requires-python = ">=3.12"
 
 dependencies = [

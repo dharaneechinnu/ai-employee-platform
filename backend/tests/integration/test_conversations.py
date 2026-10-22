@@ -219,7 +219,14 @@ async def test_every_tool_the_person_can_use_is_on_without_picking(
 
     info = (await api.get("/api/v1/me/assistant", headers=headers)).json()
     assert [m["key"] for m in info["modes"]] == ["general", "study", "work", "research", "code"]
-    assert {r["key"] for r in info["team_roles"]} == {"researcher", "analyst", "writer", "critic"}
+    assert {r["key"] for r in info["team_roles"]} == {
+        "researcher",
+        "analyst",
+        "writer",
+        "critic",
+        "developer",
+        "generalist",
+    }
     assert "suggested_tools" not in info["modes"][0]
 
 

@@ -139,8 +139,8 @@ class Tool(ABC):
                 # rather than retrying a call that can never work.
                 return ToolResult.failure(
                     "not_connected",
-                    f"This company has not connected {self.requires_connection} yet. "
-                    "Tell the user an admin can connect it under Settings > Connections.",
+                    f"{self.requires_connection} is not connected yet. "
+                    "Tell the user they can connect it under Settings > Connections.",
                 )
             if grant is not None:
                 # A copy per call: parallel tool calls share the run's

@@ -30,7 +30,7 @@ class GetWebpage(Tool):
     pack = "web"
     description = (
         "Fetch a web page and return its text. Use this to read documentation "
-        "or any public page. Only addresses allowed by this company can be read."
+        "or any public page. Only addresses on the allowed list can be read."
     )
     args_model = GetWebpageArgs
     side_effect = SideEffect.READ
@@ -50,7 +50,7 @@ class GetWebpage(Tool):
         ):
             return ToolResult.failure(
                 "not_allowed",
-                f"{parsed.hostname} is not on this company's allowed list. Ask an admin to add it.",
+                f"{parsed.hostname} is not on the allowed list. Ask an admin to add it.",
             )
 
         if _is_private_address(parsed.hostname):
@@ -60,7 +60,7 @@ class GetWebpage(Tool):
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout_s, follow_redirects=True) as client:
-                response = await client.get(args.url, headers={"User-Agent": "AIEmployee/0.1"})
+                response = await client.get(args.url, headers={"User-Agent": "AgentPlatform/0.1"})
         except httpx.TimeoutException:
             return ToolResult.failure("timeout", f"{args.url} did not respond in time.")
         except httpx.HTTPError as exc:

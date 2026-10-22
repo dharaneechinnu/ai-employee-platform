@@ -213,3 +213,56 @@ async def test_only_the_employees_own_tools_are_offered_to_the_model() -> None:
 
 
 _ = ToolSchema  # re-exported for readers of this module
+
+
+class _NoArgs(BaseModel):
+    pass
+
+
+class _RefusesTools(ScriptedProvider):
+    """A model whose provider rejects any request that carries tools."""
+
+    async def complete(self, **kwargs: object) -> LLMReply:  # type: ignore[override]
+        if kwargs.get("tools"):
+            from app.agent.providers.base import ProviderRequestError
+
+            raise ProviderRequestError(
+                "groq rejected the request: this model does not support tool use", status_code=400
+            )
+        return await super().complete(**kwargs)
+
+
+async def test_a_model_without_tool_support_still_answers() -> None:
+    from app.agent.loop import AgentLoop
+
+    class Echo(Tool):
+        name = "echo"
+        pack = "t"
+        description = "echo"
+        args_model = _NoArgs
+        side_effect = SideEffect.READ
+
+        async def run(self, ctx: ToolContext, args: object) -> ToolResult:  # type: ignore[override]
+            return ToolResult.success("x")
+
+    provider = _RefusesTools([_answer("Here is what I know.")])
+    loop = AgentLoop(
+        provider=provider,
+        model="m",
+        tools=[Echo],
+        tool_context=ToolContext(owner_id=uuid.uuid4()),
+    )
+    outcome = await loop.run(system_prompt="s", task="t")
+    assert outcome.completed
+    assert outcome.output == "Here is what I know."
+    assert "tools_unsupported" in [e.type for e in outcome.events]
+
+
+async def test_other_request_errors_are_not_mistaken_for_missing_tool_support() -> None:
+    from app.agent.loop import StopCause, rejects_tools
+    from app.agent.providers.base import ProviderRequestError
+
+    assert not rejects_tools(ProviderRequestError("context length exceeded"))
+    assert rejects_tools(ProviderRequestError("model does not support function calling"))
+    assert rejects_tools(ProviderRequestError("Tools are not supported for this model"))
+    assert StopCause.COMPLETED == "completed"

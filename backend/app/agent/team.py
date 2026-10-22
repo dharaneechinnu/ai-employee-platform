@@ -42,15 +42,22 @@ SPECIALIST_SECONDS = 180.0
 # must not use one session at the same time, so these stay with the lead.
 _LEAD_ONLY_PACKS = {"memory", "team"}
 
-RoleKey = Literal["researcher", "analyst", "writer", "critic"]
+RoleKey = Literal["researcher", "analyst", "writer", "critic", "developer", "generalist"]
 
 
 @dataclass(frozen=True, slots=True)
 class SpecialistRole:
+    """One agent of the team. `tools` names the only tools it is offered
+    and `packs` adds whole packs; with neither, it gets every read-only
+    tool the person has. Either way it is cut down to the person's
+    Permissions, and to read-only (see `specialist_tools`)."""
+
     key: str
     label: str
     instructions: str
     uses_tools: bool
+    tools: tuple[str, ...] | None = None
+    packs: tuple[str, ...] = ()
 
 
 ROLES: dict[str, SpecialistRole] = {
@@ -70,18 +77,30 @@ ROLES: dict[str, SpecialistRole] = {
         instructions=(
             "You are an analyst. Work through the numbers, logic or options in the task "
             "step by step. Show the reasoning that matters, state assumptions, and end "
-            "with a clear conclusion or recommendation."
+            "with a clear conclusion or recommendation. Use the calculator for every "
+            "sum, percentage or average instead of working it out in your head."
         ),
         uses_tools=True,
+        tools=(
+            "calculator",
+            "text_tools",
+            "current_time",
+            "sheets_read",
+            "google_drive_search",
+            "google_drive_read",
+        ),
     ),
     "writer": SpecialistRole(
         key="writer",
         label="Writer",
         instructions=(
             "You are a writer. Turn the material in the task into clear, well-structured "
-            "text for the stated reader. Keep every fact you were given; add none."
+            "text for the stated reader. Keep every fact you were given; add none. When "
+            "the task asks for a finished report, build it with report_write, with the "
+            "sources you were given listed."
         ),
-        uses_tools=False,
+        uses_tools=True,
+        tools=("report_write", "text_tools", "current_time"),
     ),
     "critic": SpecialistRole(
         key="critic",
@@ -89,9 +108,35 @@ ROLES: dict[str, SpecialistRole] = {
         instructions=(
             "You are a critic. Check the draft or claim in the task for factual errors, "
             "gaps, weak reasoning and unclear wording. List the problems in order of "
-            "importance with a fix for each. If it is good, say so briefly."
+            "importance with a fix for each. If it is good, say so briefly. Check figures "
+            "with the calculator and quoted facts against their source when you can."
         ),
-        uses_tools=False,
+        uses_tools=True,
+        tools=("text_tools", "calculator", "get_webpage", "web_search", "current_time"),
+    ),
+    "developer": SpecialistRole(
+        key="developer",
+        label="Developer",
+        instructions=(
+            "You are a senior software engineer. Read the relevant code before answering "
+            "and say which files you read. Lead with the answer or the fix, then why. "
+            "Show code in fenced blocks with the language, keep changes minimal, and "
+            "point out edge cases, tests to add and security issues. You can read code "
+            "but not change it or run it: say what you could not verify."
+        ),
+        uses_tools=True,
+        tools=("text_tools", "calculator", "get_webpage", "current_time"),
+        packs=("github",),
+    ),
+    "generalist": SpecialistRole(
+        key="generalist",
+        label="General",
+        instructions=(
+            "You are a capable all-round assistant. Do the task as written, using your "
+            "tools when they help, and answer plainly. If it clearly needs a specialist's "
+            "depth, say what is missing instead of guessing."
+        ),
+        uses_tools=True,
     ),
 }
 
@@ -120,14 +165,23 @@ class Team:
 
 def specialist_tools(tools: list[type[Tool]], role: SpecialistRole) -> list[type[Tool]]:
     """A specialist may read, never change: a lead's write needs the
-    person's eye, and the specialist cannot stop to ask."""
+    person's eye, and the specialist cannot stop to ask. On top of that,
+    each role sees only its own tools, so the reviewer cannot wander into
+    the person's mail and the report writer cannot browse the web."""
     if not role.uses_tools:
         return []
-    return [t for t in tools if t.pack not in _LEAD_ONLY_PACKS and t.side_effect is SideEffect.READ]
+    allowed = [
+        t for t in tools if t.pack not in _LEAD_ONLY_PACKS and t.side_effect is SideEffect.READ
+    ]
+    if role.tools is None and not role.packs:
+        return allowed
+    return [t for t in allowed if t.name in (role.tools or ()) or t.pack in role.packs]
 
 
 class AskSpecialistArgs(BaseModel):
-    role: RoleKey = Field(description="researcher, analyst, writer or critic")
+    role: RoleKey = Field(
+        description="researcher, analyst, writer, critic, developer or generalist"
+    )
     task: str = Field(
         min_length=1,
         max_length=6000,
@@ -143,7 +197,8 @@ class AskSpecialist(Tool):
     pack = "team"
     description = (
         "Hand an independent part of the work to a specialist (researcher, analyst, "
-        "writer or critic) and get their answer back. Ask several in the same step to "
+        "writer, critic, developer or generalist) and get their answer back. Ask several in "
+        "the same step to "
         "run them at the same time. Check what comes back before using it."
     )
     args_model = AskSpecialistArgs

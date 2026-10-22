@@ -175,8 +175,9 @@ Finish: report how many events were added and the next five by date.
 TEAM_INSTRUCTIONS = (
     "You lead a small team of specialists, reached with the `ask_specialist` tool: "
     "researcher (finds and reads sources), analyst (works through numbers, logic and "
-    "options), writer (drafts clear text) and critic (checks a draft for errors and "
-    "gaps). For a simple question, answer yourself. For a bigger one, plan first: split "
+    "options), writer (drafts clear text and builds the report), critic (checks a draft "
+    "for errors and gaps), developer (reads and explains code) and generalist (anything "
+    "else). For a simple question, answer yourself. For a bigger one, plan first: split "
     "the work into independent parts and ask several specialists in the same step so "
     "they work at the same time, then combine what comes back into one answer. Give "
     "each specialist a task that stands alone, since they cannot see this "

@@ -11,6 +11,7 @@ Phase 7 swaps the mechanism for LangGraph; these rules stay.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -22,6 +23,7 @@ from app.agent.providers.base import (
     LLMProvider,
     LLMReply,
     Message,
+    ProviderRequestError,
     Role,
     StopReason,
     ToolCall,
@@ -36,6 +38,20 @@ log = get_logger(__name__)
 # calls run together. Capped: each one also costs rate-limit budget,
 # and an unbounded fan-out starves every other task in the queue.
 MAX_PARALLEL_TOOLS = 3
+
+# What providers say when a model cannot take tools at all. A person's own
+# model may be a small or older one, and the run should still answer, only
+# without tools, rather than fail on the first call.
+_NO_TOOLS = re.compile(
+    r"(does not|doesn'?t|not) support[^.]{0,40}(tool|function)|"
+    r"(tool|function)[ _-]?(use|call\w*)?[^.]{0,40}(not supported|unsupported)|"
+    r"tools? (is|are) not (supported|available)",
+    re.IGNORECASE,
+)
+
+
+def rejects_tools(exc: LLMError) -> bool:
+    return isinstance(exc, ProviderRequestError) and bool(_NO_TOOLS.search(exc.message))
 
 
 class StopCause(str):
@@ -139,6 +155,7 @@ class AgentLoop:
         self._resume_from = resume_from
         self._approved_call = approved_call
         self._events: list[AgentEvent] = []
+        self._tools_unsupported = False
 
     async def _emit(self, type_: str, **payload: Any) -> None:
         event = AgentEvent(type=type_, payload=payload)
@@ -205,12 +222,34 @@ class AgentLoop:
             await self._emit("thinking", step=self.budget.steps_used + 1)
 
             try:
-                reply: LLMReply = await self.provider.complete(
-                    messages=messages,
-                    model=self.model,
-                    tools=self._schemas() or None,
-                    temperature=self.temperature,
-                )
+                try:
+                    reply: LLMReply = await self.provider.complete(
+                        messages=messages,
+                        model=self.model,
+                        tools=None if self._tools_unsupported else (self._schemas() or None),
+                        temperature=self.temperature,
+                    )
+                except LLMError as exc:
+                    if self._tools_unsupported or not self.tools or not rejects_tools(exc):
+                        raise
+                    # This model cannot take tools. Carry on without them.
+                    self._tools_unsupported = True
+                    await self._emit("tools_unsupported", model=self.model)
+                    messages.append(
+                        Message(
+                            role=Role.USER,
+                            content=(
+                                "Note: this AI cannot use tools, so none are available. "
+                                "Answer from what you know and say what you could not check."
+                            ),
+                        )
+                    )
+                    reply = await self.provider.complete(
+                        messages=messages,
+                        model=self.model,
+                        tools=None,
+                        temperature=self.temperature,
+                    )
             except LLMError as exc:
                 await self._emit(
                     "provider_error", error=type(exc).__name__, retryable=exc.retryable
@@ -254,7 +293,7 @@ class AgentLoop:
                         Message(
                             role=Role.TOOL,
                             content=(
-                                f"'{call.name}' is not permitted for this company ({reason}). "
+                                f"'{call.name}' is not permitted ({reason}). "
                                 "Do not try it again; use a different approach or explain "
                                 "that you cannot complete this."
                             ),

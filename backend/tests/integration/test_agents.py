@@ -133,7 +133,7 @@ async def test_create_change_and_remove_an_agent(api: AsyncClient, session: Asyn
     overview = await api.get(f"{AGENTS}/overview", headers=headers)
     assert [a["name"] for a in overview.json()["agents"]] == ["Tutor", "Tutor"]
     # The five modes and four specialists are the starters.
-    assert len(overview.json()["starters"]) == 9
+    assert len(overview.json()["starters"]) == 11
 
     assert (await api.delete(f"{AGENTS}/{agent['id']}", headers=headers)).status_code == 204
     after = await api.get(f"{AGENTS}/overview", headers=headers)
