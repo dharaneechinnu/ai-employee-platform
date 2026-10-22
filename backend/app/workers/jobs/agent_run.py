@@ -19,7 +19,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.agent import assistant
+from app.agent.checkpoint import SqlCheckpointSaver
 from app.agent.graph import run_in_graph
+from app.agent.graph_loop import GraphLoop
 from app.agent.loop import AgentEvent, AgentLoop, Budget, StopCause
 from app.agent.providers import build_provider
 from app.agent.providers.base import LLMError, Message, Role, Usage
@@ -100,7 +102,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             return {"status": "failed", "reason": "conversation missing"}
         routing = Preference(chat.routing)
 
-        run = await claim_run(session, task, worker_id=WORKER_ID)
+        run, continued = await claim_run(session, task, worker_id=WORKER_ID)
         await session.commit()
 
     # A fresh session for the run itself: the agent loop can take
@@ -283,7 +285,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             if not supervised:
                 tools = [*tools, AskSpecialist]
 
-        loop = AgentLoop(
+        loop_args: dict[str, Any] = dict(  # noqa: C408 - keyword form reads best here
             provider=provider,
             model=model,
             tools=tools,
@@ -303,9 +305,22 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             on_event=sink,
             is_cancelled=cancelled,
             check_policy=check_policy,
-            resume_from=checkpoint.state if checkpoint else None,
-            approved_call=approved_call,
         )
+        # A run paused under the old snapshot resumes the old way; every other
+        # run uses the graph loop when it is switched on.
+        if get_settings().agent_checkpointer and checkpoint is None:
+            loop: AgentLoop = GraphLoop(
+                saver=SqlCheckpointSaver(maker, task.owner_id),
+                thread_id=str(run_db.id),
+                resume=continued,
+                **loop_args,
+            )
+        else:
+            loop = AgentLoop(
+                **loop_args,
+                resume_from=checkpoint.state if checkpoint else None,
+                approved_call=approved_call,
+            )
 
         person = await session.get(User, task.created_by)
         system_prompt = assistant.system_prompt(
@@ -348,7 +363,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 # The full action, so the reviewer sees exactly what
                 # they are agreeing to rather than a summary.
                 proposed=call["arguments"],
-                state=outcome.saved_state or {},
+                state=outcome.saved_state,
                 pending_tool_call=call,
             )
             run_db.step_count = outcome.steps

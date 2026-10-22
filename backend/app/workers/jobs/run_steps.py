@@ -23,14 +23,16 @@ from app.db.models.task import Run, RunStatus, Task, TaskStatus
 from app.services.policy_service import PolicyResolver
 
 
-async def claim_run(session: AsyncSession, task: Task, *, worker_id: str) -> Run:
-    """Mark the task running and return its run row.
+async def claim_run(session: AsyncSession, task: Task, *, worker_id: str) -> tuple[Run, bool]:
+    """Mark the task running and return its run row, and whether it is a
+    paused run being continued.
 
     A task resumed after an approval continues the paused run: a new row
     would orphan the checkpoint, which is keyed by run id, and the
     approved call would be lost.
     """
     run: Run | None = None
+    continued = False
     if task.status is TaskStatus.AWAITING_APPROVAL:
         run = await session.scalar(
             select(Run)
@@ -41,6 +43,7 @@ async def claim_run(session: AsyncSession, task: Task, *, worker_id: str) -> Run
         if run is not None:
             run.status = RunStatus.RUNNING
             run.heartbeat_at = datetime.now(UTC)
+            continued = True
 
     if run is None:
         run = Run(
@@ -56,7 +59,7 @@ async def claim_run(session: AsyncSession, task: Task, *, worker_id: str) -> Run
 
     task.status = TaskStatus.RUNNING
     await session.flush()
-    return run
+    return run, continued
 
 
 def policy_check(

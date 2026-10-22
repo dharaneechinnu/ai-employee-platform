@@ -177,6 +177,35 @@ class AgentLoop:
             for t in self.tools.values()
         ]
 
+    async def _complete(self, messages: list[Message]) -> LLMReply:
+        """One model call. A model that cannot take tools is retried once
+        without them (and told so), instead of failing the run."""
+        try:
+            return await self.provider.complete(
+                messages=messages,
+                model=self.model,
+                tools=None if self._tools_unsupported else (self._schemas() or None),
+                temperature=self.temperature,
+            )
+        except LLMError as exc:
+            if self._tools_unsupported or not self.tools or not rejects_tools(exc):
+                raise
+        # This model cannot take tools. Carry on without them.
+        self._tools_unsupported = True
+        await self._emit("tools_unsupported", model=self.model)
+        messages.append(
+            Message(
+                role=Role.USER,
+                content=(
+                    "Note: this AI cannot use tools, so none are available. "
+                    "Answer from what you know and say what you could not check."
+                ),
+            )
+        )
+        return await self.provider.complete(
+            messages=messages, model=self.model, tools=None, temperature=self.temperature
+        )
+
     async def run(
         self, *, system_prompt: str, task: str, history: list[Message] | None = None
     ) -> RunOutcome:
@@ -230,34 +259,7 @@ class AgentLoop:
             await self._emit("thinking", step=self.budget.steps_used + 1)
 
             try:
-                try:
-                    reply: LLMReply = await self.provider.complete(
-                        messages=messages,
-                        model=self.model,
-                        tools=None if self._tools_unsupported else (self._schemas() or None),
-                        temperature=self.temperature,
-                    )
-                except LLMError as exc:
-                    if self._tools_unsupported or not self.tools or not rejects_tools(exc):
-                        raise
-                    # This model cannot take tools. Carry on without them.
-                    self._tools_unsupported = True
-                    await self._emit("tools_unsupported", model=self.model)
-                    messages.append(
-                        Message(
-                            role=Role.USER,
-                            content=(
-                                "Note: this AI cannot use tools, so none are available. "
-                                "Answer from what you know and say what you could not check."
-                            ),
-                        )
-                    )
-                    reply = await self.provider.complete(
-                        messages=messages,
-                        model=self.model,
-                        tools=None,
-                        temperature=self.temperature,
-                    )
+                reply = await self._complete(messages)
             except LLMError as exc:
                 await self._emit(
                     "provider_error", error=type(exc).__name__, retryable=exc.retryable

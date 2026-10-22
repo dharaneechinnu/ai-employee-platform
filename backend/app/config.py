@@ -97,6 +97,11 @@ class Settings(BaseSettings):
     # loop) instead of the lead calling `ask_specialist` itself. Off until it
     # has been tried with a real model.
     agent_supervisor: bool = False
+
+    # Run chats as a LangGraph graph whose approval pauses are saved in
+    # Postgres (`GraphLoop`), instead of the snapshot in `run_checkpoints`.
+    # Runs already paused under the old way still resume the old way.
+    agent_checkpointer: bool = False
     worker_max_jobs: int = 10
 
     @property

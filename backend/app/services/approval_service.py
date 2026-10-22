@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.checkpoint import drop_threads
 from app.core.errors import ConflictError, NotFoundError
 from app.core.observability import get_logger
 from app.db.models.policy import Approval, ApprovalStatus, RunCheckpoint
@@ -44,7 +45,7 @@ class ApprovalService:
         tool_name: str,
         side_effect: str,
         proposed: dict[str, Any],
-        state: dict[str, Any],
+        state: dict[str, Any] | None,
         pending_tool_call: dict[str, Any],
     ) -> Approval:
         approval = Approval(
@@ -60,7 +61,10 @@ class ApprovalService:
         self.session.add(approval)
 
         existing = await self.session.get(RunCheckpoint, run_id)
-        if existing is not None:
+        if state is None:
+            # The graph keeps its own saved state (see `SqlCheckpointSaver`).
+            pass
+        elif existing is not None:
             existing.state = state
             existing.pending_tool_call = pending_tool_call
         else:
@@ -137,6 +141,7 @@ class ApprovalService:
         if run is None:
             return
 
+        await drop_threads(self.session, [str(run_id)])
         run.status = RunStatus.FAILED
         run.stop_cause = "approval_denied"
         run.error_message = reason
@@ -174,6 +179,7 @@ async def expire_stale_approvals(session: AsyncSession) -> int:
 
     if stale:
         run_ids = [a.run_id for a in stale]
+        await drop_threads(session, [str(r) for r in run_ids])
         await session.execute(
             update(Run)
             .where(Run.id.in_(run_ids))

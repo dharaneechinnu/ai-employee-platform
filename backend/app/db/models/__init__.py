@@ -6,6 +6,7 @@ tenant-isolation test can see it.
 
 from app.db.models.agent import Agent
 from app.db.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.db.models.checkpoint import GraphCheckpoint, GraphCheckpointWrite
 from app.db.models.conversation import ChatMode, Conversation, ConversationMessage, MessageRole
 from app.db.models.identity import (
     PlatformAdmin,
@@ -75,6 +76,8 @@ __all__ = [
     "ConversationMessage",
     "EmbeddingConfig",
     "EventType",
+    "GraphCheckpoint",
+    "GraphCheckpointWrite",
     "LLMCall",
     "McpServer",
     "Memory",

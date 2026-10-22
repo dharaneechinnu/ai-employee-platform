@@ -69,11 +69,22 @@ class SendsThenAnswers(LLMProvider):
         return None
 
 
-@pytest.fixture
-def stub_sender(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture(params=["snapshot", "graph"])
+def stub_sender(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every approval test runs twice: once with the original pause (a snapshot in
+    `run_checkpoints`) and once with the graph loop (state saved by LangGraph)."""
+    from types import SimpleNamespace
+
     import app.workers.jobs.agent_run as job
 
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: SendsThenAnswers(api_key))
+    monkeypatch.setattr(
+        job,
+        "get_settings",
+        lambda: SimpleNamespace(
+            agent_supervisor=False, agent_checkpointer=request.param == "graph"
+        ),
+    )
 
 
 async def _setup(api: AsyncClient, session: AsyncSession) -> dict[str, str]:

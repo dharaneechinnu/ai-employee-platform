@@ -369,7 +369,11 @@ async def test_supervised_team_mode_routes_runs_helpers_and_combines_them(
             return None
 
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: Supervised(api_key))
-    monkeypatch.setattr(job, "get_settings", lambda: SimpleNamespace(agent_supervisor=True))
+    monkeypatch.setattr(
+        job,
+        "get_settings",
+        lambda: SimpleNamespace(agent_supervisor=True, agent_checkpointer=False),
+    )
     headers = await _person(api, session)
     cid = (await api.post(URL, json={"mode": "research", "team": True}, headers=headers)).json()[
         "id"
