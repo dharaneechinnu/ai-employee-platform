@@ -456,6 +456,8 @@ export interface Agent {
   description: string;
   instructions: string;
   tools: string[] | null;
+  /** True when the tools were chosen from the instructions. */
+  tools_auto: boolean;
   model: string;
   routing: "balanced" | "quality" | "cost" | "private";
   created_at: string;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Icon, type IconName } from "../components/icons";
+import Modal from "../components/Modal";
 import PermissionChoice, { PERMISSION_LABEL, type Setting } from "../components/PermissionChoice";
 import {
   Button,
@@ -123,7 +124,8 @@ function OwnAppForm({
   }
 
   return (
-    <form onSubmit={save} className="card rise flex flex-col gap-4 border-accent-line p-5">
+    <Modal title="Use your own app" onClose={onClose}>
+      <form onSubmit={save} className="flex flex-col gap-4 overflow-y-auto p-5">
       <div className="flex items-center gap-3">
         <h2 className="font-display text-[17px] font-semibold">
           Use your own {option.display_name} app
@@ -189,6 +191,7 @@ function OwnAppForm({
         production once you are past trying it out.
       </p>
     </form>
+    </Modal>
   );
 }
 
@@ -559,14 +562,29 @@ const SHARE_DEFAULTS: Record<string, Record<string, "read" | "edit">> = {
   microsoft: { "microsoft.mail": "edit", "microsoft.calendar": "edit", "microsoft.files": "read" },
 };
 
-const SHARE_HINTS: Record<string, string> = {
-  "google.sheets": "Needed for agents that update a spreadsheet.",
+type Level = "read" | "edit";
+
+/** What each choice lets your assistant and agents do, in plain words. */
+const SHARE_WORDS: Record<string, { read: string; edit?: string; tip?: string }> = {
+  "google.gmail": { read: "Search and read your email.", edit: "Also save drafts and send email." },
+  "google.calendar": { read: "See your events.", edit: "Also add events." },
+  "google.drive": { read: "Find and read your files." },
+  "google.sheets": {
+    read: "Read your spreadsheets.",
+    edit: "Also create sheets and add rows.",
+    tip: "Turn this on for agents that fill in a spreadsheet.",
+  },
+  "microsoft.mail": { read: "Search and read your email.", edit: "Also save drafts and send email." },
+  "microsoft.calendar": { read: "See your events.", edit: "Also add events." },
+  "microsoft.files": { read: "Find and read your files." },
 };
 
+const LEVEL_LABEL = { off: "Off", read: "Look", edit: "Change" } as const;
+
 /**
- * "What do you want to share?" Before the sign-in, the person picks
- * which parts of the app to hand over, and whether each may be changed
- * or only looked at. Only those permissions are requested.
+ * "What do you want to share?" A popup shown before the sign-in. For
+ * each part of the app, one choice: Off, Look (read only) or Change
+ * (read and edit). Only what is chosen is asked of the provider.
  */
 function ShareStep({
   option,
@@ -575,10 +593,10 @@ function ShareStep({
 }: {
   option: AvailableConnection;
   onClose: () => void;
-  onStart: (services: Record<string, "read" | "edit">) => Promise<void>;
+  onStart: (services: Record<string, Level>) => Promise<void>;
 }) {
   const [services, setServices] = useState<ServiceInfo[] | null>(null);
-  const [picked, setPicked] = useState<Record<string, "read" | "edit">>({});
+  const [picked, setPicked] = useState<Record<string, Level>>({});
   const [error, setError] = useState<string | null>(null);
   const [going, setGoing] = useState(false);
 
@@ -589,7 +607,7 @@ function ShareStep({
         const mine = all.filter((s) => s.app === option.kind);
         setServices(mine);
         // Start from what is held now when reconnecting, else from the defaults.
-        const start: Record<string, "read" | "edit"> = {};
+        const start: Record<string, Level> = {};
         const connected = mine.some((s) => s.granted);
         for (const s of mine) {
           const level = connected
@@ -609,7 +627,7 @@ function ShareStep({
       .catch(() => setError("Could not load what can be shared."));
   }, [option.kind]);
 
-  function set(id: string, level: "read" | "edit" | null) {
+  function set(id: string, level: Level | null) {
     setPicked((current) => {
       const next = { ...current };
       if (level === null) delete next[id];
@@ -629,14 +647,20 @@ function ShareStep({
     }
   }
 
+  const chosen = Object.keys(picked).length;
+  const changing = Object.values(picked).filter((l) => l === "edit").length;
+  const reconnecting = services?.some((s) => s.granted) ?? false;
+
   return (
-    <section className="card rise flex flex-col gap-4 border-dashed border-line2 p-5" data-coach="share-step">
-      <div className="flex items-center gap-3">
+    <Modal title={`Connect ${option.display_name}`} onClose={onClose}>
+      <div className="flex items-start gap-3 border-b border-line px-5 py-4" data-coach="share-step">
         <BrandTile kind={option.kind} size={40} />
         <div className="min-w-0 flex-1">
-          <h2 className="font-display text-[17px] font-semibold">What do you want to share?</h2>
-          <p className="text-[13px] text-muted">
-            Tick what your assistant and agents may use in {option.display_name}. You can change this later.
+          <h3 className="font-display text-[18px] font-semibold">
+            {reconnecting ? `Update what ${option.display_name} shares` : `Connect ${option.display_name}`}
+          </h3>
+          <p className="text-[13.5px] text-muted">
+            Choose what your assistant and agents may do. You can change this any time.
           </p>
         </div>
         <button type="button" className="icon-btn h-10 w-10" aria-label="Close" onClick={onClose}>
@@ -644,68 +668,100 @@ function ShareStep({
         </button>
       </div>
 
-      {!services ? (
-        error ? <ErrorNote message={error} /> : <Spinner rows={2} />
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {services.map((s) => {
-            const level = picked[s.id];
-            const closed = !s.allowed.read;
-            return (
-              <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-line px-3.5 py-2.5">
-                <div className="min-w-[160px] flex-1">
-                  <span className="text-[14px] font-medium">{s.name}</span>
-                  {SHARE_HINTS[s.id] && <p className="text-xs text-dim">{SHARE_HINTS[s.id]}</p>}
-                  {closed && (
-                    <p className="flex items-start gap-1.5 text-xs text-ask-text">
-                      <Icon name="lock" size={12} className="mt-px shrink-0" />
-                      {s.note ?? "Turned off for you by the platform."}
-                    </p>
-                  )}
-                  {s.granted && (
-                    <span className="mt-1 flex gap-1.5">
-                      <Chip tone={s.granted.read ? "ok" : "mute"} dot={false}>
-                        {s.granted.edit ? "can change now" : s.granted.read ? "can look now" : "not shared now"}
-                      </Chip>
-                    </span>
-                  )}
-                </div>
-                <label className="flex items-center gap-2 text-[13px]">
-                  <input
-                    type="checkbox"
-                    checked={!!level}
-                    disabled={closed}
-                    onChange={(e) => set(s.id, e.target.checked ? "read" : null)}
-                  />
-                  Read
-                </label>
-                {s.can_edit && (
-                  <label className="flex items-center gap-2 text-[13px]">
-                    <input
-                      type="checkbox"
-                      checked={level === "edit"}
-                      disabled={!s.allowed.edit}
-                      onChange={(e) => set(s.id, e.target.checked ? "edit" : level ? "read" : null)}
-                    />
-                    Edit
-                  </label>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <ErrorNote message={services ? error : null} />
-      <div className="flex flex-wrap items-center gap-3">
-        <Button icon="link" disabled={going || !services || Object.keys(picked).length === 0} onClick={() => void go()}>
-          {going ? "Opening sign-in…" : `Continue to ${option.display_name}`}
-        </Button>
-        <span className="text-[13px] text-dim">
-          Edit includes read. Only what you tick is asked of {option.display_name}.
-        </span>
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {!services ? (
+          error ? <ErrorNote message={error} /> : <Spinner rows={3} />
+        ) : (
+          <ul className="flex flex-col gap-2.5">
+            {services.map((s) => {
+              const level = picked[s.id] as Level | undefined;
+              const closed = !s.allowed.read;
+              const words = SHARE_WORDS[s.id];
+              const current: "off" | Level = level ?? "off";
+              const was: "off" | Level = s.granted?.edit ? "edit" : s.granted?.read ? "read" : "off";
+              const changed = reconnecting && current !== was;
+              const choices: ("off" | Level)[] = ["off", "read", ...(s.can_edit ? (["edit"] as const) : [])];
+              return (
+                <li
+                  key={s.id}
+                  className={`rounded-xl border px-3.5 py-3 ${level ? "border-accent-line bg-accent-soft/40" : "border-line"}`}
+                >
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <div className="min-w-[170px] flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[14.5px] font-medium">{s.name}</span>
+                        {changed && (
+                          <Chip tone="brand" dot={false}>
+                            will change
+                          </Chip>
+                        )}
+                      </div>
+                      <p className="text-[13px] text-muted">
+                        {closed
+                          ? (s.note ?? "Turned off for you by the platform.")
+                          : current === "edit" && words?.edit
+                            ? words.edit
+                            : current === "off" && words?.tip
+                              ? words.tip
+                              : (words?.read ?? "Look at it.")}
+                      </p>
+                    </div>
+                    <div
+                      role="radiogroup"
+                      aria-label={`${s.name}: how much to share`}
+                      className="inline-flex rounded-lg border border-line bg-raised p-0.5"
+                    >
+                      {choices.map((o) => {
+                        const disabled = closed ? o !== "off" : o === "edit" && !s.allowed.edit;
+                        const active = current === o;
+                        return (
+                          <button
+                            key={o}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            disabled={disabled}
+                            className={`rounded-md px-3 py-1.5 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                              active
+                                ? o === "edit"
+                                  ? "bg-accent font-medium text-accent-on"
+                                  : "bg-panel font-medium text-ink shadow-sm"
+                                : "text-muted hover:text-ink"
+                            }`}
+                            onClick={() => set(s.id, o === "off" ? null : o)}
+                          >
+                            {LEVEL_LABEL[o]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <div className="mt-3">
+          <ErrorNote message={services ? error : null} />
+        </div>
       </div>
-    </section>
+
+      <div className="flex flex-col gap-2.5 border-t border-line px-5 py-4">
+        <p className="text-[13px] text-muted" aria-live="polite">
+          {chosen === 0
+            ? "Choose at least one to continue."
+            : `Sharing ${chosen} ${chosen === 1 ? "part" : "parts"}${changing > 0 ? `, ${changing} that can make changes` : ", all look-only"}. ${option.display_name} will show you these before you agree.`}
+        </p>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button icon="link" disabled={going || !services || chosen === 0} onClick={() => void go()}>
+            {going ? "Opening sign-in…" : `Continue to ${option.display_name}`}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -752,7 +808,8 @@ function ManualForm({
   }
 
   return (
-    <form onSubmit={save} className="card rise flex flex-col gap-4 border-dashed border-line2 p-5">
+    <Modal title="Connect an account" onClose={onClose}>
+      <form onSubmit={save} className="flex flex-col gap-4 overflow-y-auto p-5">
       <div className="flex items-center gap-3">
         <BrandTile kind={option.kind} size={40} />
         <h2 className="flex-1 font-display text-[17px] font-semibold">Connect {option.display_name}</h2>
@@ -781,6 +838,7 @@ function ManualForm({
         <span className="text-[13px] text-dim">Encrypted, and never shown again. Use an app password or a read-only user.</span>
       </div>
     </form>
+    </Modal>
   );
 }
 

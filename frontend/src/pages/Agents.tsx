@@ -4,6 +4,8 @@ import AgentTree from "../components/agents/AgentTree";
 import FlowCost from "../components/agents/FlowCost";
 import ReadinessList from "../components/agents/ReadinessList";
 import ScheduleEditor from "../components/agents/ScheduleEditor";
+import StarterSetup from "../components/agents/StarterSetup";
+import ToolPicker from "../components/agents/ToolPicker";
 import { Icon } from "../components/icons";
 import {
   Button,
@@ -22,12 +24,12 @@ import {
   useToast,
 } from "../components/ui";
 import { fmtCost } from "../lib/agents";
+import { groupKey, groupTitle } from "../lib/labels";
 import {
   ApiError,
   api,
   type Agent,
   type AgentSchedule,
-  type AgentStarter,
   type AgentsOverview,
   type Readiness,
   type RunNowResult,
@@ -49,6 +51,7 @@ export default function Agents() {
   const [data, setData] = useState<AgentsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [settingUp, setSettingUp] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -75,6 +78,8 @@ export default function Agents() {
     navigate("/chat", { state: { prefill: START_A_REQUEST } });
   }
 
+  const packOf = Object.fromEntries((data?.tools ?? []).map((t) => [t.name, t.pack]));
+
   async function chatWith(agent: Agent) {
     try {
       // The agent's own chat: its runs and what you say to it are in one place.
@@ -89,21 +94,6 @@ export default function Agents() {
     await api.del(`/me/agents/${agent.id}`);
     toast(`${agent.name} removed. Chats that used it are kept.`);
     await load();
-  }
-
-  async function copyStarter(starter: AgentStarter) {
-    try {
-      await api.post("/me/agents", {
-        name: `My ${starter.name}`,
-        description: starter.description,
-        instructions: starter.instructions,
-      });
-      toast(`Copied. Change it under My agents.`);
-      await load();
-      setTab("agents");
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Could not copy that.");
-    }
   }
 
   return (
@@ -154,6 +144,7 @@ export default function Agents() {
                     ) : (
                       <AgentCard
                         agent={agent}
+                        packs={packOf}
                         onChat={() => void chatWith(agent)}
                         onEdit={() => setEditing(agent.id)}
                         onRemove={() => void remove(agent)}
@@ -168,24 +159,39 @@ export default function Agents() {
             <section className="flex flex-col gap-3">
               <h2 className="font-display text-[16px] font-semibold">Built in</h2>
               <p className="text-[13.5px] text-muted">
-                These ship with the product. Copy one to make it yours, then change it.
+                Pick one, say what it should do, choose when it runs, and start it. No need to find it afterwards.
               </p>
               <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {data.starters.map((s) => (
-                  <li key={s.key} className="flex flex-col gap-2 rounded-xl border border-line p-3">
-                    <div className="flex items-center gap-2">
-                      <Icon name={s.kind === "mode" ? "chat" : "employees"} size={15} className="text-dim" />
-                      <b className="text-[14px]">{s.name}</b>
-                      <span className="text-[11.5px] uppercase tracking-wider text-dim">
-                        {s.kind === "mode" ? "style" : "teammate"}
-                      </span>
-                    </div>
-                    <p className="text-[13px] text-muted">{s.description}</p>
-                    <Button size="sm" variant="ghost" className="self-start" onClick={() => void copyStarter(s)}>
-                      Make my own copy
-                    </Button>
-                  </li>
-                ))}
+                {data.starters.map((s) =>
+                  settingUp === s.key ? (
+                    <li key={s.key} className="sm:col-span-2 lg:col-span-3">
+                      <StarterSetup
+                        starter={s}
+                        onCancel={() => setSettingUp(null)}
+                        onStarted={(conversationId) => navigate(`/chat/${conversationId}`)}
+                        onCreated={async () => {
+                          setSettingUp(null);
+                          await load();
+                          setTab("agents");
+                        }}
+                      />
+                    </li>
+                  ) : (
+                    <li key={s.key} className="flex flex-col gap-2 rounded-xl border border-line p-3">
+                      <div className="flex items-center gap-2">
+                        <Icon name={s.kind === "mode" ? "chat" : "employees"} size={15} className="text-dim" />
+                        <b className="text-[14px]">{s.name}</b>
+                        <span className="text-[11.5px] uppercase tracking-wider text-dim">
+                          {s.kind === "mode" ? "style" : "teammate"}
+                        </span>
+                      </div>
+                      <p className="text-[13px] text-muted">{s.description}</p>
+                      <Button size="sm" variant="ghost" className="self-start" onClick={() => setSettingUp(s.key)}>
+                        Set up
+                      </Button>
+                    </li>
+                  ),
+                )}
               </ul>
             </section>
           </div>
@@ -211,14 +217,31 @@ export default function Agents() {
 
 // ----------------------------------------------------------------- one agent
 
+/** "Works with: The web, Google Sheets", from the tools it was given. */
+function worksWith(tools: string[] | null, packs: Record<string, string>): string {
+  if (tools === null) return "Works with what you allow";
+  const apps = [
+    ...new Set(
+      tools
+        .map((t) => groupKey(packs[t] ?? ""))
+        .filter((g) => g && g !== "basics")
+        .map(groupTitle),
+    ),
+  ];
+  return apps.length > 0 ? `Works with: ${apps.join(", ")}` : "Talks only, no outside tools";
+}
+
 function AgentCard({
   agent,
+  packs,
   onChat,
   onEdit,
   onRemove,
   onChanged,
 }: {
   agent: Agent;
+  /** Which app each tool belongs to, to say what the agent works with. */
+  packs: Record<string, string>;
   onChat: () => void;
   onEdit: () => void;
   onRemove: () => void;
@@ -298,11 +321,7 @@ function AgentCard({
       </div>
 
       <p className="text-[12.5px] text-dim">
-        {agent.tools === null
-          ? "Uses every tool you allow"
-          : agent.tools.length === 0
-            ? "Talks only, no tools"
-            : `Tools: ${agent.tools.join(", ")}`}
+        {worksWith(agent.tools, packs)}
         {" · "}
         {agent.usage.runs} run{agent.usage.runs === 1 ? "" : "s"} · {fmtCost(agent.usage.cost_usd)}
       </p>
@@ -348,8 +367,8 @@ function AgentCard({
         <Button
           size="sm"
           icon="arrow"
-          disabled={busy || (agent.tools?.length ?? 0) === 0}
-          title={(agent.tools?.length ?? 0) === 0 ? "Pick its tools first (Edit)" : "Run it now; the result is saved in its chat"}
+          disabled={busy}
+          title="Run it now; the result is saved in its chat"
           onClick={() => void runNow()}
         >
           Run now
@@ -398,16 +417,10 @@ function Editor({
   const [name, setName] = useState(agent.name);
   const [description, setDescription] = useState(agent.description);
   const [instructions, setInstructions] = useState(agent.instructions);
-  const [tools, setTools] = useState<string[] | null>(agent.tools);
+  const [tools, setTools] = useState<string[] | null>(agent.tools_auto ? null : agent.tools);
   const [schedule, setSchedule] = useState<AgentSchedule | null>(agent.schedule);
-  const [sheet, setSheet] = useState(agent.scope.sheet_ids[0] ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  function toggle(tool: string) {
-    const base = tools ?? [];
-    setTools(base.includes(tool) ? base.filter((t) => t !== tool) : [...base, tool]);
-  }
 
   async function save() {
     setBusy(true);
@@ -420,7 +433,6 @@ function Editor({
         instructions,
         tools,
         schedule,
-        scope: { sheet_ids: sheet.trim() ? [sheet.trim()] : [] },
       });
       toast("Saved.");
       await onDone(true);
@@ -436,46 +448,28 @@ function Editor({
       <Input label="Name" value={name} onChange={setName} />
       <Input label="What it is for" value={description} onChange={setDescription} />
       <TextArea label="Instructions" value={instructions} onChange={setInstructions} rows={9} />
-      <div className="flex flex-col gap-1.5">
-        <span className="label">Tools it may use</span>
-        <div className="flex flex-wrap gap-1.5">
-          <button type="button" className={`agent-tool ${tools === null ? "is-on" : ""}`} onClick={() => setTools(null)}>
-            Everything you allow
-          </button>
-          {data.tools.map((t) => (
-            <button
-              key={t.name}
-              type="button"
-              title={t.description}
-              className={`agent-tool ${tools?.includes(t.name) ? "is-on" : ""}`}
-              onClick={() => toggle(t.name)}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-      </div>
       <div className="rounded-xl border border-line bg-panel p-3">
         <ScheduleEditor value={schedule} onChange={setSchedule} />
-        {schedule && tools === null && (
-          <p className="mt-2 text-[13px] text-bad-text">An agent that runs on its own needs a list of tools.</p>
-        )}
       </div>
-      <label className="flex flex-col gap-1.5">
-        <span className="label">The one spreadsheet it may write to</span>
-        <input
-          className="field"
-          placeholder="Paste the sheet's address"
-          value={sheet}
-          onChange={(e) => setSheet(e.target.value)}
-        />
-      </label>
+      <details className="rounded-xl border border-line px-3 py-2.5">
+        <summary className="cursor-pointer text-[13.5px] text-muted">
+          Advanced: choose its tools by hand
+        </summary>
+        <div className="mt-3">
+          <ToolPicker
+            tools={data.tools}
+            value={tools}
+            onChange={setTools}
+            seed={agent.tools ?? []}
+          />
+        </div>
+      </details>
       <ErrorNote message={error} />
       <div className="flex gap-2">
         <Button
           size="sm"
           icon="check"
-          disabled={busy || !name.trim() || instructions.trim().length < 10 || (schedule !== null && tools === null)}
+          disabled={busy || !name.trim() || instructions.trim().length < 10}
           onClick={() => void save()}
         >
           Save

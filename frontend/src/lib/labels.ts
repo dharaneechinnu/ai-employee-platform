@@ -46,6 +46,17 @@ export const TOOL_LABELS: Record<string, string> = {
   github_create_issue: "Open a GitHub issue",
   github_propose_change: "Propose a code change (pull request)",
   ask_specialist: "Ask a specialist",
+  current_time: "Know today's date and time",
+  calculator: "Do exact maths",
+  text_tools: "Count, compare and pull out text",
+  python_run: "Run a small Python program",
+  report_write: "Write a finished report",
+  web_search: "Search the web",
+  sheets_create: "Create a Google Sheet",
+  sheets_read: "Read a Google Sheet",
+  sheets_append_rows: "Add rows to a Google Sheet",
+  sheets_update_cells: "Change cells in a Google Sheet",
+  propose_agent: "Draft a new agent",
 };
 
 export function humanise(id: string): string {
@@ -93,6 +104,15 @@ export const PACK_LABELS: Record<string, string> = {
   memory: "Memory",
   delegation: "Teamwork",
   github: "GitHub",
+  clock: "Date and time",
+  calculator: "Maths",
+  text: "Text",
+  python_run: "Python",
+  report: "Reports",
+  search: "Web search",
+  sheets: "Google Sheets",
+  team: "Teamwork",
+  builder: "Agent builder",
 };
 
 export function packLabel(pack: string): string {
@@ -190,4 +210,114 @@ export function parseAiChoice(value: string): { model: string; routing?: Routing
 export function aiChoiceLabel(model: string, routing?: string): string {
   if (!isAutoModel(model)) return modelLabel(model);
   return AUTO_CHOICES.find((c) => c.routing === (routing || "balanced"))?.label ?? "Automatic";
+}
+
+/**
+ * One line a non-technical person can read: what turning the tool on
+ * lets the agent do. Tools without an entry fall back to the first
+ * sentence of their own description.
+ */
+export const TOOL_BLURBS: Record<string, string> = {
+  current_time: "Lets it know today's date, so it can tell upcoming from past.",
+  calculator: "Does sums, percentages and averages exactly instead of guessing.",
+  text_tools: "Counts words, finds emails, links and numbers, and shows what changed between two versions.",
+  python_run: "Runs a short program for data work. No internet and no files.",
+  report_write: "Puts the findings into one finished, tidy report.",
+  web_search: "Looks things up on the web.",
+  get_webpage: "Opens a web page and reads it.",
+  recall: "Remembers what you told it before, such as corrections.",
+  remember: "Saves something useful to remember next time.",
+  sheets_create: "Makes a new Google Sheet for its results and keeps using it.",
+  sheets_read: "Reads what is already in a Google Sheet.",
+  sheets_append_rows: "Adds new rows to the bottom of its Google Sheet.",
+  sheets_update_cells: "Fixes values in rows that are already in its Google Sheet.",
+  gmail_search: "Finds emails in your Gmail.",
+  gmail_read: "Reads one Gmail email.",
+  gmail_create_draft: "Writes a reply and saves it as a draft. Nothing is sent.",
+  gmail_send: "Sends an email from your Gmail. This cannot be undone.",
+  google_calendar_list: "Looks at your Google Calendar.",
+  google_calendar_create: "Adds an event to your Google Calendar.",
+  google_drive_search: "Finds files in your Google Drive.",
+  google_drive_read: "Reads a file in your Google Drive.",
+  outlook_search: "Finds emails in Outlook.",
+  outlook_read: "Reads one Outlook email.",
+  outlook_create_draft: "Saves an Outlook draft. Nothing is sent.",
+  outlook_send: "Sends an Outlook email. This cannot be undone.",
+  outlook_calendar_list: "Looks at your Outlook calendar.",
+  outlook_calendar_create: "Adds an event to your Outlook calendar.",
+  onedrive_search: "Finds files in OneDrive.",
+  onedrive_read: "Reads a file in OneDrive.",
+  list_emails: "Lists emails in a connected mailbox.",
+  read_email: "Reads one email in a connected mailbox.",
+  save_draft: "Saves a reply as a draft for you to review.",
+  send_email: "Sends an email. This cannot be undone.",
+  list_tables: "Shows which tables a connected database has.",
+  describe_table: "Shows the columns of one table.",
+  run_query: "Looks up data in the database. It can only read.",
+  github_list_repos: "Lists your GitHub repositories.",
+  github_search_code: "Searches code on GitHub.",
+  github_read_file: "Reads a file in a repository.",
+  github_list_issues: "Lists issues and pull requests.",
+  github_read_issue: "Reads one issue or pull request.",
+  github_pr_diff: "Reads the changes in a pull request.",
+  github_list_commits: "Lists recent commits.",
+  github_ci_status: "Checks whether tests and builds passed.",
+  github_comment: "Posts a comment on an issue or pull request.",
+  github_create_issue: "Opens a new GitHub issue.",
+  github_propose_change: "Opens a pull request with a code change. It never edits the main branch.",
+  ask_specialist: "Hands part of a job to a helper.",
+};
+
+export function toolBlurb(name: string, description: string): string {
+  const known = TOOL_BLURBS[name];
+  if (known) return known;
+  const first = description.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s/)[0] ?? "";
+  return first.length > 140 ? `${first.slice(0, 139)}…` : first;
+}
+
+/** The order people think in: everyday helpers first, then each app. */
+const GROUP_ORDER = [
+  "clock",
+  "calculator",
+  "text",
+  "python_run",
+  "report",
+  "search",
+  "web",
+  "memory",
+  "sheets",
+  "google",
+  "microsoft",
+  "email",
+  "github",
+  "database",
+];
+
+export function packOrder(pack: string): number {
+  const i = GROUP_ORDER.indexOf(pack);
+  return i === -1 ? GROUP_ORDER.length : i;
+}
+
+/** Packs shown together under one heading. */
+const GROUP_OF: Record<string, string> = {
+  clock: "basics",
+  calculator: "basics",
+  text: "basics",
+  python_run: "basics",
+  report: "basics",
+  search: "web",
+  web: "web",
+};
+
+const GROUP_TITLES: Record<string, string> = {
+  basics: "Everyday helpers",
+  web: "The web",
+};
+
+export function groupKey(pack: string): string {
+  return GROUP_OF[pack] ?? pack;
+}
+
+export function groupTitle(key: string): string {
+  return GROUP_TITLES[key] ?? packLabel(key);
 }
