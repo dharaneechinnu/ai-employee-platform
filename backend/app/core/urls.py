@@ -1,6 +1,6 @@
 """Checks for addresses a person gives us to call.
 
-A person can point the platform at its own AI server or tool server.
+A person can point the platform at their own AI server.
 Without a check, that is a way to make our servers call into our own
 private network (SSRF): an address like http://169.254.169.254 reads
 cloud credentials. So a URL must be public, and is checked after DNS

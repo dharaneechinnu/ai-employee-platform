@@ -31,8 +31,8 @@
 ├── docker-compose.yml   Makefile   .env.example
 ├── backend/
 │   ├── pyproject.toml
-│   ├── alembic/versions/            # 0001 … 0023
-│   ├── scripts/                     # bootstrap_admin.py, demo_mcp_server.py
+│   ├── alembic/versions/            # 0001 … 0024
+│   ├── scripts/                     # bootstrap_admin.py
 │   ├── tests/                       # unit/, integration/, isolation/
 │   └── app/
 │       ├── main.py                  # API entrypoint
@@ -40,7 +40,7 @@
 │       ├── api/v1/
 │       │   ├── deps.py              # current user, request context (owner_id)
 │       │   └── routes/              # auth, platform, conversations, agents, tasks,
-│       │                            # providers, connections, mcp, policies,
+│       │                            # providers, connections, policies,
 │       │                            # approval_links, memory, notifications, speech, health
 │       ├── schemas/
 │       ├── services/                # business logic, no FastAPI imports
@@ -59,7 +59,6 @@
 │       │   ├── services.py          # app parts (Gmail, Sheets …) and read/edit levels
 │       │   ├── tool_infer.py        # pick an agent's tools from its instructions
 │       │   ├── providers/           # anthropic, gemini, openai_compatible, fallback
-│       │   ├── mcp/                 # MCP client and tool wrapper
 │       │   └── tools/               # base, registry, packs/
 │       ├── workers/
 │       │   ├── main.py              # worker entrypoint
@@ -134,7 +133,6 @@ There is no `organizations`, `memberships` or `invitations` table any more (remo
 | `agents` | name, `handle` (unique per person, for @mentions), description, instructions, `model` (`auto` or `provider:model`), `routing`, `tools` (list, or null for "everything I allow"), `tools_auto`, `archived`, `schedule` (JSON), `schedule_enabled`, `next_run_at`, `last_run_at`, `last_status`, `last_summary`, `run_conversation_id`, `max_steps` (default 40, max 80), `scope` (for example the sheet ids it may write) |
 | `provider_configs` | your AI keys: provider, **encrypted key**, last 4 characters, status, chosen model |
 | `connections` | Google, Microsoft, IMAP, GitHub, database: kind, label, **encrypted credential**, config, status, last error, enabled |
-| `mcp_servers` | an MCP server's address, **encrypted token**, and the tools it reported |
 | `org_oauth_apps` | your own Google or Microsoft app (client id, **encrypted secret**). The table keeps its old name. |
 | `policies` | your permission rules: scope (tool or pack), value, side effect, setting |
 | `notification_settings` | email and Slack switches, encrypted Slack webhook |
@@ -255,7 +253,7 @@ There is no `/auth/register`.
 
 No endpoint returns a key. The list shows provider, status and last 4 characters.
 
-**Connections and MCP** (`/me`)
+**Connections** (`/me`)
 
 | Method | Path |
 |---|---|
@@ -264,9 +262,6 @@ No endpoint returns a key. The list shows provider, status and last 4 characters
 | POST | `/me/connections` (manual: IMAP, GitHub, database) · `/me/connections/{id}/test` |
 | PATCH · DELETE | `/me/connections/{id}` |
 | GET · PUT · DELETE | `/me/connections/oauth-apps` · `/me/connections/oauth-apps/{kind}` (your own Google/Microsoft app) |
-| GET · POST | `/me/mcp-servers` |
-| POST | `/me/mcp-servers/{id}/sync` |
-| DELETE | `/me/mcp-servers/{id}` |
 
 The OAuth callback is public; it trusts only the signed `state`.
 
@@ -397,7 +392,7 @@ The registry (`app/agent/tools/registry.py`) holds every built-in tool and the c
 3. the agent lists the tool (if it is an agent run with a narrowed list);
 4. the person's Permissions do not block it.
 
-A tool that fails a layer is not described to the model at all. MCP tools are added per person from their connected servers. The agent-designing tool (`propose_agent`) is not in the registry: it is given only to a chat that is designing an agent.
+A tool that fails a layer is not described to the model at all. The agent-designing tool (`propose_agent`) is not in the registry: it is given only to a chat that is designing an agent.
 
 ## 5.3 Provider interface (`app/agent/providers/base.py`)
 
@@ -549,7 +544,7 @@ Tool failures never become HTTP errors: they are `ToolResult` failures, given to
 | Suite | What it checks |
 |---|---|
 | `unit/` | Services, permission resolution, routing, schedules, cost maths, budgets |
-| `integration/` | Routes against real Postgres and Redis: auth and setup links, chat, agents and schedules, approvals, memory, providers, connections, MCP, platform admin |
+| `integration/` | Routes against real Postgres and Redis: auth and setup links, chat, agents and schedules, approvals, memory, providers, connections, platform admin |
 | `isolation/` | Every scoped table has `owner_id` (`test_owner_scoping.py`) |
 
 Two integration tests guard the boundaries directly: `test_tenant_isolation.py` (another person's items return 404) and `test_platform_cannot_read_customer_data.py` (the Platform Admin cannot read content).

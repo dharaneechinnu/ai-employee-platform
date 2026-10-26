@@ -56,10 +56,9 @@ class Settings(BaseSettings):
     public_app_url: str = "http://localhost:5173"
     public_api_url: str = "http://localhost:8000"
 
-    # Lets a person's own AI server or MCP tool server live on a
-    # private address or plain http. Local development only: in
-    # production it would let anyone make our servers call internal
-    # addresses.
+    # Lets a person's own AI server live on a private address or plain
+    # http. Local development only: in production it would let anyone
+    # make our servers call internal addresses.
     allow_private_urls: bool = False
 
     # --- one-click connections (OAuth) -------------------------------

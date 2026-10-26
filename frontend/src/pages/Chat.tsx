@@ -20,7 +20,6 @@ import {
   type ModelOption,
   type RunEvent,
   type Task,
-  type ToolEntry,
 } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import {
@@ -28,7 +27,6 @@ import {
   aiChoiceLabel,
   aiChoiceValue,
   effectLabel,
-  learnToolLabels,
   modelLabel,
   parseAiChoice,
   toolLabel,
@@ -112,12 +110,6 @@ export default function Chat() {
   useEffect(() => {
     void api.get<AssistantInfo>("/me/assistant").then(setInfo);
     void api.get<ModelOption[]>("/me/models").then(setModels).catch(() => setModels([]));
-    // Only for naming tools in plain words: the assistant uses every
-    // tool the person can, so there is nothing here to choose.
-    void api
-      .get<ToolEntry[]>("/me/tools")
-      .then(learnToolLabels)
-      .catch(() => undefined);
     void loadList();
   }, [loadList]);
 

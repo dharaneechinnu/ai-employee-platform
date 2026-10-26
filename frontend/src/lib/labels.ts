@@ -63,29 +63,8 @@ export function humanise(id: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-// Tools from your own MCP servers are named "mcp__<server>__<tool>".
-// The app has no built-in words for them, so it uses the server's own
-// (learned when the tool list loads), or the tool's name made readable.
-const MCP_PREFIX = "mcp__";
-const learnedTools = new Map<string, string>();
-const learnedPacks = new Map<string, string>();
-
-export function isMcpTool(name: string): boolean {
-  return name.startsWith(MCP_PREFIX);
-}
-
-export function learnToolLabels(entries: { name: string; pack: string; label?: string | null; pack_label?: string | null }[]) {
-  for (const e of entries) {
-    if (e.label) learnedTools.set(e.name, e.label);
-    if (e.pack_label) learnedPacks.set(e.pack, e.pack_label);
-  }
-}
-
 export function toolLabel(name: string): string {
-  const known = TOOL_LABELS[name] ?? learnedTools.get(name);
-  if (known) return known;
-  if (isMcpTool(name)) return humanise(name.split("__").slice(2).join("__") || name);
-  return humanise(name);
+  return TOOL_LABELS[name] ?? humanise(name);
 }
 
 /** A sentence fragment: "Ravi wants to send a Gmail email". */
@@ -115,10 +94,7 @@ export const PACK_LABELS: Record<string, string> = {
 };
 
 export function packLabel(pack: string): string {
-  const known = PACK_LABELS[pack] ?? learnedPacks.get(pack);
-  if (known) return known;
-  if (pack.startsWith(MCP_PREFIX)) return `${humanise(pack.slice(MCP_PREFIX.length))} (MCP)`;
-  return humanise(pack);
+  return PACK_LABELS[pack] ?? humanise(pack);
 }
 
 export type Effect = "read" | "write" | "destructive";

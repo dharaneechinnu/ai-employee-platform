@@ -15,7 +15,6 @@ from app.db.models.identity import (
     SetupToken,
     User,
 )
-from app.db.models.mcp import McpServer
 from app.db.models.memory import (
     VECTOR_TABLES,
     EmbeddingConfig,
@@ -79,7 +78,6 @@ __all__ = [
     "GraphCheckpoint",
     "GraphCheckpointWrite",
     "LLMCall",
-    "McpServer",
     "Memory",
     "MemoryKind",
     "MemoryVector384",

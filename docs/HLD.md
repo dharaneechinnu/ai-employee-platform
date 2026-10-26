@@ -56,7 +56,6 @@ There is **no self sign-up yet** (planned). A Platform Admin creates the account
 | **Any mailbox (IMAP/SMTP)** | Outbound | Read, draft and send mail | The person's own app password |
 | **GitHub** | Outbound | Read code, issues and CI; propose changes as pull requests | The person's own fine-grained token |
 | **A database** (PostgreSQL) | Outbound | Read-only questions | The person's own read-only user |
-| **MCP tool servers** | Outbound | Whatever tools the server offers | The person's own token, if any |
 | **Web search** (Tavily or Brave) | Outbound | Finding pages | One key for the whole server, set by whoever runs it |
 | **Email (SMTP) and Slack** | Outbound | Notifications and approve-from-inbox links | Server SMTP settings; the person's own Slack webhook |
 
@@ -87,7 +86,6 @@ graph TB
         GH["GitHub"]
         EM["Mailbox (IMAP)"]
         DB["Database<br/><i>read-only</i>"]
-        MCP["MCP servers"]
     end
 
     P -->|"chats, designs agents,<br/>connects apps, approves"| SYS
@@ -99,14 +97,13 @@ graph TB
     SYS -->|"tool calls<br/><b>person's token</b>"| GH
     SYS -->|"tool calls<br/><b>person's password</b>"| EM
     SYS -->|"SELECT only<br/><b>person's user</b>"| DB
-    SYS -->|"tool calls<br/><b>person's token</b>"| MCP
 
     classDef sysStyle fill:#1e3a5f,stroke:#4a9eff,stroke-width:3px,color:#fff
     classDef personStyle fill:#2d2d2d,stroke:#888,color:#fff
     classDef extStyle fill:#3a2d1e,stroke:#d4a04a,color:#fff
     class SYS sysStyle
     class P,PA personStyle
-    class LLM,EMB,GW,GH,EM,DB,MCP extStyle
+    class LLM,EMB,GW,GH,EM,DB extStyle
 ```
 
 ## 1.6 Scope
@@ -119,7 +116,7 @@ graph TB
 | A separate Platform Admin area that cannot read content |
 | Chat as the home screen, with modes (General, Study, Work, Research, Code) and an AI picker |
 | Any LLM provider with the person's own key; automatic choice of AI per task, with fallback |
-| Tool registry with side-effect labels; built-in packs plus MCP servers |
+| Tool registry with side-effect labels; built-in tool packs |
 | Background runs with live streaming; append-only run event log |
 | Permissions (Always allow / Ask me first / Blocked) and approvals, also from email or Slack |
 | Per-service read/edit permissions for Google and Microsoft, at platform, connection and agent level |
@@ -206,7 +203,7 @@ graph TB
 
     subgraph ext["☁️ External"]
         LLM["LLM / embedding<br/>providers"]
-        TOOLS["Google · Microsoft · GitHub<br/>Mailbox · DB · MCP"]
+        TOOLS["Google · Microsoft · GitHub<br/>Mailbox · DB"]
     end
 
     WEB -->|"HTTPS<br/>REST + JSON"| API
@@ -354,7 +351,7 @@ The things the system stores, and how they relate. Exact columns are in the [LLD
 | Group | Entities |
 |---|---|
 | **Identity** | User (a person) · Setup token · Refresh token · Platform Admin · Platform Admin audit |
-| **Your setup** | Agent · Provider config (your AI keys) · Connection · MCP server · Your own OAuth app · Policy · Notification settings · Embedding config |
+| **Your setup** | Agent · Provider config (your AI keys) · Connection · Your own OAuth app · Policy · Notification settings · Embedding config |
 | **Platform rules** | Supported provider (the catalog) · Policy default · Platform OAuth app · Service access (platform-wide and per person) · Connection access (per person) |
 | **Conversation and execution** | Conversation · Message · Task · Run · Run event · LLM call · Tool invocation · Approval · Run checkpoint · Graph checkpoint |
 | **Knowledge** | Memory · Memory vector · Run summary · Re-embed job |

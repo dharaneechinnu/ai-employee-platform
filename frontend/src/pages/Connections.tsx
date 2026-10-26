@@ -22,11 +22,10 @@ import {
   api,
   type AvailableConnection,
   type ConnectionItem,
-  type McpServer,
   type ServiceInfo,
   type ToolEntry,
 } from "../lib/api";
-import { effectLabel, learnToolLabels, toolLabel } from "../lib/labels";
+import { effectLabel, toolLabel } from "../lib/labels";
 
 /**
  * The outside apps your assistant works in.
@@ -205,19 +204,15 @@ export default function Connections() {
   const [ownApp, setOwnApp] = useState<AvailableConnection | null>(null);
   const [sharing, setSharing] = useState<AvailableConnection | null>(null);
   const [tools, setTools] = useState<Record<string, ToolEntry>>({});
-  const [servers, setServers] = useState<McpServer[]>([]);
 
   async function load() {
-    const [options, items, mcp] = await Promise.all([
+    const [options, items] = await Promise.all([
       api.get<AvailableConnection[]>(`/me/connections/available`),
       api.get<ConnectionItem[]>(`/me/connections`),
-      api.get<McpServer[]>(`/me/mcp-servers`).catch(() => [] as McpServer[]),
     ]);
     setAvailable(options);
     setConnected(items);
-    setServers(mcp);
     const catalogue = await api.get<ToolEntry[]>(`/me/tools`).catch(() => [] as ToolEntry[]);
-    learnToolLabels(catalogue);
     setTools(Object.fromEntries(catalogue.map((t) => [t.name, t])));
   }
 
@@ -402,21 +397,10 @@ export default function Connections() {
           })}
         </section>
 
-        {connected.length === 0 && servers.length === 0 && (
+        {connected.length === 0 && (
           <Empty
             message="Nothing connected yet"
             hint="Connect Google or Microsoft above, then ask your assistant to work in them."
-          />
-        )}
-
-        {(
-          <McpSection
-            servers={servers}
-            tools={tools}
-            onChanged={() => void load()}
-            onSaved={(name, setting) =>
-              setTools((current) => ({ ...current, [name]: { ...current[name], effective_setting: setting } }))
-            }
           />
         )}
 
@@ -839,172 +823,5 @@ function ManualForm({
       </div>
     </form>
     </Modal>
-  );
-}
-
-/**
- * MCP tool servers. MCP is the open standard many apps now ship: a
- * server that lists its own tools. Connect one by its address and
- * those tools join the built-in ones, under the same Permissions.
- */
-function McpSection({
-  servers,
-  tools,
-  onChanged,
-  onSaved,
-}: {
-  servers: McpServer[];
-  tools: Record<string, ToolEntry>;
-  onChanged: () => void;
-  onSaved: (name: string, setting: Setting) => void;
-}) {
-  const toast = useToast();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-
-  async function sync(server: McpServer) {
-    setBusy(server.id);
-    try {
-      const fresh = await api.post<McpServer>(`/me/mcp-servers/${server.id}/sync`);
-      if (fresh.status === "connected") toast(`${server.name}: ${fresh.tools.length} tools.`);
-      else toast(fresh.last_error ?? `${server.name} did not answer.`, "bad");
-      onChanged();
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function remove(server: McpServer) {
-    await api.del(`/me/mcp-servers/${server.id}`);
-    toast(`${server.name} removed. Its tools are gone from your assistant.`, "info");
-    onChanged();
-  }
-
-  return (
-    <section className="flex flex-col gap-4" data-coach="mcp-servers">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-xl font-semibold">Tool servers (MCP)</h2>
-          <p className="max-w-[640px] text-[13px] leading-snug text-muted">
-            Many apps now offer an MCP server: a web address that lists the actions an AI can take there. Add one, and its
-            tools appear for your assistant, with the same Always allow, Ask me first and Blocked choices.
-          </p>
-        </div>
-        {!adding && (
-          <Button size="sm" variant={servers.length ? "ghost" : "brand"} icon="plus" onClick={() => setAdding(true)}>
-            Add a tool server
-          </Button>
-        )}
-      </div>
-
-      {adding && (
-        <McpForm
-          onClose={() => setAdding(false)}
-          onSaved={(server) => {
-            setAdding(false);
-            toast(`${server.name} connected: ${server.tools.length} tools found.`);
-            onChanged();
-          }}
-        />
-      )}
-
-      {servers.length > 0 && (
-        <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(380px,100%),1fr))]">
-          {servers.map((server) => (
-            <article key={server.id} className="card flex flex-col gap-4 p-5">
-              <div className="flex items-start gap-3.5">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] border border-line2 bg-raised text-accent-text">
-                  <Icon name="link" size={20} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-display text-lg font-semibold">{server.name}</h3>
-                    <StatusChip status={server.status} />
-                  </div>
-                  <div className="truncate font-mono text-xs text-muted" title={server.url}>{server.url}</div>
-                  <div className="text-xs text-dim">
-                    {server.tools.length} tools
-                    {server.token_last4 ? ` · token ••••${server.token_last4}` : " · no token"}
-                    {server.last_synced_at ? ` · checked ${relativeTime(server.last_synced_at)}` : ""}
-                  </div>
-                </div>
-              </div>
-
-              <ErrorNote message={server.last_error} />
-
-              <ToolPermissions
-                names={server.tools.map((t) => t.name)}
-                tools={tools}
-                open
-                onSaved={onSaved}
-              />
-
-              {(
-                <div className="mt-auto flex gap-2">
-                  <Button size="sm" variant="ghost" disabled={busy === server.id} onClick={() => void sync(server)}>
-                    {busy === server.id ? "Checking…" : "Check for new tools"}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => void remove(server)}>
-                    Remove
-                  </Button>
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function McpForm({
-  onClose,
-  onSaved,
-}: {
-  onClose: () => void;
-  onSaved: (server: McpServer) => void;
-}) {
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
-  const [token, setToken] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaving(true);
-    try {
-      onSaved(await api.post<McpServer>(`/me/mcp-servers`, { name, url, token: token || null }));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not connect to that server.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form onSubmit={save} className="card rise flex flex-col gap-4 border-dashed border-line2 p-5" data-coach="mcp-form">
-      <div className="flex items-center gap-3">
-        <h3 className="flex-1 font-display text-[17px] font-semibold">Add a tool server</h3>
-        <button type="button" className="icon-btn h-10 w-10" aria-label="Close" onClick={onClose}>
-          <Icon name="x" />
-        </button>
-      </div>
-      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))]">
-        <Input label="Name" value={name} onChange={setName} required placeholder="CRM" />
-        <Input label="MCP address" value={url} onChange={setUrl} required mono placeholder="https://mcp.example.com/mcp" />
-        <Input label="Access token (if it needs one)" type="password" value={token} onChange={setToken} mono autoComplete="off" />
-      </div>
-      <ErrorNote message={error} />
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={!name || !url || saving}>
-          {saving ? "Connecting…" : "Connect and list tools"}
-        </Button>
-        <span className="text-[13px] text-dim">
-          Tools that only read run on their own. Anything else asks first; tools the server marks as permanent start Blocked.
-        </span>
-      </div>
-    </form>
   );
 }

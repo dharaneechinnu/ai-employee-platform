@@ -15,7 +15,7 @@ import {
   useToast,
 } from "../components/ui";
 import { ApiError, api, type PolicyRow, type ToolEntry } from "../lib/api";
-import { effectLabel, learnToolLabels, packLabel, plainReason, toolLabel } from "../lib/labels";
+import { effectLabel, packLabel, plainReason, toolLabel } from "../lib/labels";
 
 /**
  * Phase 5. The platform sets a default; you may move any action
@@ -83,9 +83,7 @@ export default function Policies() {
 
   async function load() {
     setRows(await api.get<PolicyRow[]>(`/me/policies`));
-    const catalogue = await api.get<ToolEntry[]>(`/me/tools`);
-    learnToolLabels(catalogue);
-    setTools(catalogue);
+    setTools(await api.get<ToolEntry[]>(`/me/tools`));
   }
 
   useEffect(() => {

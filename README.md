@@ -4,7 +4,7 @@ A **personal AI assistant** that does real work. One person signs in and gets:
 
 - a chat assistant that can use real tools, not just talk;
 - their own AI keys from any provider (you bring your own key, so you pay the provider directly);
-- their own connected apps: Google, Microsoft, GitHub, a mailbox, a database, and any MCP tool server;
+- their own connected apps: Google, Microsoft, GitHub, a mailbox and a database;
 - one memory that the assistant and every agent share;
 - **agents** they design by chatting, which can run on a schedule;
 - approvals, so nothing risky happens until they say yes.
@@ -48,7 +48,7 @@ The menu on the left (you can drag it to the bottom or the right) has:
 | **AI Agents** | Manage the agents you made: edit, schedule, run now, pause, see their tree and cost. |
 | **Approvals** | Actions waiting for your yes or no. |
 | **Memory** | What the assistant remembers about you and your work. |
-| **Connections** | Your apps: Google, Microsoft, GitHub, a mailbox, a database, and MCP tool servers. |
+| **Connections** | Your apps: Google, Microsoft, GitHub, a mailbox and a database. |
 | **AI Providers** | Your AI keys and the models each one can use. |
 | **Permissions** | Always allow, Ask me first or Blocked, for every tool. |
 | **Notifications** | Where you hear about approvals, finished work and failures. |
@@ -65,19 +65,18 @@ The assistant plans a step, calls a tool, reads the result, and decides what to 
 
 ![A run streaming its steps live](docs/screenshots/04-live-run.png)
 
-### 2. It uses real tools, plus any MCP server
+### 2. It uses real tools
 
 | Pack | What the assistant can do |
 |---|---|
 | **Google Workspace** | Search, read, draft and send Gmail; list and create Calendar events; search and read Drive files; create, read and write Google Sheets |
 | **Microsoft 365** | The same for Outlook mail, Outlook calendar and OneDrive |
 | **Any mailbox (IMAP)** | List, read, draft and send email with an app password |
-| **GitHub** | Read code, issues, pull requests and CI; comment, open issues, propose changes as pull requests. See feature 15 |
+| **GitHub** | Read code, issues, pull requests and CI; comment, open issues, propose changes as pull requests. See feature 14 |
 | **Database** | List tables, describe them, and run **read-only** SQL |
 | **Web** | Read a public web page; search the web (when the server has a search key set) |
 | **Memory** | Remember facts and recall them later |
 | **Everyday helpers** | Calculator, current time, text tools, assemble a report, run a short Python program (asks you first) |
-| **MCP tool servers** | Whatever tools a connected MCP server offers: a CRM, a help desk, an internal API. See feature 12 |
 
 ### 3. One-click connections, and secrets never reach the AI
 
@@ -151,15 +150,7 @@ Each event (thinking, model call, tool call, result, approval) goes into an appe
 
 ![A finished run with its result and cost](docs/screenshots/08-result.png)
 
-### 12. Connect any MCP tool server, and its tools appear
-
-MCP (Model Context Protocol) is an open standard many apps now ship: a web address that lists the actions an AI can take there. Under **Connections → Tool servers (MCP)**, paste the server's address (and its access token, if it has one). The assistant connects straight away, asks the server for its tools, and lists them. Each one gets the same **Always allow / Ask me first / Blocked** choice as a built-in tool. The starting choice comes from the server's own labels: read-only tools run on their own, unlabelled ones ask first, and ones marked destructive start blocked. The token is encrypted and handed to the tool only at call time; the AI never sees it. Every address is checked first, so nobody can point the server at an internal network address.
-
-![A connected MCP server: three tools, each with its permission](docs/screenshots/21-mcp-tool-server.png)
-
-Try it locally with the demo CRM server in `backend/scripts/demo_mcp_server.py` (instructions at the top of the file).
-
-### 13. Any AI provider, with your own key
+### 12. Any AI provider, with your own key
 
 **AI Providers** lists the providers the Platform Admin has turned on: for example Claude (Anthropic), OpenAI (ChatGPT), Gemini, Groq, DeepSeek, Mistral, OpenRouter, Together, NVIDIA and Sarvam. You add your own key for each one you want, so the bill stays with you. **Your own server** connects any open-source model (Llama, Qwen, DeepSeek, Mistral, Gemma) running on vLLM, Ollama, LM Studio or LiteLLM: paste the address of its OpenAI-compatible API and the model name. **Load models** asks the provider which models your key can use. Claude uses its own adapter, so its thinking blocks are passed back unchanged between tool calls, as the API requires.
 
@@ -167,7 +158,7 @@ Try it locally with the demo CRM server in `backend/scripts/demo_mcp_server.py` 
 
 ![Your own model server, connected, with the model picker open](docs/screenshots/22-own-model-server.png)
 
-### 14. Chat modes, and switching AI mid-conversation
+### 13. Chat modes, and switching AI mid-conversation
 
 A **mode** tells the assistant who you are, so you do not re-explain yourself every message:
 
@@ -179,7 +170,7 @@ A **mode** tells the assistant who you are, so you do not re-explain yourself ev
 | **Research** | Researchers | Summary, findings, open questions; separates fact from inference; never invents citations |
 | **Code** | Developers | A careful pair programmer: reads before it suggests, keeps changes small, flags edge cases and tests |
 
-Pick the **AI** under the message box and switch it at any time: history is plain text, so a conversation started on Gemini carries on with Claude or your own Llama, and every reply says which model wrote it. There is no tool list to manage in Chat: every built-in tool is on, an app's tools switch on once you connect that app, and your MCP servers' tools are on too. Your Permissions still decide each call. Each answer shows what it used.
+Pick the **AI** under the message box and switch it at any time: history is plain text, so a conversation started on Gemini carries on with Claude or your own Llama, and every reply says which model wrote it. There is no tool list to manage in Chat: every built-in tool is on, and an app's tools switch on once you connect that app. Your Permissions still decide each call. Each answer shows what it used.
 
 ![Study mode: a step-by-step answer with code and a table](docs/screenshots/23-chat-study.png)
 
@@ -187,7 +178,7 @@ Pick the **AI** under the message box and switch it at any time: history is plai
 
 ![Code mode for developers](docs/screenshots/30-code-mode.png)
 
-### 15. For developers: GitHub tools
+### 14. For developers: GitHub tools
 
 Connect **GitHub** with a fine-grained personal access token, limited to the repositories you choose, and the assistant and your agents get 11 developer tools:
 
@@ -199,7 +190,7 @@ The rule is simple: **the default branch is never written.** A change always arr
 
 ![The GitHub connection and its tools, each with its permission](docs/screenshots/29-github-tools.png)
 
-### 16. Team mode: a lead and helpers
+### 15. Team mode: a lead and helpers
 
 Switch on **Team** in a chat and the assistant becomes a lead with helpers: a **researcher**, an **analyst**, a **writer**, a **critic**, a **developer** and a **generalist**. For a big question the lead hands independent parts to several helpers in the same step, so they **work at the same time**, then checks and combines their answers. You can watch each helper start and finish live.
 
@@ -211,7 +202,7 @@ The limits are deliberate: helpers cannot start their own chains, can only **rea
 
 ![The combined answer, with the team that produced it](docs/screenshots/25-chat-team-answer.png)
 
-### 17. Connect several AIs; each task goes to the one that suits it
+### 16. Connect several AIs; each task goes to the one that suits it
 
 With the AI set to **Automatic**, every task (a chat message, an agent run, each team helper) goes to the connected AI that fits it best:
 
@@ -225,19 +216,19 @@ Every answer says which AI wrote it and why. You can still pin one AI in a chat 
 
 ![What Automatic sends to each connected AI](docs/screenshots/28-providers-strengths.png)
 
-### 18. You hear about it where you work
+### 17. You hear about it where you work
 
 Email or Slack messages when an approval is needed, when work fails, or when it finishes. Each can be turned on or off on the **Notifications** page.
 
 ![Notification settings: email and Slack](docs/screenshots/11-notifications.png)
 
-### 19. Speak instead of typing
+### 18. Speak instead of typing
 
 Press the mic, say what you need, press it again: the words appear in the message box, ready to check before you send. It uses **Whisper Large v3 Turbo** (open source, very good with Indian accents) through **your own Groq key**. Without a Groq key you get the browser's built-in voice typing instead. Recordings are never stored, and approvals stay button-only on purpose: voice can ask, but never approve.
 
 ![Voice typing: the mic is listening](docs/screenshots/16-voice-input.png)
 
-### 20. A welcome tour, and tips when you need them
+### 19. A welcome tour, and tips when you need them
 
 New people get a short animated welcome, then a spotlight tour of each screen the first time they open it. Tips for a feature appear the first time it shows up. Phones skip what is tucked in the menu. The **?** button replays any tour, and tips can be turned off.
 
@@ -272,7 +263,7 @@ What the Platform Admin can see about an account: email, name, active or not, wh
 | Database | PostgreSQL + pgvector |
 | Queue | Redis + arq workers |
 | AI | Claude · OpenAI · Gemini · Groq · DeepSeek · Mistral · OpenRouter · Sarvam · any OpenAI-compatible server (you bring your own key) |
-| Tools | Built-in packs + MCP (Model Context Protocol) servers over Streamable HTTP |
+| Tools | Built-in packs (Google, Microsoft, GitHub, mailbox, database, web, memory, helpers) |
 | Deployment | Docker Compose |
 
 ## Key design decisions
@@ -302,7 +293,7 @@ What the Platform Admin can see about an account: email, name, active or not, wh
 | Step | What | Status |
 |---|---|---|
 | 0–7 | Foundation, sign-in, AI providers and tools, background runs with live streaming, permissions and approvals, memory, parallel steps and a team of helpers | ✅ Built |
-| + | One-click Google / Microsoft, notifications, approve from email or Slack, MCP servers, GitHub | ✅ Built |
+| + | One-click Google / Microsoft, notifications, approve from email or Slack, GitHub | ✅ Built |
 | + | Personal accounts: one person per account, created by a Platform Admin with a setup link | ✅ Built |
 | + | Agents designed in chat, schedules, readiness checks, per-service read/edit permissions | ✅ Built |
 | + | The run inside a LangGraph graph | ✅ Built |
@@ -360,7 +351,7 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 | Tests | `make test`: unit, per-person isolation, and integration tests against real Postgres |
 | Types | mypy **strict** |
 | Lint | ruff with bugbear, bandit, async and blind-except rules |
-| Migrations | 23 (0001 to 0023), applied with `make migrate` |
+| Migrations | 24 (0001 to 0024), applied with `make migrate` |
 | Frontend | TypeScript strict build; screens checked in dark, light and phone widths |
 | UX audit | The `icp-ux-audit` skill (`.claude/skills/`) reviews screens on desktop and phone |
 

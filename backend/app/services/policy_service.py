@@ -76,15 +76,12 @@ class PolicyResolver:
         *,
         own_rules: dict[tuple[PolicyScope, str, str | None], PolicySetting],
         defaults: dict[tuple[PolicyScope, str, str | None], PolicySetting],
-        extra_tools: dict[str, type[Tool]] | None = None,
     ) -> None:
         self._own = own_rules
         self._defaults = defaults
-        # The person's MCP tools: gated by the same rules as built-ins.
-        self.extra_tools = extra_tools or {}
 
     def tool(self, tool_name: str) -> type[Tool] | None:
-        return registry.get(tool_name) or self.extra_tools.get(tool_name)
+        return registry.get(tool_name)
 
     def evaluate(self, tool_name: str) -> Decision:
         if tool_name in BLOCKED_ACTIONS:
@@ -128,13 +125,7 @@ class PolicyService:
                 await self.session.scalars(select(Policy).where(Policy.owner_id == self.owner_id))
             ).all()
         }
-        from app.services.mcp_service import McpService
-
-        return PolicyResolver(
-            own_rules=own_rules,
-            defaults=defaults,
-            extra_tools=await McpService(self.session, self.owner_id).tools(),
-        )
+        return PolicyResolver(own_rules=own_rules, defaults=defaults)
 
     async def effective(self) -> list[PolicyRow]:
         """Every rule in force, marked default or changed, so the UI can

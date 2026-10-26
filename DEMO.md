@@ -81,10 +81,6 @@ unread email every weekday at 9:00"*. The assistant shows a draft card
 with a readiness check. Gmail must be connected under **Connections**
 before **Create** turns on.
 
-To try an MCP tool server, run the demo CRM server in
-`backend/scripts/demo_mcp_server.py` (instructions at the top of that
-file) and add it under **Connections → Tool servers (MCP)**.
-
 ## Starting from an empty database
 
 ```bash

@@ -210,7 +210,7 @@ Two kinds of account. The Platform Admin sits **outside** everyone's data.
 | **Tools and connections** | | |
 | Register the shared Google / Microsoft sign-in app | ✅ | ❌ (you may add your own app) |
 | Open or close a connection, or one part of an app, for everyone or one account | ✅ | ❌ |
-| Connect or disconnect Google, Microsoft, GitHub, a mailbox, a database, an MCP server | ❌ | ✅ |
+| Connect or disconnect Google, Microsoft, GitHub, a mailbox, a database | ❌ | ✅ |
 | 🔒 **Read a connected app's password or token** | ❌ **never** | ❌ never |
 | **Permissions and approvals** | | |
 | Set the **default** permissions | ✅ | ❌ |

@@ -55,7 +55,6 @@ from app.services.agent_service import AgentService
 from app.services.approval_service import ApprovalService
 from app.services.connection_service import ConnectionService
 from app.services.conversation_service import ConversationService
-from app.services.mcp_service import McpService
 from app.services.notification_service import NotificationService, notify_safely
 from app.services.policy_service import PolicyService
 from app.services.provider_service import ProviderService
@@ -244,7 +243,6 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         # for approval is picked up). Tools receive only the grant
         # they declare; the model never sees any of it.
         grants = await ConnectionService(session, task.owner_id).resolve_grants()
-        grants.update(await McpService(session, task.owner_id).grants())
         await session.commit()
 
         async def cancelled() -> bool:
@@ -261,7 +259,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             # agent or a scheduled run cannot create agents. Every tool is
             # listed, connected or not, because the draft's checks are what
             # tell the person which app still needs connecting.
-            offered = [*registry.all(), *resolver.extra_tools.values()]
+            offered = registry.all()
             tools = [*tools, ProposeAgent]
         # The memory tools need the run's session. What they remember
         # belongs to the person.

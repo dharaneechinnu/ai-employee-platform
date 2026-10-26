@@ -16,7 +16,6 @@ from typing import Any
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
-from app.agent.mcp.tools import McpTool
 from app.agent.tools.registry import BLOCKED_ACTIONS, registry
 from app.api.v1.deps import ContextDep, RequestContext, SessionDep
 from app.db.models.policy import ApprovalStatus, PolicyScope, PolicySetting
@@ -55,10 +54,6 @@ class ToolCatalogueEntry(BaseModel):
     # The connection kind this tool needs, so the tool picker can say
     # "connect Google first" instead of letting it fail at run time.
     requires_connection: str | None = None
-    # Set for tools from an MCP server: the server's own wording, since
-    # the app has no built-in label for them.
-    label: str | None = None
-    pack_label: str | None = None
 
 
 class ApprovalResponse(BaseModel):
@@ -119,9 +114,8 @@ async def tool_catalogue(ctx: ContextDep, session: SessionDep) -> list[ToolCatal
     resolver = await PolicyService(session, ctx.owner_id).resolver()
     entries = []
 
-    for tool in [*registry.all(), *resolver.extra_tools.values()]:
+    for tool in registry.all():
         decision = resolver.evaluate(tool.name)
-        is_mcp = issubclass(tool, McpTool)
         entries.append(
             ToolCatalogueEntry(
                 name=tool.name,
@@ -131,18 +125,10 @@ async def tool_catalogue(ctx: ContextDep, session: SessionDep) -> list[ToolCatal
                 effective_setting=decision.setting,
                 reason=decision.reason,
                 permanently_blocked=tool.name in BLOCKED_ACTIONS,
-                # An MCP tool is listed only while its server is connected.
-                requires_connection=None if is_mcp else tool.requires_connection,
-                label=(tool.title or humanise(tool.remote_name)) if is_mcp else None,  # type: ignore[attr-defined]
-                pack_label=tool.server_name if is_mcp else None,  # type: ignore[attr-defined]
+                requires_connection=tool.requires_connection,
             )
         )
     return entries
-
-
-def humanise(name: str) -> str:
-    words = name.replace("_", " ").replace("-", " ").strip()
-    return words[:1].upper() + words[1:]
 
 
 @router.get("/approvals", response_model=list[ApprovalResponse], summary="Pending approvals")

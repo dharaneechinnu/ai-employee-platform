@@ -116,7 +116,7 @@ class ReadinessService:
                         False,
                         "agent",
                         f"{name} is not available",
-                        "That tool does not exist, or it belongs to a server you removed.",
+                        "That tool does not exist (it may have been removed).",
                         tool=name,
                     )
                 )

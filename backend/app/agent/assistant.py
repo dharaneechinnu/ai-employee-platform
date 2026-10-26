@@ -242,13 +242,12 @@ def chat_tools(resolver: Any, connected: set[str]) -> list[type[Tool]]:
 
     Tools are the platform's side of the deal, so there is nothing to
     pick: built-in tools are always on, an app's tools are on once the
-    person has connected that app, and every tool from their MCP
-    servers is on. Their Permissions still decide each call (run, ask
-    first, or blocked), and a blocked tool is not offered at all, so
-    the model never wastes a step on it.
+    person has connected that app. Their Permissions still decide each
+    call (run, ask first, or blocked), and a blocked tool is not offered
+    at all, so the model never wastes a step on it.
     """
     chosen: list[type[Tool]] = []
-    for tool in [*registry.all(), *resolver.extra_tools.values()]:
+    for tool in registry.all():
         if tool.requires_connection and tool.requires_connection not in connected:
             continue
         if resolver.evaluate(tool.name).setting is PolicySetting.BLOCKED:

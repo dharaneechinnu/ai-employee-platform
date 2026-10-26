@@ -156,26 +156,6 @@ export interface ConnectedProvider {
   strengths?: string[] | null;
 }
 
-export interface McpServerTool {
-  name: string;
-  remote_name: string;
-  title: string | null;
-  description: string;
-  side_effect: "read" | "write" | "destructive";
-}
-
-export interface McpServer {
-  id: string;
-  name: string;
-  slug: string;
-  url: string;
-  token_last4: string | null;
-  status: string;
-  last_error: string | null;
-  last_synced_at: string | null;
-  tools: McpServerTool[];
-}
-
 export type TaskStatus =
   | "queued"
   | "running"
@@ -228,9 +208,6 @@ export interface ToolEntry {
   reason: string;
   permanently_blocked: boolean;
   requires_connection?: string | null;
-  /** Set for tools from an MCP server: the server's own wording. */
-  label?: string | null;
-  pack_label?: string | null;
 }
 
 export interface PolicyRow {
