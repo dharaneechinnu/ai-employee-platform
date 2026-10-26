@@ -1,10 +1,14 @@
 """Create the first platform admin.
 
-    python -m scripts.bootstrap_admin --email you@example.com --password '...'
+    python -m scripts.bootstrap_admin --email admin@example.com --password '...'
 
 Prints the password once if one was generated. Sign-in is email and
 password only; there is no second factor on this account, so treat
-the password as the whole key to every company on the platform.
+the password as the key that can create and suspend every account on
+the platform. It cannot read anyone's content.
+
+Next step: sign in at /platform, create a person's account on People,
+and send them the one-time setup link it shows.
 """
 
 from __future__ import annotations
@@ -42,8 +46,9 @@ async def main(email: str, password: str | None) -> None:
     print("\nPlatform admin created.")
     print(f"  email:       {admin.email}")
     print(f"  password:    {password}")
-    print("\nThis password is the only thing guarding every company on the")
-    print("platform. Store it in a password manager and do not reuse it.\n")
+    print("\nThis password is the only thing guarding every account on the")
+    print("platform. Store it in a password manager and do not reuse it.")
+    print("Next: sign in at /platform and create an account on People.\n")
 
 
 if __name__ == "__main__":

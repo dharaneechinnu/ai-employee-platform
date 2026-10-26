@@ -1,12 +1,24 @@
-> **Superseded (Oct 2026).** This document describes the earlier company / AI Employees design. The product is now a personal multi-agent assistant. See `docs/AGENTS_PLAN.md` and the multi-agent build plan for the current design.
-
-# AI Employee Platform — Build Plan
+# AI Employees — Build Plan
 
 *Simple English version. We add one phase at a time, after we discuss it together.*
 
-**Last updated:** 2026-10-10
-**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · **Phase 4 ✅ (MVP)** · Phase 5 ✅ · Phase 6 ✅ · Phase 7 ✅
+**Last updated:** 2026-10-26
+**Status:** Phase 0 ✅ · Phase 1 ✅ · Phase 2 ✅ (replaced by agents) · Phase 3 ✅ · **Phase 4 ✅ (MVP)** · Phase 5 ✅ · Phase 6 ✅ · Phase 7 ✅
 Phases 8–10 stay as the roadmap.
+
+> **Read this first: the product changed.** This plan was written for a product where companies "hired" AI Employees: a Company Admin built them, Members gave them tasks, and the Platform Admin set a limit per company. The product is now a **personal assistant**. Each account belongs to one person. The sections on accounts, roles and AI Employees below have been rewritten for that. The later phases keep their original reasoning, which still holds, with the words updated.
+>
+> | Old idea | What it is now |
+> |---|---|
+> | Company (organization) | Gone. Your **account** is the scope of everything. |
+> | Company Admin and Member | Gone. **You** do everything for your own account. |
+> | Invitation link | A one-time **setup link**, made by the Platform Admin when they create your account |
+> | AI Employee, with versions and templates | Gone. **Agents** you design by chatting (see [AGENTS_PLAN.md](AGENTS_PLAN.md)) |
+> | AI Employee limit per company | Gone. Up to 30 agents per person. |
+> | `org_id` on every table | `owner_id` on every table |
+> | Tasks page | Gone. **Chat** is the home screen; each reply is a task underneath. |
+>
+> For the current design, read the [HLD](HLD.md) and [LLD](LLD.md).
 
 > ⚠️ **Build order changed:** Phase 7 is written as **Phase 7 Lite** (~2 weeks, not 3) and should be built **after Phase 9**. Two reasons: Phase 9 is what proves "production grade", and Phase 7 rewrites the agent loop that passed the Phase 4 gate — so we do that only once everything else is stable. See the note inside Phase 7.
 
@@ -16,17 +28,18 @@ Phases 8–10 stay as the roadmap.
 
 ## What are we building?
 
-A website where a normal person (not a programmer) can create an **"AI employee"**.
+A website where a normal person (not a programmer) has their own **AI assistant that can do real work**.
 
-An AI employee is like a robot worker. You:
-1. Give it a name and a job (example: "Ravi, the GitHub helper").
-2. Give it tools (example: "you can read our code and open pull requests").
-3. Give it a task (example: "look at bug #42 and fix it").
+You:
+1. Chat with it, like any AI chat.
+2. Connect your apps (example: "you can read my Gmail and my GitHub").
+3. Ask for real work (example: "look at bug #42 and propose a fix").
+4. If you want a job done again and again, describe an **agent** in chat ("every weekday at 9, summarise my unread mail") and it runs on a schedule.
 
-Then it does the work by itself. You watch it work on the screen. If the work is risky, it stops and asks a human for permission first.
+It does the work by itself. You watch it work on the screen. If the work is risky, it stops and asks you first.
 
 **Why do people want this?**
-Every team has boring work that repeats every day. Sorting bug reports. Updating customer records. Writing reply emails. A normal AI chatbot cannot do this work, because:
+Everyone has boring work that repeats. Sorting email. Updating a spreadsheet. Writing replies. A normal AI chatbot cannot do this work, because:
 - It forgets everything after you close it.
 - It cannot touch your real apps.
 - You cannot trust it with risky actions.
@@ -40,16 +53,16 @@ Our platform fixes all three problems.
 | Phase | Simple name | What it means in one line | Status |
 |---|---|---|---|
 | **0** | Build the empty house | Make the project folders and tools work, with nothing inside yet. | ✅ Agreed |
-| **1** | Doors and keys | Login, users, company workspaces, and the Platform Admin area. | ✅ Agreed |
-| **2** | Make an AI worker | A form where you create an AI employee and give it a name and job. | ✅ Agreed |
+| **1** | Doors and keys | Login, personal accounts made with a setup link, and the Platform Admin area. | ✅ Built |
+| **2** | Make a helper | First a form for "AI Employees"; now **agents** designed in chat. | ✅ Replaced |
 | **3** | Give it a brain and hands | Connect the AI model (brain) and the tools it can use (hands). | ✅ Agreed |
-| **4** | 🎯 **First real worker** | One AI Employee does one real job, start to finish. **The big goal.** | ✅ Agreed |
+| **4** | 🎯 **First real job** | The assistant does one real job, start to finish. **The big goal.** | ✅ Agreed |
 | **5** | Outside apps **+ approvals** | Email, database, any REST API. Plus the Auto / Ask / Blocked permission system. | ✅ Agreed |
 | **6** | Give it a memory | It remembers past work, so it does not repeat mistakes. | ✅ Agreed |
 | **7** | Teamwork (Lite) | LangGraph, branching, parallel steps, one simple manager→specialists demo. **Build after Phase 9.** | ✅ Agreed |
 | **8** | Make it not break | If something fails, it retries and recovers. | ⬜ Not yet |
 | **9** | Locks and money counter | Security, and counting how much money the AI spends. | ⬜ Not yet |
-| **10** | Ready for real customers | Testing, and putting it online. | ⬜ Not yet |
+| **10** | Ready for real users | Testing, self sign-up, and putting it online. | ⬜ Not yet |
 
 **Phases 0 to 4 are the most important.** At the end of Phase 4 you have a real working product. Phases 5 to 10 make it bigger and stronger.
 
@@ -69,7 +82,7 @@ So the real scope is:
 
 **Why stop at 4?**
 
-Finishing Phases 0–4 properly beats starting 0–10 badly. A demo where one AI Employee reliably does a real job is strong. Ten half-working features is weak.
+Finishing Phases 0–4 properly beats starting 0–10 badly. A demo where the assistant reliably does a real job is strong. Ten half-working features is weak.
 
 And the roadmap itself is an asset. It shows an interviewer that you thought past the demo — that you know what security, reliability and cost tracking would need, even though you have not built them yet.
 
@@ -84,16 +97,16 @@ And the roadmap itself is an asset. It shows an interviewer that you thought pas
 
 ## 💡 The key decision: BYOK (Bring Your Own Key)
 
-**Each company pastes their own API key and pays their own AI bill.** You pay nothing.
+**Each person pastes their own API key and pays their own AI bill.** The server owner pays nothing.
 
 | Layer | Who decides |
 |---|---|
-| Which providers are **supported** (the menu) | 🔑 You, the Platform Admin |
-| Which provider they **use**, and the key | 👔 Each Company Admin |
+| Which providers are **supported** (the menu) | 🔑 The Platform Admin |
+| Which provider they **use**, and the key | 👤 Each person, for their own account |
 
 This is the single decision that makes a ₹0 budget work. Full detail in [Phase 3, Part G](#part-g--provider-configuration-byok-).
 
-**For your own development and demo**, you use your own Gemini free-tier key — just like any other company would. Below is the stack you personally use.
+**For your own development and demo**, you use your own Gemini free-tier key — just like anyone else would. Below is the stack you personally use.
 
 ## Your free stack (for building and demoing)
 
@@ -104,7 +117,7 @@ This is the single decision that makes a ₹0 budget work. Full detail in [Phase
 | **Embeddings** (Phase 6 memory) | **Local** — `bge-m3` on your own computer | ₹0 **forever** |
 | **Backup / testing** | **NVIDIA NIM** free | ₹0 |
 
-**Why Gemini Flash is the right pick:** best tool-calling among the free options, a very large context window, and generous free limits. We can switch per AI Employee later if needed.
+**Why Gemini Flash is the right pick:** best tool-calling among the free options, a very large context window, and generous free limits. You can pick a different AI per chat or per agent.
 
 **A small clarification:** Groq and NVIDIA are not free LLMs themselves. They are free **hosting services** that run open-source models (Llama, Qwen, DeepSeek). The models are the open-source part. This means the same model can move between them.
 
@@ -124,7 +137,7 @@ Free tiers limit **requests per minute**. And here is what people miss:
 > **One task is not one request.**
 > 1 task = think → tool → think → tool → … = **10 to 15 requests**
 
-So one AI Employee task can eat a whole minute's budget.
+So one task can eat a whole minute's budget.
 
 **What we do about it:**
 
@@ -145,12 +158,12 @@ Free tiers usually allow the provider to train on what you send. Paid tiers usua
 | Stage | Free tier OK? |
 |---|---|
 | Building and testing with fake data | ✅ **Yes, perfectly fine** |
-| Your own company's real data | ⚠️ Your choice |
-| **A paying customer's data** | ❌ **No** |
+| Your own real data | ⚠️ Your choice |
+| **Someone else's data, on a shared server** | ❌ **No** — ask them to use a paid key |
 
-**The plan:** build everything free now. Before the **first real customer**, switch to a paid key. Because the provider is swappable, that is a 5-minute change.
+**The plan:** build everything free now. Before **real people** use it, recommend a paid key. Because the provider is swappable, that is a 5-minute change.
 
-**Why this matters:** this product touches customers' code, email and client lists. If a customer later learns their data went through a training-enabled free tier, you lose them — and you may break promises they made to *their* customers. Switching later is cheap. Getting it wrong is not.
+**Why this matters:** this product touches people's code, email and contacts. If someone later learns their data went through a training-enabled free tier, you lose their trust. Switching later is cheap. Getting it wrong is not.
 
 > This is also a strong interview answer. Being asked *"what about data privacy?"* and having a real answer puts you ahead of most candidates.
 
@@ -159,90 +172,65 @@ Free tiers usually allow the provider to train on what you send. Paid tiers usua
 
 # 📖 Words we must always use correctly
 
-The word "employee" can mean two different things. That will confuse users, our team, and us. So we fix the words now, and never mix them:
+We fix the words now, and never mix them:
 
 | Always say this | For this | Never say |
 |---|---|---|
-| **AI Employee** | The robot worker 🤖 | "employee" alone |
-| **Member** | A human person inside a company 🧑 | "employee" |
-| **Company** (or **Organization**) | One customer business | "tenant" in the screens |
-| **Platform Admin** | You, the product owner 🔑 | "super admin" |
-| **Company Admin** | The customer's manager 👔 | "admin" alone |
+| **Assistant** | The AI you chat with 🤖 | "bot" |
+| **Agent** | A saved helper you designed, with its own instructions, tools and schedule | "AI Employee" (the old name) |
+| **Account** (or "you") | One person and everything they own | "tenant" in the screens |
+| **Platform Admin** | Whoever runs the server 🔑 | "super admin" |
 
-So we say: *"Company A has 2 Members and 3 AI Employees."* Clear, no confusion.
+"AI Employees" is still the product's name. It is not a word for anything inside it.
 
 ---
 ---
 
 # 🔑 Who can do what (all phases)
 
-Three levels. The first one sits **outside** the company.
+Two kinds of account. The Platform Admin sits **outside** everyone's data.
 
-| What | 🔑 Platform Admin | 👔 Company Admin | 👤 Member | Phase |
-|---|---|---|---|---|
-| **Company** | | | | |
-| Create a company | ✅ | ❌ | ❌ | 1 |
-| Suspend / close a company | ✅ | ❌ | ❌ | 1 |
-| Set the AI Employee limit | ✅ | ❌ | ❌ | 1 |
-| Change company name / settings | ❌ | ✅ | ❌ | 1 |
-| **People** | | | | |
-| Invite a teammate | ❌ | ✅ | ❌ | 1 |
-| Remove a teammate | ❌ | ✅ | ❌ | 1 |
-| Change someone's role | ❌ | ✅ | ❌ | 1 |
-| See the members list | ❌ | ✅ | ✅ | 1 |
-| **AI Employees** | | | | |
-| Create an AI Employee | ❌ | ✅ | ❌ | 2 |
-| Edit instructions / settings | ❌ | ✅ | ❌ | 2 |
-| Delete / archive | ❌ | ✅ | ❌ | 2 |
-| Pause / activate | ❌ | ✅ | ❌ | 2 |
-| Save a company template | ❌ | ✅ | ❌ | 2 |
-| **AI providers (BYOK)** | | | | |
-| Decide the **menu** of supported providers | ✅ | ❌ | ❌ | 3 |
-| Turn a provider on / off for everyone | ✅ | ❌ | ❌ | 3 |
-| **Connect a provider + paste our own key** | ❌ | ✅ | ❌ | 3 |
-| Replace or remove our key | ❌ | ✅ | ❌ | 3 |
-| See *whether* a company connected a provider | ✅ yes/no only | ✅ | ❌ | 3 |
-| 🔒 **Read a company's API key** | ❌ **never** | ❌ never | ❌ never | — |
-| **Pick** a model for an AI Employee | ❌ | ✅ from connected providers | ❌ | 3 |
-| **See** the AI Employees | counts only | ✅ | ✅ | 2 |
-| **Daily work** | | | | |
-| Give a task to an AI Employee | ❌ | ✅ | ✅ | 4 |
-| Watch a task running | ❌ | ✅ | ✅ | 4 |
-| Cancel a task | ❌ | ✅ | own tasks only | 4 |
-| See past task history | ❌ | ✅ | ✅ | 4 |
-| **Tools and connections** | | | | |
-| Connect GitHub / Gmail / database | ❌ | ✅ | ❌ | 5 |
-| Disconnect an app | ❌ | ✅ | ❌ | 5 |
-| 🔒 **Read a connected app's password** | ❌ **never** | ❌ never | ❌ never | — |
-| **Permissions and approvals** | | | | |
-| Set the **default** policy for new companies | ✅ | ❌ | ❌ | 5 |
-| **Override** the policy for our own company | ❌ | ✅ | ❌ | 5 |
-| Enable a 🔴 catastrophic action | ❌ **nobody can** | ❌ nobody can | ❌ nobody can | 5 |
-| Approve or reject a paused action | ❌ | ✅ | ❌ | 5 |
-| **Memory** | | | | |
-| Choose the embedding provider + key | ❌ | ✅ | ❌ | 6 |
-| Add / edit / delete memory | ❌ | ✅ | ❌ | 6 |
-| Upload a document | ❌ | ✅ | ❌ | 6 |
-| Search memory (via the AI) | ❌ | ✅ | ✅ | 6 |
-| Set how long history is kept | ❌ | ✅ | ❌ | 6 |
-| **Money** | | | | |
-| See how much was spent | ✅ numbers only | ✅ | ❌ | 9 |
+| What | 🔑 Platform Admin | 👤 You (a normal account) |
+|---|---|---|
+| **Accounts** | | |
+| Create an account and get its setup link | ✅ | ❌ (no self sign-up yet) |
+| Suspend or restore an account | ✅ | ❌ |
+| Set your own password | ❌ never | ✅ through the setup link |
+| **Agents** | | |
+| Design, edit, schedule, pause, run or remove an agent | ❌ | ✅ |
+| **AI providers (bring your own key)** | | |
+| Decide the **menu** of supported providers | ✅ | ❌ |
+| Turn a provider on / off for everyone | ✅ | ❌ |
+| Add your own key, replace or remove it | ❌ | ✅ |
+| See *whether* someone connected a provider | ✅ yes/no only | ✅ your own |
+| 🔒 **Read an API key** | ❌ **never** | ❌ never, not even your own |
+| **Daily work** | | |
+| Chat, start runs, watch them, cancel them | ❌ | ✅ |
+| See past chats and runs | ❌ | ✅ your own |
+| **Tools and connections** | | |
+| Register the shared Google / Microsoft sign-in app | ✅ | ❌ (you may add your own app) |
+| Open or close a connection, or one part of an app, for everyone or one account | ✅ | ❌ |
+| Connect or disconnect Google, Microsoft, GitHub, a mailbox, a database, an MCP server | ❌ | ✅ |
+| 🔒 **Read a connected app's password or token** | ❌ **never** | ❌ never |
+| **Permissions and approvals** | | |
+| Set the **default** permissions | ✅ | ❌ |
+| Change your own permissions | ❌ | ✅ |
+| Enable a 🔴 catastrophic action | ❌ **nobody can** | ❌ nobody can |
+| Approve or reject a paused action | ❌ | ✅ |
+| **Memory** | | |
+| Choose the embedding provider | ❌ | ✅ |
+| Add, read or delete memory | ❌ | ✅ |
 
 ## The simple summary
 
-| Role | In one line |
+| Who | In one line |
 |---|---|
-| 🔑 **Platform Admin** | Runs the product. Creates companies, sets limits. **Never sees customer content.** |
-| 👔 **Company Admin** | **Builds** the AI Employees. Connects apps. Approves risky actions. |
-| 👤 **Member** | **Uses** the AI Employees that already exist. Gives tasks, watches results. |
+| 🔑 **Platform Admin** | Runs the server. Creates accounts and sets platform rules. **Never sees anyone's content.** |
+| 👤 **You** | Own your assistant: your agents, keys, apps, memory, permissions and approvals. |
 
-**One sentence: Admin builds. Member uses.**
+## ⚠️ One gap we accept for now
 
-## ⚠️ Two gaps we accept for now
-
-**1. A Member can spend your money.** A Member cannot create an AI Employee, but they *can* give it tasks — and every task costs money. So a Member can raise the bill. Fix in Phase 9: a monthly spending limit per company.
-
-**2. There is no read-only role.** Later you may want a "Viewer" — a manager who watches results but gives no tasks. Not needed now, but our permission code must be built so adding a 3rd role later is easy, not a rewrite.
+**There is no self sign-up.** A Platform Admin has to create every account and send the link by hand. That is fine for a few people and is the planned next step before opening up.
 
 ---
 ---
@@ -332,9 +320,9 @@ ai-employee-platform/
 This is important. In Phase 0 there is **no**:
 
 - ❌ Login
-- ❌ AI employee
+- ❌ Assistant or agents
 - ❌ AI model
-- ❌ Any real feature a customer would use
+- ❌ Any real feature a person would use
 
 This may feel slow and boring. But it is the fastest road. Fixing a weak base later is very slow and very painful.
 
@@ -350,7 +338,7 @@ organizations
 └── created_at  (the date it was made)
 ```
 
-We make this table now, even though it is empty, only to prove that migrations work.
+We make this table now, even though it is empty, only to prove that migrations work. (It was the first company table. It was dropped when accounts became personal, in migration `0015`.)
 
 ## Backend APIs in this phase
 
@@ -392,89 +380,80 @@ Nothing. This is the very first phase. 🎉
 
 # ✅ Phase 1 — Doors and keys
 
-**Agreed on:** 2026-10-10
-**Time needed:** about 1.5 to 2 weeks
+**Agreed on:** 2026-10-10 · **Rewritten for personal accounts:** 2026-10-26
+
+> This phase first built companies, memberships, invitations and two roles (admin and member). Those were removed when the product became a personal assistant (migration `0015_personal_accounts.py`). This section describes what Phase 1 delivers now.
 
 ## What is this phase?
 
 Now we add **the front door and the keys**.
 
-Four things:
+Three things:
 1. **Login** — a person can come inside.
-2. **Users** — we remember who each person is.
-3. **Workspaces** — each company gets its own private room.
-4. **Platform Admin area** — your own private control room, where you create companies and watch the health of the product.
+2. **Accounts** — each person gets their own private room. Everything they make lives there.
+3. **Platform Admin area** — a separate control room, where accounts are created and the health of the product is watched.
 
-## Decisions you made for this phase
+## Decisions for this phase
 
 | Topic | Decision |
 |---|---|
 | Login type | Email + password only. No Google login for now. |
-| Roles inside a company | Only 2: **admin** and **member** |
-| Invite emails | No email service. The invite link is shown on screen; you send it yourself. |
-| Theme | **Dark theme** |
-| Who creates companies | **Only the Platform Admin.** There is no public sign-up page. |
-| Approval queue | **None.** The company is Active the moment you create it. |
-| Can Platform Admin read customer content? | **No. Never.** (Option "a") |
-| 2FA for Platform Admin | **Yes, compulsory** |
-| Employee limit per company | **Yes.** Platform Admin sets how many AI employees each company may create. |
+| Who creates accounts | **Only the Platform Admin.** There is no public sign-up page yet. |
+| How the person gets in | A **one-time setup link**, shown once to the Platform Admin. No email service: they send it themselves. |
+| Who sets the password | **The person**, through the link. Staff never know it. |
+| Theme | Dark and light |
+| Can Platform Admin read anyone's content? | **No. Never.** |
+| 2FA for Platform Admin | Planned at first, then **removed on request** (migration `0013`). The password is now the whole key, so treat it that way. |
 
 ---
 
-## Part A — The private room idea (multi-tenancy)
+## Part A — The private room idea (isolation)
 
 This is the most important idea in Phase 1. Please read it slowly. 🙏
 
-Our website is used by **many companies at the same time**. Company A and Company B share the same website and the same database.
-
-So we must be 100% sure **Company A can never see Company B's data**.
+Many people use the same website and the same database. So we must be 100% sure **person A can never see person B's data**.
 
 Think of an apartment building: 🏢
 - One building = our website
-- Many families inside = many companies
-- Every family has their own lock
-- No family can walk into another family's room
+- Many flats inside = many accounts
+- Every flat has its own lock
+- Nobody can walk into another flat
 
-The technical name is **multi-tenancy**. One "tenant" = one company.
+**How we do it:** every table that holds someone's data has a column called `owner_id`. It says "this row belongs to person number 5." Every query goes through one place that adds "and `owner_id` is me".
 
-**How we do it:** every table in the database gets a column called `org_id`. It says "this row belongs to company number 5."
-
-**Why now and not later:** adding this column now, while the database is empty, is easy. Adding it later, after 50 tables hold real customer data, is slow and risky — we could mix up two companies' data by mistake. That is the worst possible bug for this kind of product. So we pay the small cost now.
+**Why it was done early:** adding this column while the database is empty is easy. Adding it later, after many tables hold real data, is slow and risky. (It was first built as `org_id`, one per company. When the product became personal, the column was renamed and pointed at the person. Because there was exactly one scope column, filtered in one place, that change was safe.)
 
 ### The 404 trick 🕵️
 
-When Company A tries to open Company B's page, most websites answer:
+When person A tries to open person B's chat, most websites answer:
 
 > ❌ **403 — You are not allowed**
 
-But this leaks a secret. It tells the attacker *"this page exists, you just can't see it."*
+But this leaks a secret. It tells the attacker *"this exists, you just can't see it."*
 
 So we answer instead:
 
 > ✅ **404 — This does not exist**
 
-Now the attacker learns nothing. Small change, much safer.
+Now the attacker learns nothing.
 
 ---
 
-## Part B — Two kinds of admin ⚠️
+## Part B — Two kinds of account ⚠️
 
-We now have **two** different admins. They sound the same but are completely different:
-
-| | **Company Admin** | **Platform Admin** |
+| | **You** (a normal account) | **Platform Admin** |
 |---|---|---|
-| Who? | Our customer's manager | **You.** The product owner. |
-| Controls | Only their own company | The whole website |
-| How many? | Many | Very few (1 to 3) |
-| Logs in where? | The normal website | A **separate** admin area |
+| Who? | A person using the assistant | Whoever runs the server |
+| Controls | Only their own account | Accounts and platform rules |
+| Logs in where? | `/login` | A **separate** area at `/platform` |
 
 **The golden rule:**
 
-> A Company Admin must **never** be able to become a Platform Admin.
+> A normal account must **never** be able to become a Platform Admin.
 
-So Platform Admin is **not** a role in the normal roles list. It lives in a **separate table**, with a **separate login area**. Two separate systems. A bug in company roles can then never leak master access.
+So Platform Admin is **not** a role on the normal accounts table. It lives in a **separate table**, with a **separate login** and a **different kind of token**. A bug in normal accounts can then never leak master access.
 
-Like a hotel: 🏨 a guest can be the VIP of room 301, but a VIP guest can never become the hotel manager. Different job, different key, different door.
+Like a hotel: 🏨 a guest can have the best room, but a guest can never become the hotel manager. Different job, different key, different door.
 
 ---
 
@@ -488,117 +467,62 @@ Like a hotel: 🏨 a guest can be the VIP of room 301, but a VIP guest can never
 
 | Thing | Example |
 |---|---|
-| Company name and created date | "Victopia Labs, created 10 Oct" |
-| Number of users | "8 users" |
-| Number of AI employees | "3 AI employees" |
-| Number of tasks run | "240 tasks this month" |
-| Pass and fail counts | "212 passed, 28 failed" |
-| Error **types** only | "20 timeout, 8 bad login" |
-| Money spent | "$43 this month" |
-| Which apps are connected | "GitHub ✅, Gmail ✅" |
-| Last active time | "2 hours ago" |
+| Email, name, created date | "asha@example.com, created 10 Oct" |
 | Active or suspended | "Active" |
+| Number of tasks run | "240 tasks" |
+| Which AI providers are connected | "Gemini ✅, Claude ❌" — never the key |
+| Which connections and app parts are allowed | "Sheets edit: closed for this account" |
 
-### ❌ CANNOT see — real customer content
+### ❌ CANNOT see — anyone's content
 
 | Thing | Why not |
 |---|---|
-| Email text | Their private business |
-| Code and files | Their private business |
-| Customer records (CRM) | May hold other people's personal data |
-| The task the user typed | May name real clients |
-| What the AI wrote back | Same reason |
-| The AI's memory content | Same reason |
-| Passwords and API keys | **Never. Not even encrypted.** |
+| Chats, and what the AI wrote back | Private |
+| Email text, files, code | Private |
+| Memory | Private |
+| Agents and their instructions | Private |
+| Passwords, API keys, tokens | **Never. Not even encrypted.** |
 
 ### How we make this real, not just a promise
 
-A promise in a document is easy to break by accident. So we enforce it in the code:
-
 | Rule | What it does |
 |---|---|
-| 1. Separate table + separate login area | A company-role bug can never leak master access |
-| 2. 2FA compulsory for Platform Admin | A password alone is not enough for a master key |
-| 3. Every Platform Admin action goes in a diary | We always know who did what, and when |
-| 4. Platform Admin **cannot** edit or delete that diary | Otherwise the diary is worthless |
-| 5. Every database column is marked "confidential" or "not" | The admin API is only allowed to read the "not confidential" ones |
-| 6. A test proves rule 5 | If someone later marks email text as "not confidential", the test fails and blocks it |
+| 1. Separate table, separate login, separate token type | A bug in normal accounts can never leak master access |
+| 2. Every Platform Admin action goes in a diary | We always know who did what, and when |
+| 3. Nobody can edit or delete that diary | The database itself refuses (no UPDATE or DELETE rights) |
+| 4. There is **no endpoint** that returns content | Nothing to misconfigure: the door does not exist |
+| 5. A test tries to read content through the admin API | If someone adds such a door later, the test fails |
 
-### Why we are this careful
+### For support
 
-Honest reason: a Platform Admin account is a **master key** to the whole business. If that one password is stolen *and* that account can read customer content, then **every customer's private data leaks at once**. For a product touching people's code, email and customer lists, that is the kind of event a company does not recover from.
-
-So: the Platform Admin simply does not have the ability. Not "has it but is told not to use it".
-
-### For customer support (decided: option "a")
-
-A customer calls: *"My AI employee keeps failing!"* You can see *"28 failures, type: timeout"* but not the task content.
-
-**What you do:** ask the customer to copy-paste the details to you.
-
-**Why this is good for now:** you will have few customers at the start, so this is easy. And *"we technically cannot read your data"* is a very strong, very simple promise for a new customer.
-
-**Later (Phase 9)** we may add "break glass": you click *request access*, the **customer clicks Approve**, you see their data for **1 hour only**, and the whole thing is written in the diary. Good support, still honest. Not needed on day one.
+Someone says: *"My agent keeps failing!"* You can see the account is active and has run tasks, but not what was asked. **What you do:** ask them to share what they see. *"We technically cannot read your data"* is a simple, strong promise.
 
 ---
 
-## Part D — How a new company gets created
+## Part D — How a new account gets created
 
-There is **no public sign-up page**. Nobody can create an account alone.
+There is **no public sign-up page** yet (planned).
 
 ```
-You (Platform Admin)
-  → click "Add Company"
-  → type the company name + the first person's email
-  → system creates the company (Active immediately)
-    and makes a one-time invite link
-  → you copy the link and send it on WhatsApp / Slack
-  → the person clicks, sets their password, starts working right away
+Platform Admin
+  → opens /platform → People
+  → types the person's email (and name, if wanted)
+  → system creates the account with no usable password,
+    and makes a one-time setup link (valid 72 hours)
+  → the admin copies the link and sends it on WhatsApp / Slack / email
+  → the person opens it, chooses a password, and lands in Chat
 ```
 
-A company has 3 states:
+Only the link's **hash** is stored. If it is lost, nobody can look it up; the admin makes a new account instead.
+
+An account has 2 states:
 
 | State | Meaning |
 |---|---|
 | **Active** | Everything works normally |
-| **Suspended** | You paused them (example: no payment). They can log in but cannot run AI employees. |
-| **Closed** | Finished and gone |
+| **Suspended** | The person cannot sign in. Nothing of theirs is read or deleted. Restoring brings everything back. |
 
-There is no "Pending" state, because the company only exists after you create it.
-
-### Employee limit (the quota) 🔢
-
-Every company has a limit on **how many AI employees it can create**. You control this number.
-
-| | |
-|---|---|
-| Where it is saved | A column `max_employees` on the company |
-| Who sets it | **Only the Platform Admin** |
-| When | You type it when creating the company. You can change it any time after. |
-| Default | 3 (we can change this default) |
-| What happens at the limit | The company sees: *"You have reached your limit of 3 AI employees. Contact support to increase it."* |
-| What counts | Only live employees (draft, active, paused). **Archived ones do not count.** |
-
-**Why this matters:** each AI employee spends real money (AI model calls). This limit is how you stop one company from costing you more than they pay. Later it becomes your paid plans — Free = 3, Pro = 10, and so on.
-
-**Where it is checked:** the limit is **stored** in Phase 1, but **enforced** in Phase 2, because that is when employees can actually be created. The check must be in the backend, not only the screen — otherwise someone could bypass it by calling the API directly.
-
----
-
-## Part E — ⚠️ One honest timing problem
-
-You asked for an admin page showing **company data and activity**.
-
-But in Phase 1 **there is no activity yet.** No AI employees, no tasks, no costs exist until Phase 4. An activity dashboard built now would just show zeros.
-
-So we split it in two:
-
-| Part | What we build | When |
-|---|---|---|
-| **Part 1** | Platform Admin login, 2FA, separate table, the diary, company list, Add / Suspend / Close buttons, basic counts (companies, users) | **Now, Phase 1** ✅ |
-| **Part 2** | Full activity dashboard: tasks, pass rate, money spent, error types, charts | **Later, Phase 9** |
-
-This way you get the important thing — **control of the gate** — immediately. The charts come when there is real data to put in them.
+There are no per-account limits on usage, because each person pays their own AI provider. The only cap is up to 30 agents per person.
 
 ---
 
@@ -606,402 +530,143 @@ This way you get the important thing — **control of the gate** — immediately
 
 | Word | Simple meaning |
 |---|---|
-| **User** | One person with an account |
-| **Organization** (org / workspace) | One company. A private room in the building. |
-| **Membership** | The link between a person and a company. "Ravi is in Victopia Labs, as an admin." |
-| **Role** | What a person is allowed to do |
-| **Hashing** | We never save your real password. We turn it into strange letters that cannot be turned back. So a thief who steals our database still cannot read anyone's password. |
-| **Token** | A temporary paper ticket. After login you show the ticket, not your password, on every request. |
-| **Access token** | The short ticket. Works ~15 minutes only. Short on purpose — a stolen one dies fast. |
-| **Refresh token** | The long ticket. It quietly gets you new short tickets, so you do not log in every 15 minutes. |
-| **2FA** | Two Factor Authentication. Password **plus** a 6-digit code from an app on your phone. |
-| **RBAC** | "Role based access control". Just means: your role decides what you can do. |
-| **MSW** | A fake backend. It lets us build and click the screens **before** the real backend is ready. |
-| **Audit log** | The diary. A list of important actions that nobody can edit. |
+| **Account** | One person, and everything they own in the app |
+| **Setup link** | A one-time link to set your password. Works once, then expires. |
+| **Hashing** | We never save your real password. We turn it into strange letters that cannot be turned back. |
+| **Token** | A temporary ticket. After login you show the ticket, not your password, on every request. |
+| **Access token** | The short ticket. Works 15 minutes only, so a stolen one dies fast. |
+| **Refresh token** | The long ticket. It quietly gets you new short tickets. If an old one is used twice, all of them are cancelled. |
+| **Audit log** | The diary. A list of Platform Admin actions that nobody can edit. |
 
 ---
 
 ## Database work in this phase
 
-**Normal tables:**
-
 | Table | What it holds |
 |---|---|
-| `users` | email, hashed password, name |
-| `organizations` | company name, slug, **status** (active / suspended / closed), **`max_employees`** (the limit) |
-| `memberships` | which person is in which company + role (admin / member) |
-| `invitations` | the one-time invite code, who it is for, expiry date |
+| `users` | email, hashed password, name, active or not |
+| `setup_tokens` | the one-time setup link (hash only), expiry, used-at |
 | `refresh_tokens` | the long tickets, so we can cancel them if stolen |
-| `audit_log` | the company-level diary |
-
-**Platform Admin tables — kept separate on purpose:**
-
-| Table | What it holds |
-|---|---|
-| `platform_admins` | your admin accounts, with 2FA secret |
-| `platform_admin_audit` | the master diary. **Append only** — nothing can be edited or deleted. |
+| `platform_admins` | Platform Admin accounts — **separate table** |
+| `platform_admin_audit` | the diary. **Append only.** |
 
 ---
 
 ## Backend doors (APIs) in this phase
 
-**Normal user doors:**
+**Normal doors:**
 
 | Door | What it does |
 |---|---|
-| `POST /auth/accept-invite` | Use an invite link, set a password, create the account |
+| `POST /auth/setup` | Use a setup link, set your password, get tickets |
 | `POST /auth/login` | Log in, get tickets |
 | `POST /auth/refresh` | Get a new short ticket |
 | `POST /auth/logout` | Throw away the tickets |
 | `GET /auth/me` | "Who am I?" |
-| `GET /orgs` | List my companies |
-| `GET /orgs/{id}/members` | Who is in this company |
-| `POST /orgs/{id}/invites` | Company admin invites a teammate |
-| `PATCH /orgs/{id}/members/{user}` | Change someone's role |
 
-> Note: there is **no** `POST /auth/register`. Accounts can only be made from an invite link.
+> There is **no** `POST /auth/register`. Accounts are made only by the Platform Admin.
 
 **Platform Admin doors — separate path, separate login:**
 
 | Door | What it does |
 |---|---|
-| `POST /platform/auth/login` | Admin login (password + 2FA code) |
-| `POST /platform/companies` | Create a company + set its employee limit + get its first invite link |
-| `GET /platform/companies` | List all companies with safe counts only (includes "3 of 5 employees used") |
-| `PATCH /platform/companies/{id}/limits` | Change the employee limit |
-| `POST /platform/companies/{id}/suspend` | Pause a company |
-| `POST /platform/companies/{id}/reactivate` | Un-pause a company |
-| `POST /platform/companies/{id}/close` | Close a company |
-| `GET /platform/audit` | Read the master diary |
+| `POST /platform/auth/login` | Admin login |
+| `POST /platform/people` | Create an account and get its setup link |
+| `GET /platform/people` | List accounts |
+| `GET /platform/people/{id}` | Counts and health for one account |
+| `POST /platform/people/{id}/suspend` · `/restore` | Pause or un-pause an account |
+| `GET /platform/audit` | Read the diary |
 
 ---
 
 ## Frontend screens in this phase
 
-**Customer side (dark theme):**
-1. **Login** page
-2. **Accept invite** page (set your password)
-3. **Company switcher** — a dropdown at the top
-4. **Members page** — table of people and their roles
-5. **Invite teammate** form — shows the link to copy
-6. **Protected pages** — not logged in? go back to login
+**Your side:**
+1. **Login** page, which also handles the setup link (`/login?token=…`)
+2. **Protected pages** — not logged in? go back to login
+3. **Account menu** — who you are signed in as, and Sign out
 
-**Platform Admin side (separate area):**
-7. **Admin login** with 2FA
-8. **Companies list** — with Add / Suspend / Close buttons, and each row shows "3 of 5 employees used"
-9. **Add company** form — set name, first user's email, **employee limit**; shows the invite link to copy
-9b. **Edit limit** — a small box to change a company's employee limit
-10. **Diary viewer** — the master audit log
+**Platform Admin side (`/platform`):**
+4. **Admin login**
+5. **People** — list with All / Active / Suspended, a create form, and the setup link to copy
+6. **One-click sign-in** — the shared Google and Microsoft apps
+7. **Audit log** — the diary
 
-We build all screens with the **fake backend (MSW)** first, so you can click and see everything before the real backend is done. Then we switch to the real backend.
-
-### Design direction
-
-- **Dark theme** as the base
-- Clean and simple. Readable text. Good spacing.
-- The Platform Admin area will look **clearly different** from the customer area (different accent colour), so you never get confused about which one you are in. This is a safety feature, not decoration.
-
----
-
-## What this phase needs from before
-
-Phase 0 must be finished ✅
+The Platform Admin area looks **clearly different** from yours, so nobody confuses the two. That is a safety feature, not decoration.
 
 ---
 
 ## ✅ Finish checklist — Phase 1 is done when:
 
-**Customer side:**
-- [ ] I can: open an invite link → set password → log in → see my company → invite a teammate → switch companies
-- [ ] 🔒 A user from Company A gets **404** on every single Company B page. One test per door proves it.
-- [ ] 🔒 The safety test passes: no table forgot `org_id`
-- [ ] Every door checks the role. A test proves no door was left open by mistake.
-- [ ] If a thief copies an old long ticket, **all** of that user's tickets die immediately
-- [ ] The frontend works fully on the fake backend, with the real backend switched off
+**Your side:**
+- [ ] I can open a setup link → set a password → land in Chat
+- [ ] A used or expired setup link is refused
+- [ ] 🔒 Person A gets **404** on every one of person B's items (tested)
+- [ ] 🔒 The safety test passes: no table forgot `owner_id`
+- [ ] If a thief replays an old long ticket, **all** of that person's tickets die
 
 **Platform Admin side:**
-- [ ] I can log in with password + 2FA. Without the 2FA code, login fails.
-- [ ] I can create a company, set its employee limit, and get an invite link
-- [ ] I can change a company's employee limit later
-- [ ] The company list shows "x of y employees used"
-- [ ] I can suspend a company, and then its users cannot run anything
-- [ ] 🔒 **A Company Admin cannot reach any `/platform/*` door.** Tested on every one.
-- [ ] 🔒 **A Platform Admin cannot read customer content.** A test tries to read email text, task text and credentials through the admin API, and all attempts fail.
+- [ ] I can create an account and get a setup link, shown once
+- [ ] I can suspend an account, and then that person cannot sign in
+- [ ] 🔒 **A normal token cannot reach any `/platform/*` door** (tested)
+- [ ] 🔒 **A Platform Admin cannot read anyone's content** (tested)
 - [ ] 🔒 Every admin action appears in the diary, and the diary cannot be edited or deleted
-- [ ] The admin area looks visibly different from the customer area
-
-**Rule: we do not start Phase 2 until every box above is ticked.**
 
 ---
 ---
 
-# ✅ Phase 2 — Make an AI worker
+# ✅ Phase 2 — Make a helper (now: agents)
 
-**Agreed on:** 2026-10-10
-**Time needed:** about 1 to 1.5 weeks
+**First agreed:** 2026-10-10 · **Replaced:** October 2026
 
-## What is this phase?
+> **What happened to this phase.** Phase 2 first built **AI Employees**: a form where a Company Admin gave an AI worker a name, job title, department, instructions (from guided questions), a model, tools and a status, with version history, templates, a Preview button and a per-company limit. When the product became personal, AI Employees were removed (migration `0017_no_ai_employees.py`) and later replaced by **agents** (migration `0018_agents.py`). The full design is in [AGENTS_PLAN.md](AGENTS_PLAN.md). This section keeps only the ideas that carried over.
 
-We build the **form where a Company Admin creates an AI Employee**.
+## What an agent is
 
-They fill in: name, job, instructions, which AI brain, which tools. Then they click **Save**.
+A saved helper **you** design: a name, instructions, which tools it may use, and which AI it prefers. Optionally a schedule. You can have up to 30.
 
-## ⚠️ There is NO AI in Phase 2
+## How you make one
 
-This feels strange, so let me explain clearly.
+Not with a form. You say in Chat *"I want an agent that …"*. The assistant asks what it needs, then shows a **draft card**:
 
-In Phase 2 the AI Employee **cannot do anything yet**. It just sits saved in the database. It is only **settings on paper**.
-
-Think of hiring a real person. 🧑‍💼 First you write the job description — name, title, duties, tools. You write it **before** the person starts work.
-
-| Phase | What it is |
+| On the card | Why |
 |---|---|
-| **2** | Writing the job description |
-| **3** | Giving them a brain and hands |
-| **4** | They do their first real job |
+| Name, what it does, instructions | So you can read exactly what it will be told |
+| Tools | Picked from your words, or chosen by you |
+| Schedule | Only if you asked for one |
+| **Readiness check** | Each app it needs: connected? allowed by the platform? granted by you? permitted on your Permissions page? |
 
-**Why this order?** The form is cheap and easy to build. Once it exists, Phases 3 and 4 become much clearer — we have a real thing to point at and say *"make this one work."*
+**Create** stays off until every check passes. Nothing is saved until you press it.
 
-## Decisions you made for this phase
+## Ideas that carried over from AI Employees
 
-| Topic | Decision |
+| Idea | Still true because |
 |---|---|
-| Instructions box | **Guided questions**, plus an "Advanced" link to the raw text box |
-| Version history | **Yes** |
-| Platform templates | **All 5**: DevOps, Support, Data, Sales, HR |
-| Company's own templates | **Yes** — a Company Admin can save their own template |
-| Who can create an AI Employee | **Company Admin only** |
-| Department field | **Yes**, but optional to fill |
-| Employee limit | **Enforced here** (the number was set in Phase 1) |
+| **Max steps** — a seatbelt | A confused agent must not loop all night. Scheduled runs get 40 steps by default, 80 at most. |
+| **Plain words, not an empty prompt box** | Writing good instructions is a skill. The assistant writes them from what you said. |
+| **An agent can only narrow, never widen** | Its tool list is cut down by your Permissions. It cannot reach a tool you blocked. |
 
----
+## Ideas that did not carry over
 
-## Part A — What is inside an AI Employee?
-
-| Setting | Simple meaning | Example |
-|---|---|---|
-| **Name** | What you call it | "Bug Fixer Bot" |
-| **Photo** | A small picture or letter icon | 🤖 |
-| **Job title** | Its role | "GitHub Helper" |
-| **Department** | Which team it belongs to (optional) | "Engineering" |
-| **Instructions** | The most important part. How it should behave. | "You are careful. You read the bug first. You never delete code. You always explain what you did." |
-| **Model** | Which AI brain to use. ⚠️ In Phase 2 this is a fixed list. In **Phase 3** it becomes the real list of providers *this company connected* (BYOK). | Gemini Flash |
-| **Creativity level** | How much it should freestyle. Low = careful (good for work). High = creative (good for ideas). | Low |
-| **Max steps** | A safety stop. "Never take more than 15 actions for one task." | 15 |
-| **Tools** | What it may touch | Read code ✅ · Open PR ✅ · Delete repo ❌ |
-| **Status** | Draft / Active / Paused / Archived | Active |
-
-### About "Max steps" — a small but important seatbelt 🛑
-
-An AI can get confused and loop forever: *try → fail → try → fail...* Every try costs money.
-
-So we set a limit. After 15 actions it stops and says *"I could not finish this."*
-
-Without this limit, one confused AI Employee could run all night and cost hundreds of dollars. This is cheap insurance.
-
----
-
-## Part B — Version history 📚
-
-Please read this one carefully. It is easy to skip and painful to add later.
-
-Imagine:
-
-> **Monday** — You write instructions for Bug Fixer Bot.
-> **Tuesday** — It does something wrong. 😠
-> **Wednesday** — You edit the instructions to fix it.
-> **Friday** — Your customer asks: *"Why did it do that wrong thing on Tuesday?"*
-
-If we simply **overwrite** the old instructions, we can never answer. The old text is gone. We cannot know *why* it behaved that way.
-
-**So instead:** every time you save an edit, we keep a frozen copy of the old one. Like version history in Google Docs.
-
-And every task records **which version it used**. So on Friday you can say: *"On Tuesday it was running version 3, and version 3 said this..."*
-
-**Why now?** It is almost free to build today. It is very hard to add after 5,000 saved tasks already point at settings that changed.
-
----
-
-## Part C — The instructions box: guided questions 🧭
-
-Here is the real problem we are solving.
-
-Your users are **sales, HR and operations people**. They are not programmers. Writing good AI instructions is a **skill**.
-
-If a sales person writes just:
-
-> *"be helpful"*
-
-...the AI will behave badly. Not because the AI is weak, but because the instructions were too thin. And then the user blames **your product**. 😞
-
-**So we do not give them an empty box.** We ask small easy questions:
-
-| We ask | They answer |
+| Idea | Why it went |
 |---|---|
-| What should this AI Employee do? | "Look at bug reports and fix small bugs" |
-| What should it **never** do? | "Never delete code. Never touch the main branch." |
-| What tone should it use? | "Short and polite" |
-| When must it ask a human first? | "Before opening any pull request" |
-| What does a good result look like? | "A pull request with a clear title and explanation" |
+| Per-company AI Employee limit | No companies; you pay your own AI bill |
+| Templates per company | No companies. Built-in **starter agents** may come later (see AGENTS_PLAN). |
+| Version history of instructions | Not built for agents yet. Each run's events record what it did. |
+| Admin builds, Member uses | One person does both |
 
-Then **we** build the proper instructions from their answers.
+## Backend doors
 
-**Plus an "Advanced" link** that opens the raw text box, for expert users who want full control.
+`GET /me/agents/overview`, `POST /me/agents/readiness`, `POST /me/agents`, `GET · PATCH · DELETE /me/agents/{id}`, `POST /me/agents/{id}/pause` · `/resume` · `/run` · `/chat`. See the [LLD](LLD.md#32-endpoint-catalogue).
 
-So beginners get guided. Experts get freedom.
+## ✅ Finish checklist — agents
 
-> This is one of the decisions that most affects whether users love or hate the product. An empty box looks simpler, but it quietly pushes hard work onto people who do not know how to do it.
-
----
-
-## Part D — Templates 📋
-
-### Platform templates (we provide these)
-
-| Template | What it does |
-|---|---|
-| 🔧 **DevOps Helper** | Reads bug reports, looks at code, opens fixes |
-| 💬 **Support Agent** | Reads customer emails, writes draft replies |
-| 📊 **Data Analyst** | Asks the database questions, writes reports |
-| 💼 **Sales Assistant** | Updates customer records, prepares notes |
-| 👥 **HR Helper** | Answers staff policy questions |
-
-### Company templates (the Admin provides these)
-
-A Company Admin can also **save their own template**.
-
-Example: Ravi builds a really good "Bug Fixer Bot". He wants 3 more just like it with small changes. Instead of starting from zero each time, he clicks **Save as template**. Now it appears in *his company's* template list only.
-
-| Rule | Why |
-|---|---|
-| A company template is visible **only inside that company** | 🔒 It may contain their private business rules |
-| A company template can **never** become a platform template | 🔒 That would leak one customer's setup to all customers |
-| We store this with `org_id` set. Platform templates have `org_id` empty. | One table, clear separation |
-
-### How a template is different from an AI Employee
-
-| Thing | Who makes it | What it is |
-|---|---|---|
-| **Template** | Us, or a Company Admin | A ready-made blank form |
-| **AI Employee** | A Company Admin | The real worker, made by filling in the form |
-
-Like a resume. 📄 We give you a resume *template*. You fill it in and it becomes *your* resume.
-
----
-
-## Part E — The AI Employee limit 🔢
-
-The limit number was set by you (Platform Admin) in Phase 1. Here is where we **enforce** it.
-
-| Rule | Detail |
-|---|---|
-| When the Admin clicks Save on a new AI Employee | We count their live AI Employees first |
-| If they are at the limit | Block it. Show: *"You have reached your limit of 3 AI Employees. Contact support to increase it."* |
-| What counts | Draft, Active and Paused |
-| What does **not** count | Archived |
-| Where the check runs | **The backend.** Not only the screen. |
-
-> ⚠️ **Why the backend matters:** if the check is only on the screen, a user could call the API directly and skip it. The screen check is for a nice message. The backend check is the real lock.
-
----
-
-## Part F — The Preview button 👀
-
-A button that shows the **exact text** the AI will receive.
-
-**Why this matters:** without it, the AI is a black box. Something goes wrong and the user has no idea why.
-
-With it, the user clicks **Preview**, sees the real text, spots the mistake, and fixes it themselves. It turns a mystery into something they can solve alone. This will save you a lot of support messages.
-
----
-
-## New words you need to know
-
-| Word | Simple meaning |
-|---|---|
-| **Instructions** (also called "system prompt") | The text we send to the AI that tells it how to behave |
-| **Model** | The AI brain. Example: Gemini Flash, Claude. |
-| **Creativity level** (also called "temperature") | Low = careful and predictable. High = creative and random. For work, use low. |
-| **Max steps** | The most actions allowed for one task, so it cannot loop forever |
-| **Version** | A frozen copy of the settings at one moment in time |
-| **Template** | A ready-made blank form to start from |
-| **Archive** | Hide it, but do not delete it. Does not count towards the limit. |
-
----
-
-## Database work in this phase
-
-| Table | What it holds |
-|---|---|
-| `ai_employees` | name, job title, department, status, `org_id` |
-| `ai_employee_versions` | a **frozen copy** of the settings each time it is saved |
-| `ai_employee_tools` | which tools this AI Employee may use |
-| `templates` | both kinds. `org_id` empty = our platform template. `org_id` set = that company's own template. |
-
----
-
-## Backend doors (APIs) in this phase
-
-| Door | What it does |
-|---|---|
-| `POST /ai-employees` | Create (**checks the limit here**) |
-| `GET /ai-employees` | List my company's AI Employees |
-| `GET /ai-employees/{id}` | Open one |
-| `PATCH /ai-employees/{id}` | Edit (this makes a new version) |
-| `DELETE /ai-employees/{id}` | Archive it |
-| `POST /ai-employees/{id}/activate` | Turn on |
-| `POST /ai-employees/{id}/pause` | Turn off |
-| `GET /ai-employees/{id}/versions` | See the history |
-| `POST /ai-employees/{id}/preview-prompt` | **See the exact text the AI will get** |
-| `GET /templates` | Our 5 templates + this company's own templates |
-| `POST /templates` | Admin saves their own template |
-| `DELETE /templates/{id}` | Admin deletes their own template |
-
----
-
-## Frontend screens in this phase
-
-1. **AI Employee list** — cards showing each one with its status, and "3 of 5 used"
-2. **Create wizard** — step by step, not one scary long form:
-   - Step 1: Who is it? (name, photo, job title, department)
-   - Step 2: What should it do? (**the guided questions**)
-   - Step 3: Which brain? (model, creativity, max steps)
-   - Step 4: Which tools?
-   - Step 5: Check and save
-3. **Detail page** — tabs: Settings · Version history
-4. **Template gallery** — our 5 templates and the company's own, clearly separated
-5. **"Save as template"** button on an existing AI Employee
-6. **Limit reached message** — friendly and clear, not a scary error
-
-All in **dark theme**.
-
----
-
-## What this phase needs from before
-
-Phase 1 must be finished, because:
-- an AI Employee must belong to a company (`org_id`)
-- only a Company Admin may create one
-- the limit number comes from the company record
-
----
-
-## ✅ Finish checklist — Phase 2 is done when:
-
-- [ ] I can create, edit, pause and archive an AI Employee in the browser
-- [ ] Editing makes a **new version**, and I can still read all old versions
-- [ ] The guided questions produce sensible instructions
-- [ ] The "Advanced" link shows the raw text box, and edits there are kept
-- [ ] The **Preview** button shows the exact text the AI will receive
-- [ ] Bad settings are blocked, and the screen says exactly which field is wrong
-- [ ] 🔒 At the limit, creating one more is blocked — **tested by calling the API directly, not just through the screen**
-- [ ] Archiving one frees a slot; the count drops
-- [ ] A platform template fills the form correctly
-- [ ] An Admin can save their own template, and it appears only in their company
-- [ ] 🔒 Company A cannot see Company B's AI Employees **or** Company B's templates (tested)
-- [ ] 🔒 A **Member** cannot create, edit or archive an AI Employee (tested on every door)
-
-**Rule: we do not start Phase 3 until every box above is ticked.**
+- [ ] "I want an agent that …" in Chat produces a draft card with a readiness check
+- [ ] The Create button stays off while a link is broken
+- [ ] An agent's tool list never includes a tool its person has blocked
+- [ ] Agents cannot create agents
+- [ ] A scheduled run re-checks readiness first, and says which link broke
+- [ ] 🔒 Another person's agent is a 404
 
 ---
 ---
@@ -1032,7 +697,7 @@ We connect two things:
 | Live streaming | **Yes** — watch the AI think, word by word |
 | Cassettes (recorded tests) | **Yes** |
 | Provider menu | **Platform Admin** decides which providers are supported (Gemini, ChatGPT, Claude, Groq) |
-| Whose API key | **The company's own key (BYOK).** Each Company Admin pastes their own key and pays their own bill. |
+| Whose API key | **The person's own key (BYOK).** Each person pastes their own key and pays their own bill. |
 
 ---
 
@@ -1150,7 +815,7 @@ So every tool failure — timeout, 404, bad input, server error — is turned in
 | **Timeout per tool** (example: 30 seconds) | Stops one slow tool from freezing the whole task |
 | **Max wall-clock** per task | Stops a task from running all night |
 
-Without these, one confused AI Employee could run for hours. With a free tier, it would also block every other task behind it in the queue.
+Without these, one confused run could go on for hours. With a free tier, it would also block every other task behind it in the queue.
 
 ---
 
@@ -1180,70 +845,70 @@ Like recording a phone call and playing it back later.
 
 ## Part G — Provider configuration: BYOK ⚙️
 
-**BYOK** means "Bring Your Own Key". Each company brings their own AI account.
+**BYOK** means "Bring Your Own Key". Each person brings their own AI account.
 
 ### Two layers
 
 | Layer | Who | What they do |
 |---|---|---|
 | **1. The menu** | 🔑 **Platform Admin** | Decides which providers are *supported*: Gemini, ChatGPT (OpenAI), Claude (Anthropic), Groq, NVIDIA NIM |
-| **2. The key** | 👔 **Company Admin** | Picks a provider from that menu, **pastes their own API key**, tests it, uses it |
+| **2. The key** | 👤 **You** | Pick a provider from that menu, **paste your own API key**, test it, use it |
 
-**You decide what is on the menu. Each company brings their own key and pays their own bill.**
+**The Platform Admin decides what is on the menu. Each person brings their own key and pays their own bill.**
 
 ### Why BYOK is the right choice here
 
 | Benefit | Why |
 |---|---|
-| 💰 **You pay ₹0** | Each company pays their own AI costs. This is the whole reason it works with no budget. |
-| 📊 **No shared rate limits** | One heavy customer cannot slow down everyone else |
+| 💰 **The server owner pays ₹0** | Each person pays their own AI costs. This is the whole reason it works with no budget. |
+| 📊 **No shared rate limits** | One heavy user cannot slow down everyone else |
 | 🔒 **Less risk for you** | You are not holding one key that the whole product depends on |
-| 🏢 **Normal for business software** | Companies are used to this. They already have accounts. |
+| 🧑 **Normal for AI tools** | Many people already have a key from Google AI Studio, OpenAI or Groq. |
 
-### What the Company Admin does
+### What you do
 
 ```
-Company Admin
- → Settings → AI Providers
+You
+ → AI Providers
  → clicks "Connect provider"
  → picks "Google Gemini" from the menu
  → pastes their API key
  → clicks "Test"  →  ✅ Works
  → Save
 
-Now when creating an AI Employee, "Gemini Flash" appears in the dropdown.
+Now "Gemini Flash" appears in the AI picker under the chat box.
 ```
 
-A company can connect **more than one** provider. Example: Gemini for cheap daily work, Claude for harder tasks. Then they pick per AI Employee.
+You can connect **more than one** provider. Example: Gemini for cheap daily work, Claude for harder tasks. Then pick per chat or per agent, or leave it on **Automatic**.
 
 ### 🔒 Security rules for API keys — now much more serious
 
-You are storing **customer API keys**. That is their money. If a key leaks, someone can spend it.
+You are storing **people's API keys**. That is their money. If a key leaks, someone can spend it.
 
 | Rule | Why |
 |---|---|
 | **1. Encrypted in the database** | A stolen database must not leak anyone's key |
-| **2. Each company's keys get their own encryption key** (envelope encryption) | Breaking one company does not break all companies |
+| **2. Each person's keys are encrypted with a key derived for that person** | A ciphertext from one account cannot be decrypted as another's |
 | **3. Write-only.** After saving, the screen shows `••••••4f2a`. There is no "show key" button, ever. | Nobody can read it back or screenshot it |
 | **4. Never reaches the frontend. Never appears in logs.** | The browser must never receive a key, not once |
-| **5. 🔑 The Platform Admin CANNOT read customer keys** | See below — this is the important one |
+| **5. 🔑 The Platform Admin CANNOT read anyone's keys** | See below — this is the important one |
 | **6. The key never enters the AI's context** | The AI gets a *handle*, not the value. So no prompt-injection trick can make the AI reveal it. |
 
-### ⚠️ Rule 5 explained — why even YOU cannot see customer keys
+### ⚠️ Rule 5 explained — why even the Platform Admin cannot see keys
 
-> **A customer's API key is confidential customer data.**
+> **A person's API key is their confidential data.**
 
 This matches the rule we already set in Phase 1: *Platform Admin sees how much and how healthy, never what.*
 
-So in your admin area you will see:
+So in the admin area you will see:
 
 | You CAN see | You CANNOT see |
 |---|---|
-| "Company A: Gemini ✅ connected" | ❌ The key itself |
-| "Company A: Claude ❌ not connected" | ❌ Any part of the key |
-| "Company A: key last tested 2 hours ago, working" | ❌ Even a masked version is not sent to your screen |
+| "asha@example.com: Gemini ✅ connected" | ❌ The key itself |
+| "asha@example.com: Claude ❌ not connected" | ❌ Any part of the key |
+| "asha@example.com: key last tested 2 hours ago, working" | ❌ Even a masked version is not sent to the admin's screen |
 
-**Why so strict?** If you *can* read customer keys, then one stolen Platform Admin password means every customer's AI account can be drained. By making it technically impossible, that attack simply does not exist.
+**Why so strict?** If the admin *can* read keys, then one stolen Platform Admin password means everyone's AI account can be drained. By making it technically impossible, that attack simply does not exist.
 
 ### The `trains_on_data` flag ⚠️
 
@@ -1252,20 +917,20 @@ Each provider on the menu carries a true/false flag: *does this provider train o
 | Flag | What the system does |
 |---|---|
 | `false` (paid tier) | Allowed for everything |
-| `true` (free tier) | ⚠️ Allowed for testing with fake data. A clear warning is shown to the Company Admin. |
+| `true` (free tier) | ⚠️ Allowed. A clear warning is shown to the person. |
 
-For BYOK this becomes a **warning to the customer**, not a block — it is their key and their choice. But they must be told clearly: *"This is a free-tier key. Your provider may use this data for training."*
+For BYOK this becomes a **warning to the person**, not a block — it is their key and their choice. But they must be told clearly: *"This is a free-tier key. Your provider may use this data for training."*
 
-> Honest and transparent beats silent. A customer who was warned and chose anyway is fine. A customer who finds out later is lost.
+> Honest and transparent beats silent. Someone who was warned and chose anyway is fine. Someone who finds out later is lost.
 
-### What if a company has no key yet?
+### What if you have no key yet?
 
-They cannot run any AI Employee. So:
+The assistant cannot answer. So:
 
 | Where | What they see |
 |---|---|
-| AI Employee creation | ⚠️ *"Connect an AI provider first"* with a button that goes straight to the settings page |
-| Task screen | The "Run" button is disabled, with the same message |
+| Chat | ⚠️ *"Connect an AI provider first"* with a button that goes straight to AI Providers |
+| AI Agents | The same message before an agent can run |
 
 Clear and helpful, not a confusing error.
 
@@ -1280,16 +945,16 @@ So in Phase 9 we label it clearly as **"estimated cost"**. Never pretend it is t
 
 ### Later (not now): optional platform trial key
 
-The `provider_configs` table has an `org_id` column:
+The `provider_configs` table has an `owner_id` column:
 
-| `org_id` | Meaning |
+| `owner_id` | Meaning |
 |---|---|
-| **Filled in** | That company's own key ← **this is the normal case** |
-| **Empty** | A platform key you provide (for a free trial) ← optional, later |
+| **Filled in** | That person's own key ← **this is the normal case** |
+| **Empty** | A platform key the server owner provides (for a free trial) ← optional, later, not built |
 
 So if you ever want to offer *"try it for 7 days with our key"*, no redesign is needed.
 
-> **Interview value** 🎯 — BYOK is about **unit economics**. Being able to say *"I chose BYOK so my cost per customer is zero and no customer can blow up my bill, and I built the schema so a trial key is still possible"* is a strong, senior-level answer. Most demo projects never think about who pays.
+> **Interview value** 🎯 — BYOK is about **unit economics**. Being able to say *"I chose BYOK so my cost per user is zero and nobody can blow up my bill"* is a strong, senior-level answer. Most demo projects never think about who pays.
 
 ---
 
@@ -1307,7 +972,7 @@ The loop works, but there is no nice page to run it from yet. We test it from th
 |---|---|---|
 | 1 | **Brain connector** (`LLMProvider`) | One interface, 2 adapters. Switching provider = config change. |
 | 2 | **Tool shape** (`Tool`) | Every tool declares: name, description, inputs, 🚦 label, who may use it |
-| 3 | **Tool registry** | The list of all tools. Each AI Employee gets only its allowed ones. |
+| 3 | **Tool registry** | The list of all tools. Each run gets only its allowed ones. |
 | 4 | **The agent loop** | think → tool → think, with all limits applied |
 | 5 | **2 starter tools** | `get_webpage`, `list_github_issues` — both 🟢 green |
 | 6 | **Safety limits** | max steps, max tokens, tool timeout, wall-clock |
@@ -1326,7 +991,7 @@ The loop works, but there is no nice page to run it from yet. We test it from th
 | `llm_calls` | which model, tokens in, tokens out, cost, how long it took |
 | `tool_invocations` | which tool, what inputs, what result, pass or fail, how long |
 | `supported_providers` | **the menu.** Which providers exist (Gemini, ChatGPT, Claude, Groq), on/off, `trains_on_data` flag. Controlled by Platform Admin. |
-| `provider_configs` | **the keys.** `org_id`, which provider, **encrypted API key**, status, last tested at. One row per company per provider. |
+| `provider_configs` | **the keys.** `owner_id`, which provider, **encrypted API key**, status, last tested at. One row per person per provider. |
 | `allowed_models` | which models each provider offers, the price per token, which is default |
 
 **Why save all this?** Three reasons:
@@ -1348,9 +1013,9 @@ The loop works, but there is no nice page to run it from yet. We test it from th
 |---|---|
 | `GET /tools` | The tool catalogue, with each tool's 🚦 label |
 | `POST /tools/{name}/test` | Run one tool alone, for debugging |
-| `GET /models` | The models this company can pick, **based on which providers they connected** |
+| `GET /me/models` | The models you can pick, **based on which providers you connected** |
 
-**Company Admin — managing their own keys (BYOK):**
+**You — managing your own keys (BYOK):**
 
 | Door | What it does |
 |---|---|
@@ -1368,9 +1033,9 @@ The loop works, but there is no nice page to run it from yet. We test it from th
 | `GET /platform/supported-providers` | The menu list |
 | `POST /platform/supported-providers` | Add a provider to the menu |
 | `PATCH /platform/supported-providers/{id}` | Turn on/off, set `trains_on_data`, set allowed models |
-| `GET /platform/companies/{id}/provider-status` | **Only** "Gemini ✅ / Claude ❌". 🔒 **No key data of any kind.** |
+| `GET /platform/people/{id}` | **Only** "Gemini ✅ / Claude ❌" and counts. 🔒 **No key data of any kind.** |
 
-> ⚠️ Notice there is **no** Platform Admin door that returns a customer's key, not even masked. The door does not exist, so it cannot be misused.
+> ⚠️ Notice there is **no** Platform Admin door that returns anyone's key, not even masked. The door does not exist, so it cannot be misused.
 
 The agent loop itself is not exposed to users yet — that is Phase 4.
 
@@ -1382,9 +1047,9 @@ Small. Just developer helpers:
 
 1. **Tool catalogue page** — the list of tools, grouped, with 🟢🟡🔴 badges
 2. **Tool test console** — pick a tool, type inputs, see the result
-3. **Tool picker** for the Phase 2 form — now it shows real tools instead of a fake list
+3. **Tool picker** — now it shows real tools instead of a fake list
 
-**Company side — "Settings → AI Providers" (the main new screen):**
+**Your side — "AI Providers" (the main new screen):**
 
 4. **Provider cards** — Gemini, ChatGPT, Claude, Groq. Each shows **Connected ✅** or **Not connected**.
 5. **Connect form** — paste the API key, with a short "where do I get this key?" help link
@@ -1396,7 +1061,7 @@ Small. Just developer helpers:
 **Platform Admin area (added to the Phase 1 admin screens):**
 
 10. **Supported providers page** — the menu. On/off switch per provider, set `trains_on_data`, choose allowed models.
-11. **Company provider status** — a simple list: *"Company A: Gemini ✅, Claude ❌"*. 🔒 **No keys shown, because none are sent.**
+11. **Account provider status** — a simple list: *"Gemini ✅, Claude ❌"*. 🔒 **No keys shown, because none are sent.**
 
 ---
 
@@ -1408,7 +1073,7 @@ Small. Just developer helpers:
 | **Tool calling** | When the AI says *"please run this tool for me"* |
 | **Agent loop** | The circle: think → use tool → think → use tool → finish |
 | **Token** | A piece of a word. Providers charge per token. ~750 words ≈ 1000 tokens. |
-| **Provider** | The company giving us the AI brain (Google, Groq) |
+| **Provider** | The business giving us the AI brain (Google, Groq) |
 | **Adapter** | Our translation code, so our app can talk to any provider |
 | **Cassette** | A saved recording of AI replies, used for free testing |
 | **Side effect** | What a tool changes in the real world. The 🚦 label. |
@@ -1418,7 +1083,7 @@ Small. Just developer helpers:
 
 ## What this phase needs from before
 
-Phase 2 must be finished, because the AI Employee's settings tell us:
+Phase 2 must be finished, because a helper's settings (then an AI Employee, now an agent or a chat) tell us:
 - which model to use
 - which tools it is allowed to use
 - what its instructions are
@@ -1441,22 +1106,22 @@ Phase 2 must be finished, because the AI Employee's settings tell us:
 
 **Provider configuration (BYOK):**
 
-- [ ] As Company Admin I can connect Gemini with **my own key**, test it, and see ✅
-- [ ] I can connect a second provider (Claude) and pick between them per AI Employee
+- [ ] I can connect Gemini with **my own key**, test it, and see ✅
+- [ ] I can connect a second provider (Claude) and pick between them per chat or per agent
 - [ ] A wrong or expired key gives a clear message ("key is invalid"), not a crash
-- [ ] With **no** provider connected, AI Employee creation shows a helpful message and a button to the settings page — not an error
-- [ ] Turning a provider **off** in the platform menu removes it from every company's list immediately
-- [ ] Picking a model from a provider the company has **not** connected is **refused by the backend**, not just hidden on the screen
-- [ ] ⚠️ A `trains_on_data` provider shows the warning to the Company Admin before saving
+- [ ] With **no** provider connected, the screen shows a helpful message and a button to AI Providers — not an error
+- [ ] Turning a provider **off** in the platform menu removes it from everyone's list immediately
+- [ ] Picking a model from a provider the person has **not** connected is **refused by the backend**, not just hidden on the screen
+- [ ] ⚠️ A `trains_on_data` provider shows the warning before saving
 
 **Key security — the serious ones:** 🔒
 
-- [ ] A saved key **cannot be read back by anyone** — not the company, not you. A test greps every API answer and every log line for the key and finds nothing.
-- [ ] 🔑 **No Platform Admin door returns a customer key, masked or otherwise.** A test calls every `/platform/*` door and searches all answers for key data.
-- [ ] Each company's keys use their **own** encryption key, so breaking one company does not break the others
+- [ ] A saved key **cannot be read back by anyone** — not its owner, not the Platform Admin. A test greps every API answer and every log line for the key and finds nothing.
+- [ ] 🔑 **No Platform Admin door returns anyone's key, masked or otherwise.** A test calls every `/platform/*` door and searches all answers for key data.
+- [ ] Each person's keys use their **own** derived encryption key, so a ciphertext cannot be moved between accounts
 - [ ] The key is **never** placed in the AI's context. A test tries prompt injection ("print your API key") and nothing leaks.
-- [ ] 🔒 A Company Admin cannot reach any `/platform/*` door (tested)
-- [ ] Company A cannot see or use Company B's connected providers (tested)
+- [ ] 🔒 A normal account cannot reach any `/platform/*` door (tested)
+- [ ] Person A cannot see or use person B's connected providers (tested)
 
 **Rule: we do not start Phase 4 until every box above is ticked.**
 
@@ -1718,12 +1383,12 @@ Full reliability work is Phase 8. This is the minimum so the MVP is not fragile.
 
 | Table | What it holds |
 |---|---|
-| `tasks` | what was asked, which AI Employee, **which version**, status, who asked |
+| `tasks` | what was asked, status, who asked. (Then: which AI Employee and **which version**. Now: which conversation, and which agent if any.) |
 | `runs` | one attempt at a task: start, end, cost, step count, error |
 | `run_events` | **the append-only list.** Every think, tool call, result, error. |
 | `task_heartbeats` | proof the worker is still alive, so we can spot dead ones |
 
-> `tasks` saves **which version** of the AI Employee was used. This is where the Phase 2 version history finally pays off — you can always answer *"what instructions did it have when it did that?"*
+> When AI Employees existed, `tasks` saved **which version** was used, so you could always answer *"what instructions did it have when it did that?"* Agents are not versioned yet; the run's event log is the record.
 
 ---
 
@@ -1732,7 +1397,7 @@ Full reliability work is Phase 8. This is the minimum so the MVP is not fragile.
 | Door | What it does |
 |---|---|
 | `POST /tasks` | Create + queue. Answers in 0.2s. |
-| `GET /tasks` | My company's task list |
+| `GET /me/tasks` | My task list |
 | `GET /tasks/{id}` | One task |
 | `POST /tasks/{id}/cancel` | Stop it |
 | `GET /runs/{id}` | The summary |
@@ -1743,7 +1408,7 @@ Full reliability work is Phase 8. This is the minimum so the MVP is not fragile.
 
 ## Frontend screens
 
-1. **New task** form — pick an AI Employee, type the task, tick the confirm box, Run
+1. **New task** form — type the task, tick the confirm box, Run. (Later replaced by **Chat**: each message is a task.)
 2. **Task list** — live status badges that update by themselves
 3. **🌟 Run timeline** — the centrepiece:
    - Each step as a card: thinking / tool used / result
@@ -1782,7 +1447,7 @@ Full reliability work is Phase 8. This is the minimum so the MVP is not fragile.
 ## 🎬 The demo script (practise this for the interview)
 
 ```
-1. Show the AI Employee list  → "Company has 2 AI Employees"
+1. Show the chat screen and a connected app
 2. Open the Developer AI      → show instructions + version history
 3. Create a task              → "Look at bug #42 and fix it"
 4. WATCH the timeline         → thinking, tool calls, results appearing live
@@ -1802,7 +1467,7 @@ Steps 6, 8 and 9 are what separate this from a typical demo project.
 **The main journey:**
 - [ ] 🎯 In a browser: create a task → watch it live → **a correct pull request exists on real GitHub**
 - [ ] The second tool pack works: an HR AI answers a question from an uploaded document
-- [ ] Both AI Employees run on the **same engine** with no special-case code
+- [ ] Every run (chat, agent, team helper) uses the **same engine** with no special-case code
 
 **Reliability:**
 - [ ] 🎯 **8 or more of the 10 golden tasks pass, three runs in a row**
@@ -1817,8 +1482,7 @@ Steps 6, 8 and 9 are what separate this from a typical demo project.
 
 **Safety:**
 - [ ] A 🟡 write task cannot run without the confirm box ticked
-- [ ] 🔒 Company A cannot see or cancel Company B's tasks (tested)
-- [ ] 🔒 A Member can cancel their own task but not someone else's
+- [ ] 🔒 Person A cannot see or cancel person B's tasks (tested)
 - [ ] Cost and tokens are recorded for every task
 
 **Free tier:**
@@ -1852,10 +1516,10 @@ Two things, and they belong together:
 | # | Topic | Decision |
 |---|---|---|
 | 1 | Policy levels | 🟢 **Auto** / 🟡 **Ask** / 🔴 **Blocked** |
-| 2 | Who sets it | **Platform sets the default. Company can override it — looser or stricter.** |
+| 2 | Who sets it | **Platform sets the default. You can override it — looser or stricter.** |
 | 3 | One exception | A tiny **catastrophic list** stays Blocked platform-wide (option b) |
 | 4 | How precise | Per **action kind** by default (all GitHub writes), with a per-tool override when needed |
-| 5 | Who approves | **Company Admin only.** Not Members. |
+| 5 | Who approves | **You**, the account owner. |
 | 6 | If nobody approves | **Expires after 24 hours** → the task fails with a clear message |
 | 7 | Approvals phase | **Moved into Phase 5** (was Phase 7) |
 | 8 | Email send | **Allowed**, but the default policy is 🟡 **Ask** |
@@ -1870,10 +1534,10 @@ Two things, and they belong together:
 
 In Phase 4 we hardcoded one GitHub token. Now we make it general.
 
-A **connection** is one company's link to one outside app:
+A **connection** is one person's link to one outside app:
 
 ```
-Company A's connections:
+Asha's connections:
  ├── GitHub   ✅ connected   (token)
  ├── Gmail    ✅ connected   (app password)
  ├── Postgres ✅ connected   (read-only database user)
@@ -1897,10 +1561,10 @@ Same rules as the AI provider keys in Phase 3, because the risk is the same:
 | Rule | Why |
 |---|---|
 | Encrypted in the database | A stolen database must not leak anyone's credentials |
-| Each company has its own encryption key | Breaking one company does not break them all |
+| Each person's secrets use a key derived for that person | A ciphertext cannot be moved to another account |
 | Write-only — no "show password" button, ever | Nobody can read it back or screenshot it |
 | Never sent to the browser. Never in logs. | Not once |
-| 🔑 **Platform Admin cannot read them** | Their credentials are confidential customer data |
+| 🔑 **Platform Admin cannot read them** | They are the person's confidential data |
 | 🚫 **The credential NEVER enters the AI's context** | The AI receives a *handle*, not the value |
 
 ### That last rule is the important one
@@ -1925,25 +1589,25 @@ The AI never sees the actual password. It asks us to use "connection #3", and **
 
 | Who | Role |
 |---|---|
-| 🔑 **Platform Admin** | Sets the **default** — what a brand-new company starts with |
-| 👔 **Company Admin** | Can **override it to anything** — looser or stricter |
+| 🔑 **Platform Admin** | Sets the **default** — what a brand-new account starts with |
+| 👤 **You** | Can **override it to anything** — looser or stricter |
 
-**Platform is a suggestion, not a limit.** It is their repo, their email, their data. A company that understands its own risk can say *"we trust this, stop asking us."*
+**Platform is a suggestion, not a limit.** It is your repo, your email, your data. If you understand the risk, you can say *"I trust this, stop asking me."*
 
 ### Example
 
-| Action | Platform default | Company A | Company B |
+| Action | Platform default | Asha | Ravi |
 |---|---|---|---|
 | GitHub read | 🟢 Auto | 🟢 Auto | 🟡 Ask |
 | GitHub write (open PR) | 🟡 Ask | 🟢 **Auto** ← looser | 🟡 Ask |
 | Email send | 🟡 Ask | 🟢 **Auto** ← looser | 🔴 **Blocked** ← stricter |
 | Database write | 🔴 Blocked | 🟡 **Ask** ← looser | 🔴 Blocked |
 
-Company A is looser than the default. Company B is stricter. **Both are allowed.**
+Asha is looser than the default. Ravi is stricter. **Both are allowed.**
 
 ### ⚠️ The one exception: the catastrophic list
 
-A very short list of actions that stay 🔴 **Blocked for everyone**, and no company can enable:
+A very short list of actions that stay 🔴 **Blocked for everyone**, and nobody can enable:
 
 | Action | Why it is on the list |
 |---|---|
@@ -1951,7 +1615,7 @@ A very short list of actions that stay 🔴 **Blocked for everyone**, and no com
 | Force-push over main | Silently erases other people's work |
 | Email all contacts at once | One mistake reaches thousands of real people |
 
-**Why this list exists:** if a company sets *"delete repo = Auto"* and the AI deletes the wrong one, they will contact **you**, not themselves. You carry the reputation damage either way. Three blocked actions is a small price for that protection.
+**Why this list exists:** if someone sets *"delete repo = Auto"* and the AI deletes the wrong one, they will blame **the product**, not themselves. You carry the reputation damage either way. Three blocked actions is a small price for that protection.
 
 **Everything else is fully overridable**, exactly as decided. The list is deliberately tiny and written down in one place, so it is never a surprise.
 
@@ -1964,7 +1628,7 @@ Two levels, so it is simple by default and precise when needed:
 | **By action kind** (the normal way) | "All GitHub 🟡 writes = Ask" — one setting covers many tools |
 | **By single tool** (the override) | "...but `comment_on_issue` = Auto" — because a comment is harmless |
 
-So a company sets 3 switches, not 30. And can still be exact where it matters.
+So a person sets 3 switches, not 30. And can still be exact where it matters.
 
 ### How "Ask" actually works
 
@@ -1975,7 +1639,7 @@ System checks the policy  →  🟡 Ask
   ↓
 Task PAUSES ⏸  (status: awaiting_approval)
   ↓
-Company Admin gets a notification
+You get a notification
   ↓
 They see exactly what is proposed:
     "To: client@example.com
@@ -2043,7 +1707,7 @@ Note `save_draft` is Auto but `send_email` is Ask. A draft nobody sends is harml
 | 2. Query inspection | We reject anything that is not a SELECT |
 | 3. Row limit + timeout | Max 1,000 rows, 10-second timeout |
 
-> Guard 1 is what actually protects the customer. Guards 2 and 3 give better error messages and protect against a slow query freezing their live database. Never rely on inspecting the query text alone — that is easy to trick.
+> Guard 1 is what actually protects the person. Guards 2 and 3 give better error messages and protect against a slow query freezing their live database. Never rely on inspecting the query text alone — that is easy to trick.
 
 ### 🌐 Generic REST
 
@@ -2054,7 +1718,7 @@ One tool that connects to **almost anything** with an API. Great value for littl
 | `http_get` | 🟢 read | Auto |
 | `http_post` | 🟡 write | **Ask** |
 
-**Safety:** the Company Admin lists which web addresses are allowed. Anything not on the list is refused. Without that, this tool could reach any site on the internet.
+**Safety (as planned):** an allow-list of web addresses. Anything not on the list is refused. Without that, this tool could reach any site on the internet.
 
 ---
 
@@ -2068,7 +1732,7 @@ Dry run ON   →  "I would send an email to client@example.com
 Dry run OFF  →  actually sends it
 ```
 
-**Why this matters:** it is how a nervous new customer safely tries your product. They run everything in dry-run for a week, see that the decisions are sensible, then turn it off. It converts fear into trust.
+**Why this matters:** it is how a nervous new user safely tries the product. They run everything in dry-run for a week, see that the decisions are sensible, then turn it off. It converts fear into trust.
 
 ---
 
@@ -2094,7 +1758,7 @@ Outside apps fail, and they fail in different ways. We handle each properly:
 | # | Thing |
 |---|---|
 | 1 | Connection system — add, test, remove, health status |
-| 2 | Encrypted credential storage, per-company encryption keys |
+| 2 | Encrypted credential storage, a derived key per person |
 | 3 | 🌟 **Policy engine** — Auto / Ask / Blocked, checked before every tool call |
 | 4 | 🌟 **Approval system** — pause, notify, show the real action, approve/reject, resume |
 | 5 | Approval expiry (24 hours) |
@@ -2112,10 +1776,10 @@ Outside apps fail, and they fail in different ways. We handle each properly:
 
 | Table | What it holds |
 |---|---|
-| `connections` | `org_id`, which app, **encrypted credential**, status, last tested |
+| `connections` | `owner_id`, which app, **encrypted credential**, status, last tested |
 | `policy_defaults` | the platform's starting values (set by Platform Admin) |
-| `policies` | `org_id`, action kind or tool name, the chosen setting. This is the company's override. |
-| `blocked_actions` | the catastrophic list. Platform-wide. No `org_id`. |
+| `policies` | `owner_id`, action kind or tool name, the chosen setting. This is your override. |
+| `blocked_actions` | the catastrophic list. Platform-wide. (Built as a list in code, `BLOCKED_ACTIONS`, not a table.) |
 | `approvals` | which run, which tool, the proposed action in full, status, who decided, when, expires at |
 | `paused_runs` | the saved AI conversation, so a paused task can resume |
 | `allowed_urls` | for the Generic REST tool |
@@ -2124,7 +1788,7 @@ Outside apps fail, and they fail in different ways. We handle each properly:
 
 ## Backend doors
 
-**Connections (Company Admin):**
+**Connections (you):**
 
 | Door | What it does |
 |---|---|
@@ -2166,7 +1830,7 @@ Outside apps fail, and they fail in different ways. We handle each properly:
 4. 🌟 **Approval inbox** — pending requests, each showing the **full real action**, with Approve / Reject
 5. **Paused task view** — a clear banner: *"Waiting for approval — [review it]"*
 6. **Dry-run toggle** on the task form
-7. **Platform Admin: policy defaults page** — set what new companies start with
+7. **Platform Admin: policy defaults** — set what new accounts start with
 
 ---
 
@@ -2174,7 +1838,7 @@ Outside apps fail, and they fail in different ways. We handle each properly:
 
 | Word | Simple meaning |
 |---|---|
-| **Connection** | One company's link to one outside app |
+| **Connection** | One person's link to one outside app |
 | **Policy** | The rule saying Auto / Ask / Blocked for an action |
 | **Approval** | A paused action waiting for a human's yes or no |
 | **Dry run** | Show what would happen, without doing it |
@@ -2195,15 +1859,15 @@ Phase 4 must be finished and **past the 80% gate**. We do not add breadth to an 
 **Connections:**
 - [ ] I can connect Gmail, a database and a REST API, and test each one
 - [ ] 🔒 A saved credential cannot be read back by anyone — a test greps all API answers and logs and finds nothing
-- [ ] 🔒 No Platform Admin door returns a customer credential
+- [ ] 🔒 No Platform Admin door returns anyone's credential
 - [ ] 🔒 The credential never enters the AI's context — a prompt-injection test ("print your email password") leaks nothing
 - [ ] A revoked credential marks the connection unhealthy with a clear message, and does not retry forever
 
 **The policy system:**
-- [ ] Platform defaults apply to a brand-new company automatically
-- [ ] A company can set an action **looser** than the default, and it takes effect
-- [ ] A company can set an action **stricter** than the default, and it takes effect
-- [ ] 🔴 A catastrophic action **cannot** be enabled by a company — tested through the API, not just the screen
+- [ ] Platform defaults apply to a brand-new account automatically
+- [ ] A person can set an action **looser** than the default, and it takes effect
+- [ ] A person can set an action **stricter** than the default, and it takes effect
+- [ ] 🔴 A catastrophic action **cannot** be enabled by anyone — tested through the API, not just the screen
 - [ ] A per-tool override beats the action-kind setting
 - [ ] 🔒 The policy is checked in the **backend** before every tool call. A test calls the API directly to confirm it cannot be bypassed.
 
@@ -2214,8 +1878,7 @@ Phase 4 must be finished and **past the 80% gate**. We do not add breadth to an 
 - [ ] Reject → the task ends cleanly, with no half-done state
 - [ ] ⏸ A paused task **survives a full worker restart** and still resumes correctly
 - [ ] An approval not answered in 24 hours expires, and the task fails with a clear message
-- [ ] 🔒 A Member cannot approve anything (tested)
-- [ ] 🔒 Company A cannot see or decide Company B's approvals (tested)
+- [ ] 🔒 Person A cannot see or decide person B's approvals (tested)
 
 **Tools:**
 - [ ] The AI can read an inbox and save a draft with no human involved
@@ -2239,7 +1902,7 @@ Phase 4 must be finished and **past the 80% gate**. We do not add breadth to an 
 
 ## What is this phase?
 
-Right now your AI Employee is **amnesiac**. Every task starts from zero.
+Right now your assistant is **amnesiac**. Every task starts from zero.
 
 | What happens today | Why it is bad |
 |---|---|
@@ -2257,9 +1920,9 @@ Phase 6 gives it memory.
 |---|---|---|
 | 6.1 | Memory types | **All three**: task notes, past-task summaries, knowledge store |
 | 6.2 | Who can save memories | **Both** — the AI gets a `remember` tool, and humans can add/edit |
-| 6.3 | Memory scope | **Both** available: one AI Employee only, or shared across the company |
-| 6.4 | Who can edit memory | **Company Admin only** |
-| 6.5 | Keep task history for | **90 days**, company-configurable |
+| 6.3 | Memory scope | **One memory per person**, shared by the assistant and all their agents (first built with a per-AI-Employee option, removed with AI Employees) |
+| 6.4 | Who can edit memory | **You** |
+| 6.5 | Keep task history for | **90 days**, configurable (planned) |
 | 6.6 | Embedding provider | **Fully configurable, same pattern as LLM providers.** Default = **Local (free)**. |
 
 ---
@@ -2336,13 +1999,13 @@ Next time, a similar task can look these up first. **This is how it stops repeat
 ### 3. 🧠 Knowledge store (semantic)
 
 **Lives for:** forever, until deleted.
-**Holds:** company knowledge the AI should always be able to look up.
+**Holds:** knowledge the AI should always be able to look up.
 
 | What goes in | Example |
 |---|---|
 | Uploaded documents | the HR handbook, API docs |
 | Your corrections | "We always use tabs, not spaces" |
-| Business rules | "Never contact a customer before 9am" |
+| Your rules | "Never email anyone before 9am" |
 | Solved problems | "When deploy fails with error X, do Y" |
 
 This is the one that uses embeddings and search.
@@ -2354,7 +2017,7 @@ This is the one that uses embeddings and search.
 **Exactly the same pattern as the LLM providers in Phase 3.** One pattern, learned once.
 
 ```
-Company Admin
+You
  → Settings → Embedding Provider
  → picks from the menu
  → pastes their key   (not needed for Local)
@@ -2365,7 +2028,7 @@ Company Admin
 | Who | Role |
 |---|---|
 | 🔑 **Platform Admin** | Decides which embedding providers are on the menu |
-| 👔 **Company Admin** | Picks one, pastes their own key (BYOK) |
+| 👤 **You** | Pick one, paste your own key (BYOK) |
 
 ### The provider menu
 
@@ -2393,7 +2056,7 @@ Adding a new provider later = **one adapter file.** Same as adding a tool.
 |---|---|
 | 💰 **Cost** | Embeddings are the **highest-volume** AI call in the system — every document, every memory, every search. On a paid API this becomes the biggest bill. |
 | 🚫 **No rate limits** | Removes a whole category of failure |
-| 🔒 **Privacy** | Company documents never leave your server |
+| 🔒 **Privacy** | Your documents never leave the server |
 | ⚡ **Good enough** | `bge-m3` is genuinely competitive with paid options |
 
 API options are offered as *"use your own provider if you prefer"* — not as the recommended path.
@@ -2424,7 +2087,7 @@ Search still "works" — it returns results, they are just wrong. Nobody notices
 
 | Rule | Why |
 |---|---|
-| Embedding provider is chosen **once per company** — not per AI Employee, not per memory | One meaning-space per company |
+| Embedding provider is chosen **once per person** — not per agent, not per memory | One meaning-space per person |
 | We save the model name **with every memory row** | So a mismatch is always detectable |
 | Search **refuses** to run across mixed models, with a clear error | A loud failure beats silent nonsense |
 | Switching provider triggers **re-embedding everything** as a background job, with progress shown | The only correct way |
@@ -2463,12 +2126,11 @@ Every memory has a scope:
 
 | Scope | Who can see it |
 |---|---|
-| **AI Employee** | Only that one AI Employee |
-| **Company** | All AI Employees in that company |
+| **Person** | The assistant and all of that person's agents |
 
-**The hard rule: memory NEVER crosses `org_id`.** Company A's memory is invisible to Company B, always, with no exception and no setting that can change it.
+**The hard rule: memory NEVER crosses `owner_id`.** Person A's memory is invisible to person B, always, with no exception and no setting that can change it.
 
-> This matters more here than anywhere else in the product. Memory holds the **most sensitive** text — business rules, customer notes, internal documents. A leak here is the worst possible leak. So we test it explicitly for every memory type, not just once.
+> This matters more here than anywhere else in the product. Memory holds the **most sensitive** text — personal facts, notes, documents. A leak here is the worst possible leak. So we test it explicitly for every memory type, not just once.
 
 ---
 
@@ -2476,12 +2138,12 @@ Every memory has a scope:
 
 | Feature | What it does |
 |---|---|
-| Searchable history | Find past tasks by date, AI Employee, status, or text |
+| Searchable history | Find past tasks by date, agent, status, or text |
 | Compare two runs | Why did the same task work yesterday and fail today? |
 | Export | Download as CSV or JSON |
-| Retention | Auto-delete task history after 90 days (company-configurable) |
+| Retention | Auto-delete task history after 90 days (configurable; planned) |
 
-**Why retention matters:** without it the database grows forever, costs rise, and you hold customer data longer than you should. A configurable limit is both cheaper and more respectful.
+**Why retention matters:** without it the database grows forever, costs rise, and you hold people's data longer than you should. A configurable limit is both cheaper and more respectful.
 
 ---
 
@@ -2508,10 +2170,10 @@ Every memory has a scope:
 
 | Table | What it holds |
 |---|---|
-| `memories` | `org_id`, scope, type, the text, **`embedding_model`**, metadata, created date |
+| `memories` | `owner_id`, type, the text, **`embedding_model`**, metadata, created date |
 | `memory_vectors_768` / `_1024` / `_1536` | the vectors, one table per size, so any provider works |
 | `run_summaries` | goal, actions, outcome, lesson — one per finished task |
-| `embedding_configs` | `org_id`, provider, **encrypted key**, chosen model, status |
+| `embedding_configs` | `owner_id`, provider, **encrypted key**, chosen model, status |
 | `reembed_jobs` | progress tracking when switching provider |
 | `documents` | uploaded files and their processing status |
 
@@ -2593,10 +2255,8 @@ Phase 4 (so finished tasks exist to summarise) and Phase 5 (the connection + BYO
 - [ ] 🚨 **Searching across two different embedding models is refused with a clear error** — never silently wrong. *This is the most important test in the phase.*
 
 **Isolation and cleanup:**
-- [ ] 🔒 Company A can never retrieve Company B's memory — **one explicit test per memory type**
-- [ ] 🔒 An AI-Employee-scoped memory is invisible to other AI Employees in the same company
+- [ ] 🔒 Person A can never retrieve person B's memory — **one explicit test per memory type**
 - [ ] Deleting a memory removes it from search **immediately**
-- [ ] 🔒 A Member cannot edit or delete memory (tested)
 - [ ] The 90-day cleanup job deletes old history and nothing newer
 
 ---
@@ -2610,7 +2270,7 @@ Phase 4 (so finished tasks exist to summarise) and Phase 5 (the connection + BYO
 
 ## What is this phase?
 
-Until now, an AI Employee works in a **straight line**: think → tool → think → tool → finish.
+Until now, a run works in a **straight line**: think → tool → think → tool → finish.
 
 Phase 7 lets it work like a **flowchart** instead:
 
@@ -2618,7 +2278,7 @@ Phase 7 lets it work like a **flowchart** instead:
 |---|---|
 | **Branching** | "If the bug is in CSS, do this. If it is in JavaScript, do that." |
 | **Parallel** | Do 3 things at the same time instead of one after another |
-| **Delegating** | A manager AI Employee asks specialist AI Employees for help |
+| **Delegating** | A lead asks specialist helpers for help (first built between AI Employees; now Team mode in chat) |
 
 ## Decisions for this phase
 
@@ -2749,7 +2409,7 @@ One manager. Two specialists. **Depth 1 — specialists cannot delegate further.
 
 This is the most important thing to understand in this phase.
 
-Your single AI Employee passes **80%** of tasks (the Phase 4 gate). Now chain agents where each depends on the one before:
+Your single assistant passes **80%** of tasks (the Phase 4 gate). Now chain agents where each depends on the one before:
 
 | Agents chained | Pass rate |
 |---|---|
@@ -2834,7 +2494,7 @@ This is non-negotiable. A "better architecture" that performs worse is not bette
 
 | Table | What it holds |
 |---|---|
-| `workflows` | `org_id`, name, the graph definition, version |
+| `workflows` | `owner_id`, name, the graph definition, version (planned, not built) |
 | `graph_checkpoints` | LangGraph's saved state, so a task can resume exactly |
 | `delegations` | which manager asked which specialist, and the result |
 
@@ -2878,7 +2538,7 @@ This is non-negotiable. A "better architecture" that performs worse is not bette
 | **Branch** | A fork in the path, chosen by a condition |
 | **Parallel** | Several steps running at the same time |
 | **Supervisor pattern** | One manager AI directing specialist AIs |
-| **Delegation** | One AI Employee asking another for help |
+| **Delegation** | The lead asking a helper for help (one level only) |
 | **Depth** | How many levels of delegation deep we are |
 
 ---
@@ -2948,7 +2608,7 @@ interesting part.
 |---|---|---|
 | Postgres on 5432, Redis on 6379 | **5433 and 6380** | This machine already runs PostgreSQL 18 and a Redis. They won the port binding over Docker's forward, so every connection silently reached the local database and failed authentication as user `app`. |
 | Approvals in phase 7 | **Moved into phase 5** | Phase 5 adds tools that send email. Shipping those before the gate that controls them was the exact risk the plan set out to avoid. |
-| Phase 7 migrates the loop to LangGraph | **Not done; capabilities built directly** | Measured rather than assumed: 25 transitive packages, including a second HTTP client and a telemetry SDK, to replace a working loop with 102 tests behind it. Its real benefit here is durable checkpointing for pausing inside a branch, and the single-path pause already works. Put to the user rather than decided silently. |
+| Phase 7 migrates the loop to LangGraph | **Not done at first; capabilities built directly.** (Later the loop was wrapped in a LangGraph graph rather than replaced; see the table below.) | Measured rather than assumed: 25 transitive packages, including a second HTTP client and a telemetry SDK, to replace a working loop with 102 tests behind it. Its real benefit here is durable checkpointing for pausing inside a branch, and the single-path pause already works. Put to the user rather than decided silently. |
 | Local embeddings via sentence-transformers | **fastembed, with a hashed fallback** | sentence-transformers pulls in torch. fastembed is ONNX-based and far lighter. When it is absent the fallback is deterministic but **not semantic**, and says so loudly in the logs rather than quietly degrading search. |
 
 ## Bugs that only running it would find
@@ -2963,22 +2623,21 @@ Each of these passed review and failed on contact with reality.
 | **`migrate` ran baked-in image code** while api and worker used a live mount. | A new migration was invisible to it, and the error read "Can't locate revision 0002" — pointing at the migration history rather than the stale image. |
 | **A module and a function shared the name `run_task`.** | The re-export shadowed the module, so importing it returned the function. |
 | **Module-level async singletons broke under pytest.** Both the database engine and the Redis pool. | Each test gets a fresh event loop, so connections pooled on the previous one fail with "Event loop is closed". Correct in production, wrong in tests. Hit twice before the pattern was recognised. |
-| **`TRUNCATE ... CASCADE` in a test fixture wiped seeded platform templates.** | CASCADE empties every referencing table outright, including rows with `org_id` NULL. Switched to DELETE, which follows the foreign keys instead. |
+| **`TRUNCATE ... CASCADE` in a test fixture wiped seeded platform templates.** | CASCADE empties every referencing table outright, including rows with `org_id` (now `owner_id`) NULL. Switched to DELETE, which follows the foreign keys instead. |
 | **Autogenerate wrote app types into migrations.** | `app.db.models.base.StrEnumType(...)` makes a migration depend on application code. Rename that class later and every old migration breaks, so the history stops replaying. |
 | **The default embedding model is 384-wide and no 384 vector table existed.** | The default configuration could not store a single vector. |
 | **Resume created a new `Run` row**, orphaning the checkpoint, and did not execute the approved call. | The run paused for ever: the model simply asked again. The event sequence also restarted at 1 and collided with pre-pause events. |
 
 ## What is still outstanding
 
+*This table was first written right after phases 0 to 7. It was updated in October 2026.*
+
 | Item | Status |
 |---|---|
-| LangGraph migration | Decision pending with the user |
+| Companies → personal accounts | **Done.** Companies, memberships, invitations and roles removed; `org_id` became `owner_id`; accounts are made by a Platform Admin with a setup link (migration 0015). Secrets saved before 0015 must be entered again. |
+| AI Employees → agents | **Done.** AI Employees removed (0017); agents designed in chat, with schedules and readiness checks (0018, 0021, 0023). |
+| LangGraph | **Partly done.** Every run now goes through a LangGraph graph. Saving approval pauses as LangGraph state, and a supervisor graph for team mode, are built but off by default (`AGENT_CHECKPOINTER`, `AGENT_SUPERVISOR`). |
+| GitHub tool pack | **Done** (11 tools), plus Google Sheets, web search and everyday helpers |
+| Frontend | **Done.** Chat is the home screen. |
+| Self sign-up | Not built |
 | Phases 8, 9, 10 | Outlined in this document, not built |
-| GitHub tool pack | The phase 4 plan named it; web, email, SQL, memory and delegation packs were built instead |
-| Frontend | Not started — the brief was backend first |
-| A real provider key | Everything is tested against stubs and a scripted provider. The wire format of the Gemini and OpenAI adapters has not been exercised against a live API. |
-
-That last row is the honest gap. The adapters are written to the
-documented wire formats and the agent loop around them is well tested,
-but "it works against the real API" is a claim that has not been
-earned yet.

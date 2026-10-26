@@ -8,8 +8,8 @@
 > time zone; a worker job starts them, re-checks the links first, and tells you
 > when something broke. The AI Agents page only manages them: schedule, run now,
 > pause, edit, tree, cost. Permissions are split by service (Gmail, Drive, Sheets,
-> Calendar) and level (read, edit) at the platform, company, connection and agent
-> levels. Not built yet: effort-based model choice, failure-based retry and
+> Calendar) and level (read, edit) at the platform (for everyone or for one
+> person), connection and agent levels. Not built yet: effort-based model choice, failure-based retry and
 > escalation, usage and quality monitoring, and Excel through Microsoft 365.
 
 
@@ -35,7 +35,7 @@ any of it. Agents replace that with one idea:
 | Question | Decision | Why |
 |---|---|---|
 | What does "multiple agents" mean? | Both: persona *and* teammates | Persona alone is custom GPTs; teammates is what makes it an agent system |
-| Private memory per agent? | No. One shared memory | Avoids reintroducing the per-worker memory scope removed with AI Employees |
+| Private memory per agent? | No. One shared memory per person | Keeps one memory the person can read and edit, instead of a separate memory per helper |
 
 ## How it works
 

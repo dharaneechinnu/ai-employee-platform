@@ -1,27 +1,25 @@
-> **Superseded (Oct 2026).** This document describes the earlier company / AI Employees design. The product is now a personal multi-agent assistant. See `docs/AGENTS_PLAN.md` and the multi-agent build plan for the current design.
+# Low Level Design — AI Employees (personal assistant)
 
-# Low Level Design — AI Employee Platform
+**Last updated:** 2026-10-26
+**Read [HLD.md](HLD.md) first.** This document assumes the architecture described there.
 
-**Version:** 0.1
-**Last updated:** 2026-10-11
-**Read [HLD.md](HLD.md) first** — this document assumes the architecture decided there.
+> **What changed.** An earlier version of this document described companies, memberships, invitations, admin and member roles, and AI Employees with version history and per-company limits. All of that is gone. Every table that holds data now carries `owner_id` (the person), accounts are created by a Platform Admin with a setup link, and agents replaced AI Employees. Where this document shows code, it is a short sketch of the real code; the source files named are the reference.
 
 ## Contents
 
 | Part | Covers |
 |---|---|
 | 1 | Folder structure and layering rules |
-| 2 | Database schema |
-| 3 | API specification |
+| 2 | Database tables |
+| 3 | API |
 | 4 | The agent loop |
 | 5 | Tool and provider contracts |
-| 6 | Policy engine |
-| 7 | Event log and SSE protocol |
+| 6 | Permissions |
+| 7 | Event log and SSE |
 | 8 | Worker and queue |
 | 9 | Encryption |
-| 10 | Error taxonomy and testing |
+| 10 | Errors and tests |
 
----
 ---
 
 # Part 1 — Folder structure and layering
@@ -29,1046 +27,534 @@
 ## 1.1 Repository layout
 
 ```
-ai-employee-platform/
-├── docker-compose.yml
-├── docker-compose.prod.yml
-├── Makefile
-├── .env.example
-│
+.
+├── docker-compose.yml   Makefile   .env.example
 ├── backend/
 │   ├── pyproject.toml
-│   ├── alembic/versions/
+│   ├── alembic/versions/            # 0001 … 0023
+│   ├── scripts/                     # bootstrap_admin.py, demo_mcp_server.py
+│   ├── tests/                       # unit/, integration/, isolation/
 │   └── app/
-│       ├── main.py                    # API entrypoint
-│       ├── config.py                  # pydantic-settings
-│       │
+│       ├── main.py                  # API entrypoint
+│       ├── config.py                # pydantic-settings
 │       ├── api/v1/
-│       │   ├── deps.py                # current_user, current_org, require_permission
-│       │   └── routes/
-│       │       ├── auth.py  orgs.py  ai_employees.py  templates.py
-│       │       ├── tasks.py  runs.py  tools.py  providers.py
-│       │       ├── connections.py  policies.py  approvals.py
-│       │       ├── memory.py  documents.py  workflows.py
-│       │       └── platform/          # platform-admin only
-│       │           ├── companies.py  providers.py  policies.py  audit.py
-│       │
-│       ├── schemas/                   # pydantic request/response — the contract
-│       ├── services/                  # business logic, framework-free
-│       │   ├── auth_service.py  employee_service.py  task_service.py
-│       │   ├── policy_service.py  approval_service.py  memory_service.py
-│       │   └── cost_service.py
-│       │
+│       │   ├── deps.py              # current user, request context (owner_id)
+│       │   └── routes/              # auth, platform, conversations, agents, tasks,
+│       │                            # providers, connections, mcp, policies,
+│       │                            # approval_links, memory, notifications, speech, health
+│       ├── schemas/
+│       ├── services/                # business logic, no FastAPI imports
 │       ├── db/
-│       │   ├── session.py
-│       │   ├── models/                # SQLAlchemy 2.0 declarative
-│       │   └── repositories/          # ← ALL queries live here
-│       │       ├── base.py            # OrgScopedRepository
-│       │       └── *_repo.py
-│       │
-│       ├── agent/                     # LangChain/LangGraph confined here
-│       │   ├── runner.py              # AgentRunner port
-│       │   ├── loop.py                # phase 3 hand-written loop
-│       │   ├── graphs/                # phase 7 LangGraph
-│       │   ├── providers/
-│       │   │   ├── base.py            # LLMProvider ABC
-│       │   │   ├── gemini.py  openai_compatible.py
-│       │   │   ├── embeddings/        # local.py, api.py
-│       │   │   └── pricing.py         # per-model cost table
-│       │   ├── memory/                # compaction, recall, summarise
-│       │   └── tools/
-│       │       ├── base.py            # Tool ABC
-│       │       ├── registry.py
-│       │       └── packs/             # github.py, email.py, sql.py, http.py, docs.py
-│       │
+│       │   ├── models/              # SQLAlchemy 2.0
+│       │   └── repositories/        # ALL queries live here
+│       ├── agent/
+│       │   ├── loop.py              # the hand-written agent loop
+│       │   ├── graph.py             # the loop as a one-node LangGraph graph
+│       │   ├── graph_loop.py        # loop with LangGraph-saved pauses (off by default)
+│       │   ├── supervisor.py        # team mode as a graph (off by default)
+│       │   ├── assistant.py         # chat modes and the system prompt
+│       │   ├── team.py              # lead + helpers, ask_specialist
+│       │   ├── routing.py           # Automatic: which AI for which task
+│       │   ├── schedule.py          # agent schedules
+│       │   ├── services.py          # app parts (Gmail, Sheets …) and read/edit levels
+│       │   ├── tool_infer.py        # pick an agent's tools from its instructions
+│       │   ├── providers/           # anthropic, gemini, openai_compatible, fallback
+│       │   ├── mcp/                 # MCP client and tool wrapper
+│       │   └── tools/               # base, registry, packs/
 │       ├── workers/
-│       │   ├── main.py                # worker entrypoint
-│       │   ├── jobs/                  # run_task, reembed, expire_approvals, reap
-│       │   └── queue.py
-│       │
-│       ├── core/
-│       │   ├── security.py  crypto.py  events.py
-│       │   ├── errors.py  observability.py  ratelimit.py
-│       │
-│       └── tests/
-│           ├── unit/  integration/  e2e/
-│           ├── isolation/             # tenant-isolation suite
-│           ├── security/              # injection red-team suite
-│           ├── evals/                 # golden tasks
-│           └── cassettes/             # committed — CI runs offline
-│
-├── frontend/
-│   └── src/
-│       ├── api/                       # generated types + typed client
-│       ├── mocks/                     # MSW handlers
-│       ├── features/{auth,employees,tasks,runs,providers,policies,approvals,memory,platform}/
-│       ├── components/ui/
-│       └── hooks/
-│
-└── docs/
-    ├── IMPLEMENTATION_PLAN.md  HLD.md  LLD.md
-    └── adr/
+│       │   ├── main.py              # worker entrypoint
+│       │   └── jobs/                # run_task, dispatch_due_agents, expire_approvals
+│       └── core/                    # security, crypto, signed, errors, observability
+└── frontend/
+    ├── src/
+    │   ├── App.tsx                  # routes
+    │   ├── components/              # Rail (the menu), coach (tours), ui …
+    │   ├── pages/                   # Chat, Agents, Approvals, Memory, Connections,
+    │   │                            # Providers, Policies, Notifications, Login,
+    │   │                            # PlatformAdmin, ApproveLink, Product
+    │   └── lib/api.ts               # typed client, base path /api/v1
+    └── scripts/                     # screenshot and video recorders (see README)
 ```
 
 ## 1.2 Layering rules
 
 ```
 route  →  service  →  repository  →  database
-         ↘ agent (worker only)
+                 ↘ agent (worker)
 ```
 
 | Rule | Why |
 |---|---|
-| A route never writes a query | `org_id` scoping must have exactly one chokepoint |
+| A route never writes a query | `owner_id` filtering must happen in exactly one place |
 | A service never imports FastAPI | Business logic stays testable without HTTP |
-| A repository never contains business rules | It fetches and persists; nothing else |
-| `agent/` is imported only from `workers/` | Enforces "the API never runs an agent" |
-| No LangChain/LangGraph type crosses out of `agent/` | Library churn stays contained |
-
-**Enforcement:** an import-linter rule in CI, not a convention in a wiki.
+| A repository holds no business rules | It fetches and saves; nothing else |
+| The API never runs an agent | Long work belongs to the worker |
 
 ## 1.3 The repository base class
 
-Every tenant-owned repository inherits this. It is the single place tenant filtering happens.
+Every table that holds a person's data is read and written through `OwnerScopedRepository` in `app/db/repositories/base.py`:
 
 ```python
-class OrgScopedRepository(Generic[ModelT]):
-    model: type[ModelT]
+class OwnerScopedRepository[ModelT: Base](BaseRepository[ModelT]):
+    def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None: ...
 
-    def __init__(self, session: AsyncSession, org_id: UUID):
-        self.session = session
-        self.org_id = org_id
+    def _scoped(self) -> Select:            # the only way to start a query
+        return select(self.model).where(self.model.owner_id == self.owner_id)
 
-    def _scoped(self) -> Select:
-        return select(self.model).where(self.model.org_id == self.org_id)
-
-    async def get(self, id: UUID) -> ModelT | None:
-        return await self.session.scalar(self._scoped().where(self.model.id == id))
-
-    async def list(self, **filters) -> Sequence[ModelT]: ...
-    async def create(self, **data) -> ModelT:
-        return self.model(org_id=self.org_id, **data)   # org_id never from caller
+    def create(self, **data) -> ModelT:     # sets owner_id itself
+        ...
 ```
 
-Two properties worth noting: `create` sets `org_id` itself, so a caller cannot pass someone else's. And `get` returning `None` becomes a **404**, never a 403 — the route layer does not distinguish "missing" from "someone else's".
+Two properties matter. `create` sets `owner_id` itself, so a caller cannot pass someone else's. And a `get` that finds nothing becomes a **404**: the route cannot tell "missing" from "someone else's", so neither can a caller.
+
+The `owner_id` comes from the signed-in token (`RequestContext.owner_id` in `deps.py`), never from the request body or path.
 
 ---
----
 
-# Part 2 — Database schema
+# Part 2 — Database tables
 
-Conventions: `id` is `uuid` primary key, timestamps are `timestamptz`, money is `numeric(12,6)`, soft delete via `archived_at` where needed.
+Conventions: `id` is a UUID primary key (event and call logs use `bigint`), timestamps are `timestamptz`, money is `numeric(12,6)`. Exact columns are in `app/db/models/`.
 
-## 2.1 Identity (Phase 1)
+## 2.1 Identity
 
-```sql
-CREATE TABLE organizations (
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    name            text NOT NULL,
-    slug            citext UNIQUE NOT NULL,
-    status          text NOT NULL DEFAULT 'active',      -- active|suspended|closed
-    max_employees   int  NOT NULL DEFAULT 3,
-    created_at      timestamptz NOT NULL DEFAULT now()
-);
+| Table | Holds | Scoped by |
+|---|---|---|
+| `users` | email, password hash (argon2id), name, `is_active`, last sign-in | its own id |
+| `setup_tokens` | the one-time setup link: token **hash**, expiry (72 h by default), used-at | `user_id` |
+| `refresh_tokens` | token hash, `family_id` for rotation, expiry, revoked-at | `user_id` |
+| `platform_admins` | email, password hash, `is_active` | global — separate from `users` on purpose |
+| `platform_admin_audit` | who did what, to which target, when | global; **append-only by database grants** |
 
-CREATE TABLE users (
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           citext UNIQUE NOT NULL,
-    password_hash   text NOT NULL,                        -- argon2id
-    full_name       text,
-    created_at      timestamptz NOT NULL DEFAULT now()
-);
+There is no `organizations`, `memberships` or `invitations` table any more (removed in migration `0015_personal_accounts.py`).
 
-CREATE TABLE memberships (
-    id       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id  uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    org_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    role     text NOT NULL,                               -- admin|member
-    UNIQUE (user_id, org_id)
-);
+## 2.2 Your setup
 
-CREATE TABLE invitations (
-    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id      uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    email       citext NOT NULL,
-    role        text NOT NULL,
-    token_hash  text UNIQUE NOT NULL,                     -- store the hash, not the token
-    expires_at  timestamptz NOT NULL,
-    used_at     timestamptz
-);
+| Table | Holds |
+|---|---|
+| `agents` | name, `handle` (unique per person, for @mentions), description, instructions, `model` (`auto` or `provider:model`), `routing`, `tools` (list, or null for "everything I allow"), `tools_auto`, `archived`, `schedule` (JSON), `schedule_enabled`, `next_run_at`, `last_run_at`, `last_status`, `last_summary`, `run_conversation_id`, `max_steps` (default 40, max 80), `scope` (for example the sheet ids it may write) |
+| `provider_configs` | your AI keys: provider, **encrypted key**, last 4 characters, status, chosen model |
+| `connections` | Google, Microsoft, IMAP, GitHub, database: kind, label, **encrypted credential**, config, status, last error, enabled |
+| `mcp_servers` | an MCP server's address, **encrypted token**, and the tools it reported |
+| `org_oauth_apps` | your own Google or Microsoft app (client id, **encrypted secret**). The table keeps its old name. |
+| `policies` | your permission rules: scope (tool or pack), value, side effect, setting |
+| `notification_settings` | email and Slack switches, encrypted Slack webhook |
+| `embedding_configs` | which embedding provider and model your memory uses |
 
-CREATE TABLE refresh_tokens (
-    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    family_id   uuid NOT NULL,                            -- rotation family
-    token_hash  text UNIQUE NOT NULL,
-    expires_at  timestamptz NOT NULL,
-    revoked_at  timestamptz
-);
-CREATE INDEX ON refresh_tokens (family_id);
+All of these carry `owner_id`.
 
--- Platform admins live in their own table, NOT as a role on users
-CREATE TABLE platform_admins (
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           citext UNIQUE NOT NULL,
-    password_hash   text NOT NULL,
-    created_at      timestamptz NOT NULL DEFAULT now()
-);
+## 2.3 Platform rules
 
-CREATE TABLE platform_admin_audit (
-    id          bigserial PRIMARY KEY,
-    admin_id    uuid NOT NULL REFERENCES platform_admins(id),
-    action      text NOT NULL,
-    target      jsonb NOT NULL,
-    created_at  timestamptz NOT NULL DEFAULT now()
-);
-REVOKE UPDATE, DELETE ON platform_admin_audit FROM app_user;   -- append-only, enforced by grants
-```
+| Table | Holds | Scope |
+|---|---|---|
+| `supported_providers` | the AI provider catalog: key, name, base URL, API format, default model, `trains_on_data`, `enabled` | global |
+| `policy_defaults` | starting permission values | global |
+| `platform_oauth_apps` | the shared Google / Microsoft app behind one-click sign-in | global |
+| `platform_service_access` | whether a part of an app (for example Sheets, edit) is allowed for everyone | global |
+| `org_service_access` | the same, for one person | `owner_id` |
+| `org_connection_access` | whether a connection kind is open for one person | `owner_id` |
 
-> The last line matters. Making the audit table append-only through **database grants** means application code cannot tamper with it even if compromised. A convention would not survive a bug.
+## 2.4 Conversation and execution
 
-## 2.2 Configuration (Phases 2, 3, 5)
+| Table | Holds |
+|---|---|
+| `conversations` | title, `mode` (general, study, work, research, code), `model`, `routing`, `team`, optional `agent_id` |
+| `conversation_messages` | role, content, the `task_id` that produced a reply, the model and why it was chosen, tools used, an agent draft card if any |
+| `tasks` | `conversation_id`, optional `agent_id`, input, status, `dry_run`, `created_by`, `cancel_requested` |
+| `runs` | one attempt: status, steps, tokens, cost, output, stop cause, heartbeat |
+| `run_events` | `(run_id, seq)` unique; type; redacted payload. **Insert only.** |
+| `llm_calls` | provider, model, tokens, cost, latency |
+| `tool_invocations` | tool, side effect, redacted args, status, duration |
+| `approvals` | `run_id`, tool, side effect, the **full proposed action**, status, decided by and when, `expires_at` (24 h) |
+| `run_checkpoints` | the saved conversation of a paused run, and the pending tool call |
+| `graph_checkpoints`, `graph_checkpoint_writes` | LangGraph's saved state, used only when `AGENT_CHECKPOINTER` is on |
 
-```sql
-CREATE TABLE ai_employees (
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id          uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    name            text NOT NULL,
-    job_title       text,
-    department      text,
-    status          text NOT NULL DEFAULT 'draft',        -- draft|active|paused|archived
-    current_version_id uuid,
-    created_by      uuid REFERENCES users(id),
-    archived_at     timestamptz
-);
-CREATE INDEX ON ai_employees (org_id, status);
+All carry `owner_id`.
 
-CREATE TABLE ai_employee_versions (
-    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    employee_id   uuid NOT NULL REFERENCES ai_employees(id) ON DELETE CASCADE,
-    org_id        uuid NOT NULL,
-    version_no    int NOT NULL,
-    config        jsonb NOT NULL,     -- whole snapshot: instructions, model, limits, tools
-    created_by    uuid REFERENCES users(id),
-    created_at    timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (employee_id, version_no)
-);
+## 2.5 Knowledge
 
-CREATE TABLE templates (
-    id       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id   uuid REFERENCES organizations(id) ON DELETE CASCADE,  -- NULL = platform template
-    name     text NOT NULL,
-    config   jsonb NOT NULL
-);
+| Table | Holds |
+|---|---|
+| `memories` | kind, content, a generated full-text column, `embedding_model` |
+| `memory_vectors_384` / `_768` / `_1024` / `_1536` | one table per vector width, because a pgvector index needs a fixed width |
+| `run_summaries` | goal, outcome, lesson of a finished run |
+| `reembed_jobs` | progress of re-embedding after a model change |
 
-CREATE TABLE supported_providers (                        -- the menu, platform-controlled
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    key             text UNIQUE NOT NULL,                 -- gemini|openai|anthropic|groq
-    display_name    text NOT NULL,
-    kind            text NOT NULL,                        -- llm|embedding
-    enabled         boolean NOT NULL DEFAULT true,
-    trains_on_data  boolean NOT NULL DEFAULT false
-);
+## 2.6 The isolation test
 
-CREATE TABLE provider_configs (                           -- the keys, BYOK
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id          uuid REFERENCES organizations(id) ON DELETE CASCADE,  -- NULL = platform trial key
-    provider_key    text NOT NULL REFERENCES supported_providers(key),
-    api_key_enc     bytea NOT NULL,
-    key_last4       text NOT NULL,                        -- for display only
-    status          text NOT NULL DEFAULT 'untested',
-    last_tested_at  timestamptz,
-    UNIQUE (org_id, provider_key)
-);
-
-CREATE TABLE connections (                                -- GitHub, email, SQL, REST
-    id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id          uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    kind            text NOT NULL,
-    credential_enc  bytea NOT NULL,
-    config          jsonb NOT NULL DEFAULT '{}',          -- repo list, allowed URLs, etc.
-    status          text NOT NULL DEFAULT 'untested',
-    last_tested_at  timestamptz
-);
-```
-
-## 2.3 Execution (Phases 4, 5)
-
-```sql
-CREATE TABLE tasks (
-    id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id               uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    employee_id          uuid NOT NULL REFERENCES ai_employees(id),
-    employee_version_id  uuid NOT NULL REFERENCES ai_employee_versions(id),   -- pinned
-    title                text,
-    input                text NOT NULL,
-    status               text NOT NULL DEFAULT 'queued',
-    dry_run              boolean NOT NULL DEFAULT false,
-    created_by           uuid NOT NULL REFERENCES users(id),
-    created_at           timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX ON tasks (org_id, status, created_at DESC);
-
-CREATE TABLE runs (
-    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_id       uuid NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    org_id        uuid NOT NULL,
-    attempt       int NOT NULL DEFAULT 1,
-    status        text NOT NULL DEFAULT 'running',
-    step_count    int NOT NULL DEFAULT 0,
-    total_tokens  int NOT NULL DEFAULT 0,
-    cost_usd      numeric(12,6) NOT NULL DEFAULT 0,
-    error_class   text,
-    error_message text,
-    started_at    timestamptz NOT NULL DEFAULT now(),
-    ended_at      timestamptz
-);
-
-CREATE TABLE run_events (
-    id          bigserial PRIMARY KEY,
-    run_id      uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    seq         int  NOT NULL,
-    type        text NOT NULL,
-    payload     jsonb NOT NULL,
-    created_at  timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (run_id, seq)
-);
-CREATE INDEX ON run_events (run_id, seq);
-
-CREATE TABLE llm_calls (
-    id             bigserial PRIMARY KEY,
-    run_id         uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    org_id         uuid NOT NULL,
-    provider_key   text NOT NULL,
-    model          text NOT NULL,
-    prompt_tokens  int NOT NULL,
-    output_tokens  int NOT NULL,
-    cost_usd       numeric(12,6) NOT NULL,
-    latency_ms     int NOT NULL,
-    created_at     timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE tool_invocations (
-    id           bigserial PRIMARY KEY,
-    run_id       uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    org_id       uuid NOT NULL,
-    tool_name    text NOT NULL,
-    side_effect  text NOT NULL,                           -- read|write|destructive
-    args         jsonb NOT NULL,                          -- redacted
-    status       text NOT NULL,
-    duration_ms  int,
-    idempotency_key text
-);
-
-CREATE TABLE policy_defaults (                            -- platform-set starting values
-    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    scope_kind   text NOT NULL,                           -- pack|tool
-    scope_value  text NOT NULL,                           -- 'github' or 'github.open_pull_request'
-    side_effect  text,
-    setting      text NOT NULL,                           -- auto|ask|blocked
-    UNIQUE (scope_kind, scope_value, side_effect)
-);
-
-CREATE TABLE policies (                                   -- company overrides
-    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id       uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    scope_kind   text NOT NULL,
-    scope_value  text NOT NULL,
-    side_effect  text,
-    setting      text NOT NULL,
-    UNIQUE (org_id, scope_kind, scope_value, side_effect)
-);
-
-CREATE TABLE blocked_actions (                            -- catastrophic list, platform-wide
-    tool_name  text PRIMARY KEY,
-    reason     text NOT NULL
-);
-
-CREATE TABLE approvals (
-    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    run_id       uuid NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-    org_id       uuid NOT NULL,
-    tool_name    text NOT NULL,
-    proposed     jsonb NOT NULL,                          -- the FULL payload the reviewer sees
-    status       text NOT NULL DEFAULT 'pending',
-    decided_by   uuid REFERENCES users(id),
-    decided_at   timestamptz,
-    expires_at   timestamptz NOT NULL
-);
-CREATE INDEX ON approvals (org_id, status, expires_at);
-
-CREATE TABLE run_checkpoints (
-    run_id      uuid PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE,
-    state       jsonb NOT NULL,                           -- phase 5 handmade; phase 7 LangGraph
-    updated_at  timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE run_heartbeats (
-    run_id      uuid PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE,
-    worker_id   text NOT NULL,
-    beat_at     timestamptz NOT NULL DEFAULT now()
-);
-```
-
-## 2.4 Knowledge (Phase 6)
-
-```sql
-CREATE TABLE embedding_configs (
-    org_id          uuid PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
-    provider_key    text NOT NULL,
-    model           text NOT NULL,
-    dim             int  NOT NULL,                        -- 768 | 1024 | 1536
-    api_key_enc     bytea
-);
-
-CREATE TABLE memories (
-    id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id           uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    employee_id      uuid REFERENCES ai_employees(id) ON DELETE CASCADE,  -- NULL = org-wide
-    kind             text NOT NULL,                       -- fact|correction|summary|document
-    content          text NOT NULL,
-    content_tsv      tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
-    embedding_model  text NOT NULL,                       -- mismatch detection
-    created_at       timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX ON memories USING gin (content_tsv);         -- keyword half of hybrid search
-
--- One table per dimension: pgvector indexes require a fixed dimension
-CREATE TABLE memory_vectors_768  (memory_id uuid PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE, embedding vector(768));
-CREATE TABLE memory_vectors_1024 (memory_id uuid PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE, embedding vector(1024));
-CREATE TABLE memory_vectors_1536 (memory_id uuid PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE, embedding vector(1536));
-CREATE INDEX ON memory_vectors_1024 USING hnsw (embedding vector_cosine_ops);
-
-CREATE TABLE run_summaries (
-    run_id   uuid PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE,
-    org_id   uuid NOT NULL,
-    goal     text, outcome text, lesson text
-);
-
-CREATE TABLE reembed_jobs (
-    id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id    uuid NOT NULL,
-    from_model text, to_model text,
-    total int, done int, status text
-);
-```
-
-## 2.5 The tenant-isolation test
-
-```python
-GLOBAL_TABLES = {"users", "platform_admins", "platform_admin_audit",
-                 "supported_providers", "policy_defaults", "blocked_actions"}
-
-def test_every_table_is_org_scoped():
-    for model in Base.registry.mappers:
-        table = model.class_.__tablename__
-        if table in GLOBAL_TABLES:
-            continue
-        assert "org_id" in model.class_.__table__.columns, f"{table} is missing org_id"
-```
-
-Adding a table without `org_id` fails CI. The whitelist is deliberately short and requires a reviewer to justify an addition.
+`backend/tests/isolation/test_owner_scoping.py` walks every mapped table. A table without `owner_id` fails the test unless it is in `GLOBAL_TABLES` with a written reason (accounts, tokens, the Platform Admin's tables, the provider catalog, platform defaults and platform rules). A second test fails if any reason is blank.
 
 ---
----
 
-# Part 3 — API specification
+# Part 3 — API
 
 ## 3.1 Conventions
 
 | Aspect | Decision |
 |---|---|
 | Base path | `/api/v1` |
-| Auth | `Authorization: Bearer <access>` (15 min); refresh in an httpOnly cookie |
-| Errors | RFC 7807 problem+json: `{type, title, status, detail, errors[]}` |
-| Cross-tenant | **404**, never 403 |
-| Pagination | Cursor: `?cursor=&limit=` → `{items, next_cursor}` |
-| Idempotency | `Idempotency-Key` header on POSTs that cause side effects |
-| Validation | Pydantic; 422 with field-level errors |
+| Auth | `Authorization: Bearer <access>` (15 minutes); refresh token in an httpOnly cookie (30 days), rotated on use |
+| Scope | Everything for a signed-in person is under `/me`. There is no id in the path to tamper with. |
+| Another person's item | **404**, never 403 |
+| Validation | Pydantic; 422 with field errors |
+| Platform Admin | Under `/platform`, with a separate token type (`platform_access`). A normal token is refused there. |
 
 ## 3.2 Endpoint catalogue
 
-**Auth** (Phase 1)
-
-| Method | Path | Role | Notes |
-|---|---|---|---|
-| POST | `/auth/accept-invite` | public | The only way an account is created |
-| POST | `/auth/login` | public | Rate-limited per IP and per email |
-| POST | `/auth/refresh` | cookie | Rotates; reuse revokes the whole family |
-| POST | `/auth/logout` | any | |
-| GET | `/auth/me` | any | |
-
-**Organizations** (Phase 1)
-
-| Method | Path | Role |
-|---|---|---|
-| GET | `/orgs` | any |
-| GET · PATCH | `/orgs/{id}` | member · admin |
-| GET | `/orgs/{id}/members` | member |
-| POST | `/orgs/{id}/invites` | admin |
-| PATCH · DELETE | `/orgs/{id}/members/{uid}` | admin |
-
-**AI Employees** (Phase 2)
-
-| Method | Path | Role | Notes |
-|---|---|---|---|
-| GET | `/ai-employees` | member | |
-| POST | `/ai-employees` | admin | **Enforces `max_employees`** |
-| GET | `/ai-employees/{id}` | member | |
-| PATCH | `/ai-employees/{id}` | admin | Inserts a new version |
-| DELETE | `/ai-employees/{id}` | admin | Archive |
-| POST | `/ai-employees/{id}/activate` · `/pause` | admin | |
-| GET | `/ai-employees/{id}/versions` | member | |
-| POST | `/ai-employees/{id}/preview-prompt` | admin | Exact text sent to the model |
-| GET · POST · DELETE | `/templates` · `/templates/{id}` | member · admin | |
-
-**Providers and connections** (Phases 3, 5)
-
-| Method | Path | Role |
-|---|---|---|
-| GET | `/providers/available` | admin |
-| GET · POST | `/providers` · `/providers/{id}` | admin |
-| POST | `/providers/{id}/test` | admin |
-| GET | `/models` | member |
-| GET · POST · DELETE | `/connections` · `/connections/{id}` | admin |
-| POST | `/connections/{id}/test` | admin |
-
-> No endpoint anywhere returns a plaintext key. `GET /providers` returns `{provider_key, status, key_last4}`.
-
-**Tasks and runs** (Phase 4)
-
-| Method | Path | Role | Notes |
-|---|---|---|---|
-| POST | `/tasks` | member | Returns 202 in <500 ms |
-| GET | `/tasks` · `/tasks/{id}` | member | |
-| POST | `/tasks/{id}/cancel` | member (own) · admin | |
-| GET | `/runs/{id}` | member | |
-| GET | `/runs/{id}/events` | member | **SSE**, supports `Last-Event-ID` |
-| GET | `/runs/{id}/trace` | member | Full history as JSON |
-
-**Policies and approvals** (Phase 5)
-
-| Method | Path | Role |
-|---|---|---|
-| GET · PUT | `/policies` | admin |
-| POST | `/policies/reset` | admin |
-| GET | `/approvals` · `/approvals/{id}` | admin |
-| POST | `/approvals/{id}/approve` · `/reject` | admin |
-
-**Memory** (Phase 6)
-
-| Method | Path | Role |
-|---|---|---|
-| GET · POST · PATCH · DELETE | `/memory` · `/memory/{id}` | admin |
-| POST | `/memory/search` | member |
-| POST | `/documents` | admin |
-| GET · PUT | `/embedding-config` | admin |
-| GET | `/reembed-jobs/{id}` | admin |
-
-**Platform admin** (Phase 1, 3)
+**Auth**
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/platform/auth/login` | Password only |
-| GET · POST | `/platform/companies` | |
-| PATCH | `/platform/companies/{id}/limits` | |
-| POST | `/platform/companies/{id}/suspend` · `/reactivate` · `/close` | |
-| GET | `/platform/companies/{id}/provider-status` | **Boolean only. No key data.** |
-| GET · POST · PATCH | `/platform/supported-providers` | |
-| GET · PUT | `/platform/policy-defaults` | |
+| POST | `/auth/setup` | Set your password from a setup link. The only place a password is set. |
+| POST | `/auth/login` | |
+| POST | `/auth/refresh` | Rotates; reusing an old token revokes the whole family |
+| POST | `/auth/logout` | |
+| GET | `/auth/me` | id, email, name |
+
+There is no `/auth/register`.
+
+**Chat** (`/me`)
+
+| Method | Path |
+|---|---|
+| GET | `/me/assistant` (modes and settings for the chat screen) |
+| GET · POST | `/me/conversations` |
+| GET · PATCH · DELETE | `/me/conversations/{id}` |
+| POST | `/me/conversations/{id}/messages` (queues a task; returns at once) |
+
+**Agents** (`/me/agents`)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/me/agents/overview` | The whole AI Agents page in one call |
+| POST | `/me/agents/readiness` | Check a draft before it exists |
+| POST | `/me/agents` | Create (pressing Create on a draft card). Max 30. |
+| GET · PATCH · DELETE | `/me/agents/{id}` | DELETE archives it; chats that used it still read |
+| GET | `/me/agents/{id}/readiness` | |
+| POST | `/me/agents/{id}/pause` · `/resume` | The schedule |
+| POST | `/me/agents/{id}/run` | Run now |
+| POST | `/me/agents/{id}/chat` | Open a chat with this agent |
+
+**Tasks and runs** (`/me`)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/me/tasks` · `/me/tasks/{id}` | |
+| POST | `/me/tasks/{id}/cancel` | |
+| GET | `/me/runs/{id}` · `/me/runs/{id}/trace` | |
+| GET | `/me/runs/{id}/events` | **SSE**, resumes with `Last-Event-ID` |
+
+**AI providers** (`/me`)
+
+| Method | Path |
+|---|---|
+| GET | `/me/providers/available` · `/me/providers` · `/me/models` |
+| POST | `/me/providers` · `/me/providers/{key}/test` · `/me/providers/{key}/auto-model` |
+| PUT | `/me/providers/{key}/model` |
+| GET | `/me/providers/{key}/models` |
+| DELETE | `/me/providers/{key}` |
+
+No endpoint returns a key. The list shows provider, status and last 4 characters.
+
+**Connections and MCP** (`/me`)
+
+| Method | Path |
+|---|---|
+| GET | `/me/connections/available` · `/me/connections` · `/me/connections/services` |
+| POST | `/me/connections/oauth/{kind}/start` (body: which parts and levels to share) |
+| POST | `/me/connections` (manual: IMAP, GitHub, database) · `/me/connections/{id}/test` |
+| PATCH · DELETE | `/me/connections/{id}` |
+| GET · PUT · DELETE | `/me/connections/oauth-apps` · `/me/connections/oauth-apps/{kind}` (your own Google/Microsoft app) |
+| GET · POST | `/me/mcp-servers` |
+| POST | `/me/mcp-servers/{id}/sync` |
+| DELETE | `/me/mcp-servers/{id}` |
+
+The OAuth callback is public; it trusts only the signed `state`.
+
+**Permissions and approvals** (`/me`)
+
+| Method | Path |
+|---|---|
+| GET · PUT | `/me/policies` |
+| POST | `/me/policies/reset` |
+| GET | `/me/tools` |
+| GET | `/me/approvals` · `/me/approvals/{id}` |
+| POST | `/me/approvals/{id}/approve` · `/me/approvals/{id}/reject` |
+| GET · POST | `/approval-links/{token}` · `/approval-links/{token}/decide` (public, signed link; showing never decides) |
+
+**Memory, notifications, speech** (`/me`)
+
+| Method | Path |
+|---|---|
+| GET · POST | `/me/memory` |
+| DELETE | `/me/memory/{id}` |
+| POST | `/me/memory/search` |
+| GET | `/me/embedding-providers` |
+| GET · PUT | `/me/embedding-config` |
+| POST | `/me/embedding-config/reembed` |
+| GET · PUT | `/me/notifications` |
+| POST | `/me/notifications/test` |
+| GET | `/me/speech` |
+| POST | `/me/speech/transcribe` |
+
+**Platform Admin** (`/platform`)
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/platform/auth/login` | Email and password |
+| GET · POST | `/platform/people` | POST returns the setup token once |
+| GET | `/platform/people/{id}` | Counts and health only: tasks run, providers connected (yes/no) |
+| POST | `/platform/people/{id}/suspend` · `/restore` | Nothing is read or deleted |
+| GET · PUT | `/platform/people/{id}/connections` · `…/connections/{kind}` | Open or close a connection kind for one person |
+| GET · PUT | `/platform/people/{id}/services` · `…/services/{service}/{level}` | Open or close one part of an app for one person |
+| GET · PUT | `/platform/service-access` · `/platform/service-access/{service}/{level}` | The same, for everyone |
+| GET · PUT · PATCH · DELETE | `/platform/oauth-apps` · `/platform/oauth-apps/{provider}` | The shared one-click apps |
+| GET · PUT · PATCH | `/platform/providers` · `/platform/providers/{key}` | The AI provider catalog |
 | GET | `/platform/audit` | Read-only |
 
-**There is deliberately no `/platform/*` endpoint that returns customer content, credentials, task text or memory.** Absence is the control.
+**There is no `/platform` endpoint that returns anyone's chats, tasks, memory, credentials or keys.** Absence is the control.
 
-## 3.3 Permission dependency
-
-```python
-def require_permission(perm: Permission):
-    async def dep(ctx: RequestContext = Depends(get_context)) -> RequestContext:
-        if perm not in ROLE_PERMISSIONS[ctx.role]:
-            raise Forbidden()
-        return ctx
-    return dep
-
-ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
-    Role.ADMIN:  {EMPLOYEE_WRITE, TASK_WRITE, CONNECTION_WRITE,
-                  POLICY_WRITE, APPROVAL_DECIDE, MEMBER_MANAGE, MEMORY_WRITE},
-    Role.MEMBER: {TASK_WRITE, TASK_READ, EMPLOYEE_READ},
-}
-```
-
-A test walks the OpenAPI schema and asserts every route carries either `require_permission` or an explicit `@public` marker. A forgotten guard fails CI rather than shipping.
-
----
 ---
 
 # Part 4 — The agent loop
 
-## 4.1 Pseudocode
+## 4.1 Sketch
+
+The real code is `AgentLoop` in `app/agent/loop.py`, started by `run_task` in `app/workers/jobs/agent_run.py`.
 
 ```python
-async def run_task(run_id: UUID) -> RunResult:
-    ctx     = await load_run_context(run_id)      # version config, tools, policy, connections
-    events  = EventWriter(run_id)                 # appends + publishes
-    msgs    = ctx.checkpoint.messages if ctx.checkpoint else [
-                  system(ctx.config.instructions), user(ctx.task.input)]
-    budget  = Budget(ctx.config.max_steps, ctx.config.max_tokens, WALL_CLOCK)
+# run_task, simplified
+task, conversation, agent = load(...)
+tools    = allowed_tools(person, agent)        # Permissions, grants, platform rules, agent list
+provider = choose_ai(conversation or agent)    # Automatic routing, with fallbacks
+loop     = AgentLoop(provider=provider, tools=tools, budget=..., check_policy=...)
+outcome  = await run_in_graph(loop, system_prompt=..., task=task.input, history=...)
 
-    while True:
-        if violation := budget.check():
-            return await finish(run_id, FAILED, violation)
-        if await cancel_requested(run_id):
-            return await finish(run_id, CANCELLED)
-        await heartbeat(run_id)
-
-        await events.append("thinking")
-        reply = await ctx.provider.complete(
-            messages=msgs, tools=ctx.tool_schemas,
-            model=ctx.config.model, temperature=ctx.config.temperature)
-
-        await record_llm_call(run_id, reply.usage)
-        budget.consume(reply.usage.total_tokens)
-        msgs.append(reply.message)
-
-        if not reply.tool_calls:
-            return await finish(run_id, COMPLETED, output=reply.text)
-
-        for call in reply.tool_calls:
-            decision = ctx.policy.evaluate(call.name)          # see Part 6
-
-            if decision is BLOCKED:
-                msgs.append(tool_result(call, "Blocked by this company's policy."))
-                await events.append("tool_blocked", call.name)
-                continue
-
-            if decision is ASK:
-                await create_approval(run_id, call)
-                await save_checkpoint(run_id, msgs)
-                return await pause(run_id, AWAITING_APPROVAL)   # worker is freed
-
-            result = await execute_tool(ctx, call, dry_run=ctx.task.dry_run)
-            msgs.append(tool_result(call, result.as_text()))    # errors included as text
-            await events.append("tool_result", result.summary())
-
-        budget.step()
+# AgentLoop.run, simplified
+while True:
+    stop if budget spent or cancel requested
+    reply = await provider.complete(messages, tool_schemas)
+    record llm_call; add reply to messages
+    if no tool calls: finish with reply text
+    for each call (up to 3 at once when independent):
+        decision = check_policy(call)
+        Blocked -> tell the model it is blocked
+        Ask     -> save state, create approval, pause (return)
+        Auto    -> run the tool; errors come back as text
 ```
 
-## 4.2 Five properties this encodes
+`run_in_graph` (in `graph.py`) runs the loop as the single node of a LangGraph graph. With `AGENT_CHECKPOINTER=true`, `GraphLoop` pauses with LangGraph's `interrupt()` and saves state in `graph_checkpoints`; otherwise the pause is saved in `run_checkpoints`. With `AGENT_SUPERVISOR=true`, team mode runs as the graph in `supervisor.py`. Both settings are off by default.
+
+## 4.2 Budgets
+
+| Run | Steps | Time |
+|---|---|---|
+| A chat turn | 10 (`CHAT_MAX_STEPS`) | worker job limit |
+| A scheduled or "run now" agent run | the agent's `max_steps` (default 40, max 80) | 840 s |
+| A team helper | 6 steps | 180 s |
+
+At most 6 helper calls per message. Team mode is off for unattended runs.
+
+## 4.3 Properties
 
 | Property | Where |
 |---|---|
-| **Budget checked first, every iteration** | A runaway loop is stopped before it costs anything further |
-| **Cancellation checked every iteration** | Stops within one step, typically under 5 s |
-| **Tool errors become messages, not exceptions** | `result.as_text()` on failure lets the model recover |
-| **Pausing returns from the function** | The worker is released; it does not sleep waiting for a human |
-| **Policy is evaluated per call** | One run can legitimately hit Auto, Ask and Blocked in sequence |
+| **Budget checked first, every step** | A runaway loop stops before it costs more |
+| **Cancellation checked every step** | Stops within one step |
+| **Tool errors become messages** | The model can recover |
+| **Pausing returns** | The worker is freed; it does not wait for a person |
+| **Permission checked per call** | One run can hit Always allow, Ask and Blocked in turn |
 
-## 4.3 Context compaction (Phase 6)
-
-```python
-if estimated_tokens(msgs) > ctx.config.context_threshold:
-    head, tail = msgs[:-KEEP_RECENT], msgs[-KEEP_RECENT:]
-    summary = await ctx.routine_provider.summarise(head)   # cheap model
-    msgs = [msgs[0], assistant(f"[earlier steps] {summary}"), *tail]
-```
-
-The system message is always kept. Recent steps stay verbatim because the model needs their detail; older steps compress well because only their conclusions matter.
-
----
 ---
 
 # Part 5 — Tool and provider contracts
 
-## 5.1 The Tool interface
+## 5.1 The Tool interface (`app/agent/tools/base.py`)
 
 ```python
-class SideEffect(StrEnum):
-    READ = "read"; WRITE = "write"; DESTRUCTIVE = "destructive"
-
 class Tool(ABC):
     name: ClassVar[str]
     pack: ClassVar[str]
     description: ClassVar[str]
-    args_schema: ClassVar[type[BaseModel]]
-    side_effect: ClassVar[SideEffect]        # required — no default
+    args_model: ClassVar[type[BaseModel]]
+    side_effect: ClassVar[SideEffect]          # read | write | destructive — no default
     supports_dry_run: ClassVar[bool] = False
-    timeout_s: ClassVar[int] = 30
+    timeout_s: ClassVar[float] = 30.0
+    requires_connection: ClassVar[str | None] = None
 
-    @abstractmethod
-    async def execute(self, ctx: ToolContext, args: BaseModel) -> ToolResult: ...
+    async def run(self, ctx: ToolContext, args: BaseModel) -> ToolResult: ...
 ```
 
-```python
-@dataclass
-class ToolContext:
-    org_id: UUID
-    run_id: UUID
-    connection: Connection | None     # credential handle, not the value
-    dry_run: bool
+`ToolContext` carries `owner_id`, `run_id`, `dry_run` and the credentials the worker attached (`grants`). The model never sees them. `ToolResult` is `ok`, `data`, or an error class and message that `as_text()` turns into a sentence for the model.
 
-@dataclass
-class ToolResult:
-    ok: bool
-    data: Any = None
-    error_class: str | None = None
-    def as_text(self) -> str:
-        return json.dumps(self.data) if self.ok else f"Tool failed: {self.error_class}. {self.message}"
-```
+**`side_effect` has no default.** A tool without it fails at import, so the server will not start.
 
-**`side_effect` has no default.** A tool class without it raises at import time, so the process will not start. That is deliberate — a forgotten label is the one that emails four hundred customers.
+## 5.2 Registry and the tool list
 
-## 5.2 Registry
+The registry (`app/agent/tools/registry.py`) holds every built-in tool and the catastrophic blocklist (`BLOCKED_ACTIONS`). For one run, the tools offered are the ones that pass every layer:
 
-```python
-class ToolRegistry:
-    def register(self, tool: type[Tool]) -> None:
-        if not hasattr(tool, "side_effect"):
-            raise ConfigError(f"{tool.__name__} must declare side_effect")
-        if tool.name in BLOCKED_ACTIONS:
-            raise ConfigError(f"{tool.name} is on the catastrophic blocklist")
-        self._tools[tool.name] = tool
+1. the platform allows that part of the app (for everyone, or for this person);
+2. the person's connection was granted that permission (for example Gmail edit);
+3. the agent lists the tool (if it is an agent run with a narrowed list);
+4. the person's Permissions do not block it.
 
-    def for_employee(self, cfg: EmployeeConfig) -> list[type[Tool]]:
-        return [self._tools[n] for n in cfg.enabled_tools if n in self._tools]
+A tool that fails a layer is not described to the model at all. MCP tools are added per person from their connected servers. The agent-designing tool (`propose_agent`) is not in the registry: it is given only to a chat that is designing an agent.
 
-    def schemas(self, tools) -> list[dict]:
-        return [{"name": t.name, "description": t.description,
-                 "parameters": t.args_schema.model_json_schema()} for t in tools]
-```
-
-The model only ever sees schemas for tools on **that employee's** allowlist. A tool that is not in the list does not exist as far as the model is concerned — which is the primary injection defence.
-
-## 5.3 Provider interface
+## 5.3 Provider interface (`app/agent/providers/base.py`)
 
 ```python
 class LLMProvider(ABC):
-    @abstractmethod
     async def complete(self, *, messages, tools, model, temperature, max_tokens) -> LLMReply: ...
-    @abstractmethod
-    def stream(self, **kw) -> AsyncIterator[LLMChunk]: ...
-    @abstractmethod
-    def count_tokens(self, messages) -> int: ...
-
-@dataclass
-class LLMReply:
-    message: Message
-    text: str | None
-    tool_calls: list[ToolCall]
-    usage: Usage              # prompt_tokens, output_tokens
-    stop_reason: StopReason   # normalised across providers
+    async def list_models(self) -> list[str]: ...
+    async def check(self, model: str) -> None: ...
 ```
 
-Two implementations: `GeminiProvider` (native SDK) and `OpenAICompatibleProvider` (Groq, NVIDIA, Ollama, DeepSeek, OpenRouter, Together — one adapter, same wire format).
-
-The interface normalises the four things that genuinely differ: tool-call shape, system-prompt placement, streaming event types, and stop reasons. Everything above `agent/providers/` is provider-agnostic.
+Three adapters: `AnthropicProvider` (keeps Claude's thinking blocks between tool calls), `GeminiProvider`, and `OpenAICompatibleProvider` (OpenAI, Groq, DeepSeek, Mistral, OpenRouter, Together, NVIDIA, Sarvam, and the person's own server). Which adapter a catalog entry uses is its `api_format`. A fallback wrapper moves to the next connected AI on a rate limit or outage. Errors are typed (`ProviderRateLimitError`, `ProviderAuthError`, `ProviderTooLargeError` …) so the caller can tell a bad key from a busy server.
 
 ## 5.4 Cost
 
-```python
-PRICING = {  # USD per 1M tokens — verify at build time, these move
-    ("gemini", "gemini-flash"):  Price(input=0.30, output=2.50),
-    ("groq",   "llama-70b"):     Price(input=0.59, output=0.79),
-}
-
-def cost_usd(provider, model, usage) -> Decimal:
-    p = PRICING[(provider, model)]
-    return (usage.prompt_tokens * p.input + usage.output_tokens * p.output) / Decimal(1_000_000)
-```
-
-With BYOK we cannot see the customer's actual invoice, so every figure is surfaced as **"estimated cost"**. Presenting an estimate as a bill would be dishonest.
+Each model call is priced from a per-model table (`app/agent/pricing.py`) and stored in `llm_calls`. With your own key we cannot see your real invoice, so every figure is shown as an **estimated cost**.
 
 ---
----
 
-# Part 6 — Policy engine
+# Part 6 — Permissions
 
-## 6.1 Resolution order
+## 6.1 Resolution order (`app/services/policy_service.py`)
 
-```python
-def evaluate(self, tool_name: str) -> Decision:
-    tool = registry.get(tool_name)
+1. **Catastrophic blocklist**: platform-wide, nobody can override.
+2. Your rule for this tool.
+3. Your rule for this pack and side effect.
+4. Platform default for this tool.
+5. Platform default for this pack and side effect.
+6. **Safe fallback**: read → Always allow, write → Ask me first, destructive → Blocked.
 
-    # 1. Catastrophic blocklist — platform-wide, nobody can override
-    if tool_name in self.blocked_actions:
-        return Decision.BLOCKED
+Most specific wins, except the blocklist, which always wins. Rule 6 means a new tool with no rule is safe by default. An unknown tool is refused.
 
-    # 2. Company override, specific tool
-    if s := self.org_policies.get(("tool", tool_name)):
-        return Decision(s)
+## 6.2 Platform defaults versus your rules
 
-    # 3. Company override, whole pack + side effect
-    if s := self.org_policies.get(("pack", tool.pack, tool.side_effect)):
-        return Decision(s)
-
-    # 4. Platform default, specific tool
-    if s := self.defaults.get(("tool", tool_name)):
-        return Decision(s)
-
-    # 5. Platform default, pack + side effect
-    if s := self.defaults.get(("pack", tool.pack, tool.side_effect)):
-        return Decision(s)
-
-    # 6. Safe fallback
-    return {READ: Decision.AUTO,
-            WRITE: Decision.ASK,
-            DESTRUCTIVE: Decision.BLOCKED}[tool.side_effect]
-```
-
-**Most specific wins, except the blocklist, which wins absolutely.** Rule 6 means a brand-new tool with no policy configured is safe by default — a new destructive tool is blocked until someone deliberately enables it.
-
-## 6.2 Platform default versus company override
-
-| | Platform Admin | Company Admin |
+| | Platform Admin | You |
 |---|---|---|
-| Sets | The **starting value** for new companies | Their own value, **looser or stricter** |
-| Can a company go looser than the default? | — | ✅ Yes |
-| Can a company override the blocklist? | — | ❌ No |
+| Sets | The starting values (`policy_defaults`) | Your own value, looser or stricter |
+| Can you go looser than the default? | — | ✅ Yes (switching an irreversible action to Always allow asks you once more) |
+| Can you override the blocklist? | — | ❌ No; the backend refuses it |
 
-The blocklist is intentionally tiny — three entries — and each carries a written reason, so it never looks arbitrary.
+Separately, the Platform Admin can close a part of an app (for example Sheets edit) for everyone or one person. That is a different layer (Part 5.2, layer 1): it removes the tool rather than changing its setting.
 
 ## 6.3 Where it is enforced
 
-```python
-# worker, before every tool execution — not in the API, not in the UI
-decision = ctx.policy.evaluate(call.name)
-```
+In the worker, before every tool call. The screens read the same rules only to show helpful text. A screen check is a convenience; the worker check is the control.
 
-The UI also reads policy, but only to render helpful text. **A screen-level check is a convenience; the worker-level check is the control.** A test calls the API directly, bypassing the UI, to prove the gate holds.
-
----
 ---
 
 # Part 7 — Event log and SSE
 
 ## 7.1 Event types
 
-| Type | Payload |
+| Type | When |
 |---|---|
-| `run_started` | `{employee_version_id, model}` |
-| `thinking` | `{step}` |
-| `llm_call` | `{model, prompt_tokens, output_tokens, cost_usd}` |
-| `tool_call` | `{tool, args_redacted}` |
-| `tool_result` | `{tool, ok, summary}` |
-| `tool_blocked` | `{tool, reason}` |
-| `approval_requested` | `{approval_id, tool}` |
-| `approval_decided` | `{approval_id, decision, by}` |
-| `branch_taken` *(P7)* | `{from, to, condition}` |
-| `delegated_to` *(P7)* | `{specialist_employee_id}` |
-| `run_finished` | `{status, cost_usd, step_count}` |
+| `run_started`, `run_finished`, `run_stopped` | Start and end of a run |
+| `thinking`, `llm_call`, `text` | Model steps and output |
+| `model_chosen`, `model_fallback`, `model_retry`, `provider_error` | Which AI, and any handover |
+| `tool_call`, `tool_result`, `tool_blocked`, `parallel_started` | Tools |
+| `approval_requested`, `approval_decided` | Approvals |
+| `specialist_started`, `specialist_step`, `specialist_finished`, `specialist_failed`, `specialist_escalated`, `team_summary` | Team mode |
 
 ## 7.2 Writing
 
-```python
-class EventWriter:
-    async def append(self, type: str, payload: dict) -> None:
-        self._seq += 1
-        await self.repo.insert(run_id=self.run_id, seq=self._seq,
-                               type=type, payload=redact(payload))   # Postgres first
-        await self.redis.publish(f"run:{self.run_id}",
-                                 json.dumps({"seq": self._seq, ...}))  # Redis second
-```
-
-**Order matters.** Persist then publish. If Redis publish fails, the event still exists and the client recovers it on reconnect. If we published first and the insert failed, a client would see an event that is not in the permanent record.
+Events are inserted into `run_events` with the next `seq`, with secret-looking keys (`api_key`, `token`, `password`, `secret` …) replaced by `[redacted]` **before** the insert, then published on Redis channel `run:{id}`. Persist first, publish second: a lost publish is recovered on reconnect; an event is never shown that is not in the permanent record.
 
 ## 7.3 SSE protocol
 
 ```
-GET /api/v1/runs/{id}/events
-Last-Event-ID: 12          ← optional, for resume
+GET /api/v1/me/runs/{id}/events
+Last-Event-ID: 12          ← optional, to resume
 
 id: 13
 event: tool_call
-data: {"seq":13,"tool":"get_issue","args":{"number":42}}
-
-: keepalive               ← comment frame every 15 s
+data: {"seq":13,"tool":"gmail_search", ...}
 ```
 
-```python
-async def stream(run_id: UUID, last_id: int | None):
-    for e in await repo.events_after(run_id, last_id or 0):   # 1. replay the gap
-        yield sse(e)
-    async for msg in redis.subscribe(f"run:{run_id}"):        # 2. then live
-        yield sse(msg)
-        if msg["type"] == "run_finished":
-            break
-```
+The server first replays events after `Last-Event-ID` from Postgres, then streams live ones from Redis. The client drops duplicates by `seq`.
 
-Replay-then-subscribe closes the gap. A brief overlap is possible, so the client de-duplicates on `seq`, which is cheap and idempotent.
-
-## 7.4 Redaction
-
-```python
-REDACT_KEYS = {"api_key", "token", "password", "secret", "authorization", "credential"}
-```
-
-Applied on write, so a secret never enters the table in the first place. Redacting on read would leave the plaintext permanently in the database.
-
----
 ---
 
 # Part 8 — Worker and queue
 
-## 8.1 Job types
+## 8.1 Jobs (`app/workers/main.py`)
 
-| Job | Trigger | Schedule |
-|---|---|---|
-| `run_task` | Task created, or approval granted | On demand |
-| `expire_approvals` | — | Every 5 min |
-| `reap_dead_runs` | — | Every 1 min |
-| `summarise_run` | Run completed | On demand |
-| `reembed_memories` | Embedding provider changed | On demand |
-| `cleanup_retention` | — | Daily |
+| Job | Trigger |
+|---|---|
+| `run_task` | A chat message, a "run now", a scheduled run, or an approval granted |
+| `dispatch_due_agents` | Every minute: start agents whose `next_run_at` has come, after a readiness re-check |
+| `expire_approvals` | Every 5 minutes: fail runs whose approval passed 24 h; also delete LangGraph state older than 3 days left by crashed runs |
+| `ping` | Proves the API → Redis → worker path |
 
 ## 8.2 Concurrency
 
 ```python
-class WorkerSettings:
-    max_jobs = 1 if settings.SLOW_MODE else 10    # SLOW_MODE on free tiers
-    job_timeout = 900
-    keep_result = 3600
+max_jobs    = 1 if settings.slow_mode else settings.worker_max_jobs   # slow_mode defaults to on
+job_timeout = 900
 ```
 
-**Why `max_jobs = 1` by default:** one task makes 10–15 model calls. Two concurrent tasks will exceed a free-tier per-minute limit. The queue lengthens instead of tasks failing, which is the better failure mode.
+One run makes many model calls, so with free-tier keys, running two at once trips rate limits. In slow mode the queue gets longer instead of runs failing.
 
-## 8.3 Retry classification
+## 8.3 Retries
 
-```python
-TRANSIENT = {RateLimited, Timeout, ServerError, ConnectionError}   # retry with backoff
-PERMANENT = {Unauthorized, NotFound, ValidationError, PolicyBlocked}  # fail immediately
-
-delay = min(2 ** attempt + random.uniform(0, 1), 60)   # jitter avoids a thundering herd
-```
-
-Retrying a 401 is pointless — the key will still be wrong in four seconds. Failing fast on a 429 is equally pointless. Classification is what makes retries useful rather than noisy.
-
-## 8.4 Dead-worker recovery
-
-```python
-async def reap_dead_runs():
-    stale = await repo.runs_with_heartbeat_older_than(seconds=120)
-    for run in stale:
-        if run.has_checkpoint and run.attempt < MAX_ATTEMPTS:
-            await queue.enqueue("run_task", run.id)        # resume from checkpoint
-        else:
-            await repo.fail(run.id, "worker_lost")
-```
-
-Without this, a `docker kill` leaves a run marked `running` forever. The heartbeat makes it detectable and the checkpoint makes it recoverable.
-
-## 8.5 Idempotency
-
-```python
-key = sha256(f"{run_id}:{step}:{tool}:{canonical(args)}")
-if existing := await repo.find_invocation(key):
-    return existing.result          # retry must not create a second pull request
-```
+Provider errors are typed. A rate limit or outage moves the run to the next connected AI. A bad key fails at once with a message the person can act on. A team helper that could not finish is tried once more on the strongest connected AI.
 
 ---
----
 
-# Part 9 — Encryption
-
-## 9.1 Envelope scheme
+# Part 9 — Encryption (`app/core/crypto.py`)
 
 ```
-master key (env var, or KMS in production)
-   └── wraps → per-company data key (DEK), stored wrapped
-                  └── encrypts → credentials, API keys, OAuth secrets
+master key (ENCRYPTION_KEY)  →  SHA-256(master + scope)  →  AES-GCM key for that scope
 ```
 
 ```python
-def encrypt_for_org(org_id: UUID, plaintext: str) -> bytes:
-    dek = unwrap(load_wrapped_dek(org_id), master_key())
-    return AESGCM(dek).encrypt(os.urandom(12), plaintext.encode(), aad=str(org_id).encode())
+encrypt(plaintext, scope=owner_id)   # nonce + ciphertext; scope is also the AAD
+decrypt(blob, scope=owner_id)        # wrong scope or key → SecretUnreadableError
 ```
 
 | Property | Benefit |
 |---|---|
-| Per-company DEK | Compromising one company does not expose the others |
-| `aad = org_id` | Ciphertext cannot be moved between companies — decryption fails |
-| AES-GCM | Authenticated: tampering is detected, not silently decrypted |
-| Master key rotatable | Rewrap DEKs without touching a single credential row |
+| A different key per person | One person's secrets cannot be decrypted with another's key |
+| The scope as authenticated data | A ciphertext moved to another person's row fails to decrypt |
+| AES-GCM | Tampering is detected |
+| `scope="platform"` | Used for the Platform Admin's shared app secrets |
 
-## 9.2 The access rules, as code
+Known gap: secrets saved before migration 0015 were encrypted with the old company id, so they cannot be read on an upgraded database and must be entered again. `SecretUnreadableError` says so in plain words.
 
-```python
-# There is no function that returns a decrypted credential to an HTTP response.
-# The only consumer is the worker, at call time:
-
-async def call_with_credential(conn_id: UUID, request: Request) -> Response:
-    secret = decrypt_for_org(org_id, load_ciphertext(conn_id))
-    request.headers["Authorization"] = f"Bearer {secret}"
-    try:
-        return await http.send(request)
-    finally:
-        del secret
-```
-
-A test asserts that no response model anywhere in the OpenAPI schema contains a field whose name matches the secret-key pattern. This catches the mistake at the contract level rather than hoping reviewers notice.
+No function returns a decrypted secret to an HTTP response. The worker decrypts only at call time, to add it to the outgoing request.
 
 ---
----
 
-# Part 10 — Error taxonomy and testing
+# Part 10 — Errors and tests
 
-## 10.1 Error hierarchy
+## 10.1 Errors (`app/core/errors.py`)
 
 ```
-AppError
-├── AuthError            → 401
-├── PermissionError      → 403
-├── NotFoundError        → 404      ← also used for cross-tenant access
-├── ValidationError      → 422
-├── ConflictError        → 409      (e.g. employee limit reached)
+AppError                 → 500
+├── AuthError            → 401   (InvalidCredentialsError, TokenReuseError)
+├── PermissionDeniedError→ 403
+├── NotFoundError        → 404   ← also another person's item
+├── ConflictError        → 409
+├── ValidationError      → 422   (SecretUnreadableError)
 ├── RateLimitError       → 429
-└── ToolError                       ← never reaches HTTP; returned to the model
-    ├── ToolTimeout
-    ├── ToolUnauthorized
-    ├── ToolNotFound
-    └── ToolUpstreamError
+└── UpstreamError        → 502
 ```
 
-`ToolError` is deliberately outside the HTTP branch. Tool failures are **information for the model**, not responses to a user.
+Tool failures never become HTTP errors: they are `ToolResult` failures, given to the model as text.
 
-## 10.2 Test suites
+## 10.2 Tests (`backend/tests/`)
 
-| Suite | Scope | Runs | Gate |
-|---|---|---|---|
-| Unit | Services, policy resolution, cost maths, budget | Every commit | ≥80% on `services/`, `agent/`, `core/` |
-| Integration | Routes against real Postgres + Redis (testcontainers) | Every commit | All pass |
-| **Isolation** | Every route, cross-tenant → 404; every model has `org_id` | Every commit | **100%** |
-| **Permissions** | Every route has a guard; role matrix enforced | Every commit | **100%** |
-| **Secrets** | Grep every response and log line for key material | Every commit | **Zero hits** |
-| Evals (replay) | 10 golden tasks from cassettes | Every commit | ≥8/10 |
-| Evals (live) | Same tasks, real providers | Nightly | Tracked over time |
-| **Red team** | 15 injection payloads in tool output | Pre-release | **Zero unauthorised calls** |
-| E2E (Playwright) | Invite → employee → task → PR | Pre-merge | All pass |
-| Chaos | 30% random tool failure | Nightly | Correct, or clean failure |
+| Suite | What it checks |
+|---|---|
+| `unit/` | Services, permission resolution, routing, schedules, cost maths, budgets |
+| `integration/` | Routes against real Postgres and Redis: auth and setup links, chat, agents and schedules, approvals, memory, providers, connections, MCP, platform admin |
+| `isolation/` | Every scoped table has `owner_id` (`test_owner_scoping.py`) |
 
-## 10.3 Cassettes
+Two integration tests guard the boundaries directly: `test_tenant_isolation.py` (another person's items return 404) and `test_platform_cannot_read_customer_data.py` (the Platform Admin cannot read content).
 
-```python
-@pytest.fixture
-def llm(request):
-    path = CASSETTES / f"{request.node.name}.json"
-    return ReplayProvider(path) if path.exists() else RecordingProvider(path, RealProvider())
-```
-
-Committed to the repository, so CI runs with **no API key, no cost and no rate limit**, and the same input always produces the same result. This is what makes testing a non-deterministic system possible at all.
-
-## 10.4 Eval assertions
-
-Each golden task asserts a **fact**, never text:
-
-```python
-GOLDEN = [
-    Task("Fix issue #1", lambda r: pr_exists(r) and "LoginButton.tsx" in pr_files(r)),
-    Task("Comment on #2", lambda r: comment_exists(2)),
-    Task("Find the login bug", lambda r: "LoginButton.tsx" in r.output),
-    Task("Fix issue #7 (impossible)", lambda r: r.admitted_failure and not pr_exists(r)),
-]
-```
-
-The last one is the most valuable test in the suite. **An agent that admits it cannot do something is worth far more than one that fabricates a plausible answer** — and it is the behaviour most likely to regress silently when prompts change.
+Tests use scripted and stub providers, so they run with no API key and no cost. `make test` runs them against a separate database (`ai_employee_test`).
 
 ---
 
