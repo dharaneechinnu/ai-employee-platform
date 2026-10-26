@@ -4,18 +4,18 @@
  * In a slim icon rail there is no room for the "3 running / 2 waiting"
  * lines the wide menu used to carry, and those are the two things
  * someone actually wants to know at a glance. So the mark carries them:
- * the ring around it reports what the workspace is doing.
+ * the ring around it reports what your assistant is doing.
  *
  *   idle      no ring, calm
  *   running   a ring sweeping in the run colour
  *   waiting   a steady amber ring, breathing
  *
  * Waiting outranks running, because a run continues on its own and an
- * approval does not: nothing moves until a person looks.
+ * approval does not: nothing moves until you look.
  *
  * The glyph itself is a rounded tile with a smaller tile lifted off its
  * corner — a worker, and the spark handed to them. Deliberately not a
- * person silhouette, which would collide with the Members icon, and
+ * person silhouette, which would read as a profile picture, and
  * deliberately not a dot grid, which reads as a drag handle.
  */
 export type BrandState = "idle" | "running" | "waiting";

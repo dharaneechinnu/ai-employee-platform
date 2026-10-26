@@ -19,7 +19,7 @@ import { notifyActivity } from "../lib/activity";
 import { ApiError, api, type Approval } from "../lib/api";
 
 /**
- * Phase 5. The reviewer sees the full proposed action, never only a
+ * Phase 5. You see the full proposed action, never only a
  * summary: you cannot meaningfully approve what you cannot read. The
  * plain sentence on top helps you read it; it does not replace it.
  *
@@ -73,7 +73,7 @@ export default function Approvals() {
 
   return (
     <>
-      <PageHeader crumb="Work" title="Approvals">
+      <PageHeader title="Approvals">
         <span className="max-w-[360px] text-[13px] leading-snug text-muted">
           Your assistant stops here before anything it cannot undo.
         </span>
@@ -138,7 +138,7 @@ function ApprovalCard({
             Wants to <span className="text-ask-text">{toolAction(approval.tool_name)}</span>
           </span>
           {approval.task_title && (
-            <span className="truncate text-[13px] text-muted">Task: {approval.task_title}</span>
+            <span className="truncate text-[13px] text-muted">From: {approval.task_title}</span>
           )}
         </div>
         <Chip tone={statusTone(approval.side_effect)}>{effectLabel(approval.side_effect)}</Chip>

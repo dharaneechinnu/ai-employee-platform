@@ -83,7 +83,7 @@ export const TOURS: Tour[] = [
         target: "policy-choice",
         icon: "lock",
         title: "Always allow, ask me first, or blocked",
-        body: "Always allow runs with no approval. Ask me first waits for a person. Blocked never runs. It saves the moment you click.",
+        body: "Always allow runs with no approval. Ask me first waits for you. Blocked never runs. It saves the moment you click.",
       },
       {
         target: "policy-advanced",

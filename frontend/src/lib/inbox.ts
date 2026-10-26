@@ -41,11 +41,11 @@ function readSeen(key: string): Record<string, string> {
 function writeSeen(key: string, seen: Record<string, string>): void {
   try {
     // Only the last 200 matter; without a cap this grows forever on a
-    // busy workspace and eventually throws on write.
+    // busy account and eventually throws on write.
     const trimmed = Object.fromEntries(Object.entries(seen).slice(-200));
     window.localStorage.setItem(`${SEEN_KEY}.${key}`, JSON.stringify(trimmed));
   } catch {
-    // A workspace that cannot remember what you read is mildly
+    // An inbox that cannot remember what you read is mildly
     // annoying; one that fails to render is not acceptable.
   }
 }

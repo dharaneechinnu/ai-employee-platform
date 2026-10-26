@@ -4,10 +4,9 @@ import { Button, Chip, ErrorNote, Input, PageBody, PageHeader, Spinner, Switch, 
 import { ApiError, api, type NotificationSettings } from "../lib/api";
 
 /**
- * Where the company hears about its runs: an email to the people
- * concerned, and optionally a Slack channel. Both carry Approve and
- * Reject buttons, so a paused run does not wait for someone to open
- * the app.
+ * Where you hear about your runs: an email to you, and optionally a
+ * Slack channel. Both carry Approve and Reject buttons, so a paused
+ * run does not wait for you to open the app.
  */
 
 type EventKey = "on_approval_requested";
@@ -99,7 +98,7 @@ export default function Notifications() {
                 <h2 className="font-display text-lg font-semibold">Email</h2>
                 <p className="text-[13px] text-muted">Approve or reject straight from the inbox.</p>
               </div>
-              {/* Shown off, and locked, while the platform has no mail server:
+              {/* Shown off, and locked, while there is no mail server:
                   an "on" switch that sends nothing is a broken promise. */}
               <Switch
                 checked={settings.email_enabled && settings.email_available}
@@ -111,11 +110,11 @@ export default function Notifications() {
             {!settings.email_available && (
               <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px] leading-normal">
                 <Icon name="warn" className="text-ask-text" />
-                <span>Email sending isn't switched on yet, so nothing will be sent. Whoever runs this platform can turn it on (it needs a mail server). Slack works without it.</span>
+                <span>Email approvals are not available on this server, so no email will be sent. Approval requests still appear in the app and in its bell, and Slack works without email.</span>
               </div>
             )}
             <p className="text-[13px] leading-relaxed text-dim">
-              Each admin gets their own link. Opening it shows the full action; nothing is decided until they press a button.
+              You get your own link. Opening it shows the full action; nothing is decided until you press a button.
               Links expire with the request, after 24 hours.
             </p>
           </section>
@@ -127,7 +126,7 @@ export default function Notifications() {
               </span>
               <div className="flex-1">
                 <h2 className="font-display text-lg font-semibold">Slack</h2>
-                <p className="text-[13px] text-muted">Post to a channel your team already watches.</p>
+                <p className="text-[13px] text-muted">Post to a Slack channel you already watch.</p>
               </div>
               {settings.slack_connected && (
                 <Switch checked={settings.slack_enabled} disabled={saving} onChange={(on) => void save({ slack_enabled: on })} label="Slack notifications" />
@@ -168,7 +167,7 @@ export default function Notifications() {
               </div>
             </form>
             <p className="text-[13px] leading-relaxed text-dim">
-              A channel is shared, so its buttons ask whoever clicks to sign in. The decision is recorded against them.
+              Its buttons ask you to sign in before anything is decided.
             </p>
           </section>
         </div>
@@ -178,7 +177,7 @@ export default function Notifications() {
         <section className="card rise flex flex-col p-1.5" style={{ animationDelay: ".14s" }} data-coach="notify-when">
           <div className="flex flex-col gap-0.5 px-4 pb-1 pt-3.5">
             <h2 className="font-display text-[17px] font-semibold">Tell us when</h2>
-            <p className="text-[13px] text-dim">Task updates go to the person who assigned the task.</p>
+            <p className="text-[13px] text-dim">Choose which updates reach you.</p>
           </div>
           {EVENTS.map((event) => (
             <div key={event.key} className="flex items-center gap-4 rounded-xl px-4 py-3.5 hover:bg-raised">

@@ -18,7 +18,7 @@ import { ApiError, api, type PolicyRow, type ToolEntry } from "../lib/api";
 import { effectLabel, learnToolLabels, packLabel, plainReason, toolLabel } from "../lib/labels";
 
 /**
- * Phase 5. The platform sets a default; a company may move any action
+ * Phase 5. The platform sets a default; you may move any action
  * looser or stricter, per tool or per pack. Only the catastrophic
  * blocklist is fixed, and the backend refuses to change it whatever
  * this screen sends.
@@ -156,7 +156,7 @@ export default function Policies() {
 
       <PageBody>
         <p className="rise max-w-3xl text-sm leading-relaxed text-muted">
-          For every tool, choose <b>Always allow</b> (it runs with no approval), <b>Ask me first</b> (a person approves
+          For every tool, choose <b>Always allow</b> (it runs with no approval), <b>Ask me first</b> (you approve
           each time) or <b>Blocked</b> (it never runs). By default, reading is allowed and sending asks first. Changes
           save as you click.
         </p>
@@ -207,7 +207,7 @@ export default function Policies() {
                     {/* Only worth a line when it is not the default: the tag already says what the default means. */}
                     {!/^platform default/i.test(tool.reason) && (
                       <span className="text-xs text-accent-text">
-                        {/^set by your company/i.test(tool.reason) ? "Changed by your company" : plainReason(tool.reason)}
+                        {/^set by (your company|you)\b/i.test(tool.reason) ? "Changed by you" : plainReason(tool.reason)}
                       </span>
                     )}
                   </div>

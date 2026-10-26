@@ -31,7 +31,7 @@ import { effectLabel, learnToolLabels, toolLabel } from "../lib/labels";
 /**
  * The outside apps your assistant works in.
  *
- * Google and Microsoft connect with one click: the admin signs in with
+ * Google and Microsoft connect with one click: you sign in with
  * the provider and approves the listed permissions. Nothing secret is
  * ever shown here, only which account is connected and whether it works.
  */
@@ -74,12 +74,12 @@ function BrandTile({ kind, size = 48 }: { kind: string; size?: number }) {
 }
 
 /**
- * Register this company's own Google or Microsoft app.
+ * Register your own Google or Microsoft app.
  *
  * The platform can register one app for everyone, but that puts the
- * operator in the critical path of every customer's setup. This is the
- * other route: the company's own Google Cloud project, its own name on
- * the consent screen, and nobody else to wait for.
+ * operator in the critical path of everyone's setup. This is the
+ * other route: your own Google Cloud project, your own name on the
+ * consent screen, and nobody else to wait for.
  */
 function OwnAppForm({
   option,
@@ -113,7 +113,7 @@ function OwnAppForm({
         client_id: clientId,
         client_secret: secret,
       });
-      toast(`${option.display_name} sign-in is on for your company.`);
+      toast(`${option.display_name} sign-in is on for your account.`);
       onDone();
       onClose();
     } catch (err) {
@@ -137,7 +137,7 @@ function OwnAppForm({
 
       <p className="text-[13px] leading-normal text-muted">
         Create an OAuth client in your own {option.kind === "google" ? "Google Cloud" : "Microsoft Entra"}{" "}
-        project, then paste its ID and secret here. Your company's name appears on the sign-in
+        project, then paste its ID and secret here. Your own app name appears on the sign-in
         screen, and nobody else has to set anything up first.
       </p>
 
@@ -389,8 +389,8 @@ export default function Connections() {
                         onClick={() => setOwnApp(option)}
                       >
                         {/* Not a dead end. Either the platform registers
-                            one app for everybody, or a company does it
-                            for itself — and nobody has to wait for the
+                            one app for everybody, or you do it
+                            for yourself — and nobody has to wait for the
                             other. */}
                         One-click sign-in isn't set up yet. Use your own {option.display_name} app →
                       </button>

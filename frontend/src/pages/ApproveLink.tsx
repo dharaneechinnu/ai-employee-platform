@@ -12,8 +12,8 @@ import { effectLabel, formatDateTime, toolAction } from "../lib/labels";
  * Decide on a paused action from an email or Slack link.
  *
  * Opening the page never decides anything. A mail scanner or a link
- * preview may fetch this URL; only a person pressing a button below
- * sends the decision. `?action=` merely highlights the button they
+ * preview may fetch this URL; only you pressing a button below
+ * sends the decision. `?action=` merely highlights the button you
  * clicked in the message.
  */
 export default function ApproveLink() {
@@ -79,7 +79,7 @@ export default function ApproveLink() {
                 <h1 className="font-display text-2xl font-semibold leading-tight">
                   Your assistant wants to {toolAction(view.tool_name)}
                 </h1>
-                {view.task_title && <p className="text-sm text-muted">Task: {view.task_title}</p>}
+                {view.task_title && <p className="text-sm text-muted">From: {view.task_title}</p>}
               </div>
 
               <div className="flex flex-col gap-2">
@@ -92,7 +92,7 @@ export default function ApproveLink() {
               {view.status === "pending" ? (
                 needsSignIn ? (
                   <div className="flex flex-col gap-3 rounded-xl bg-accent-soft p-4">
-                    <p className="text-sm">This link came from a shared channel, so sign in to decide. The decision is recorded against you.</p>
+                    <p className="text-sm">This link came from Slack, so sign in to decide. The decision is recorded as yours.</p>
                     <Link className="btn btn-primary self-start" to={`/login?next=${encodeURIComponent(next)}`}>
                       <Icon name="lock" size={16} /> Sign in to decide
                     </Link>
@@ -148,7 +148,7 @@ export default function ApproveLink() {
                       ? "Approved. The run has picked up where it paused."
                       : view.status === "rejected"
                         ? "Rejected. The run has stopped and nothing was done."
-                        : "This request expired before anyone decided."}
+                        : "This request expired before you decided. Nothing was done."}
                   </div>
                 </div>
               )}

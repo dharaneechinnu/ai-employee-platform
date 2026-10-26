@@ -30,7 +30,7 @@ type StageKind = "trigger" | "think" | "model" | "tool" | "wait" | "answer" | "s
 
 interface Stage {
   kind: StageKind;
-  /** The heading: "Ravi thinks", "Gmail", "Groq". */
+  /** The heading: "Your assistant thinks", "Gmail", "Groq". */
   title: string;
   /** One line under it, in plain words. */
   detail: string | null;
@@ -54,7 +54,7 @@ const DESTINATIONS: { match: RegExp; name: string; icon: IconName; away: boolean
   { match: /^run_query$|^list_tables$|^describe_table$/, name: "Your database", icon: "database", away: true },
   { match: /^github_/, name: "GitHub", icon: "terminal", away: true },
   { match: /^get_webpage$/, name: "The web", icon: "link", away: true },
-  { match: /^recall$|^remember$/, name: "Company memory", icon: "memory", away: false },
+  { match: /^recall$|^remember$/, name: "Your memory", icon: "memory", away: false },
   ];
 
 function destinationFor(tool: string) {
@@ -80,7 +80,7 @@ const VERBS: Record<string, string> = {
   list_tables: "looks at what tables exist",
   describe_table: "checks a table's columns",
   get_webpage: "reads a page",
-  recall: "remembers what the company knows",
+  recall: "looks up what it knows about you",
   remember: "writes something down to keep",
   delegate_to_specialist: "hands part of the job to a specialist",
   github_search_code: "searches the code",
@@ -184,7 +184,7 @@ export function buildStages(
         stages.push({
           kind: "wait",
           title: "Waiting for you",
-          detail: `${VERBS[tool] ?? tool.replace(/_/g, " ")} — needs a person to say yes`,
+          detail: `${VERBS[tool] ?? tool.replace(/_/g, " ")} — waits for your approval`,
           icon: "approvals",
           away: false,
           state: "ask",

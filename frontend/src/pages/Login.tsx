@@ -46,8 +46,8 @@ export default function Login() {
   return (
     <div className="flex min-h-screen flex-wrap">
       <AuthStage
-        headline="Your AI team, already at work."
-        ticker="AI Employees that do real work in your email, calendar, files and data, while you stay in control."
+        headline="Your assistant, already at work."
+        ticker="A personal assistant that does real work in your email, calendar, files and data, while you stay in control."
       />
 
       <section className="flex flex-[1_1_440px] items-center justify-center px-6 py-12">

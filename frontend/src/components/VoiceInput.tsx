@@ -3,9 +3,9 @@ import { ApiError, api } from "../lib/api";
 import { Icon } from "./icons";
 
 /**
- * Voice typing for the task box.
+ * Voice typing for the chat box.
  *
- * Whisper (through the company's own Groq key) when the company has one;
+ * Whisper (through your own Groq key) when you have one;
  * otherwise the browser's built-in recogniser. Whisper is more accurate,
  * especially with accents, but the browser one costs nothing and needs
  * no setup. If neither is possible the button does not appear at all.

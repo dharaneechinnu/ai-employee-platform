@@ -1,8 +1,7 @@
 /**
  * Plain-English names for things the code calls by internal ids.
  *
- * The people using this app run operations, sales and HR teams. They
- * should read "Send a Gmail email", not `gmail_send`, and "Can't be
+ * The person using this app is not a programmer. They should read "Send a Gmail email", not `gmail_send`, and "Can't be
  * undone", not "destructive". One table, so every screen says the
  * same thing for the same tool.
  */
@@ -32,8 +31,8 @@ export const TOOL_LABELS: Record<string, string> = {
   describe_table: "See a table's columns",
   run_query: "Look up data (read-only)",
   get_webpage: "Read a web page",
-  recall: "Look up company memory",
-  remember: "Save to company memory",
+  recall: "Look up your memory",
+  remember: "Save to your memory",
   github_list_repos: "See GitHub repositories",
   github_search_code: "Search code on GitHub",
   github_read_file: "Read a file on GitHub",
@@ -64,7 +63,7 @@ export function humanise(id: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-// Tools from a company's MCP servers are named "mcp__<server>__<tool>".
+// Tools from your own MCP servers are named "mcp__<server>__<tool>".
 // The app has no built-in words for them, so it uses the server's own
 // (learned when the tool list loads), or the tool's name made readable.
 const MCP_PREFIX = "mcp__";
@@ -102,7 +101,7 @@ export const PACK_LABELS: Record<string, string> = {
   database: "Database",
   web: "Web",
   memory: "Memory",
-  delegation: "Teamwork",
+  delegation: "Specialists",
   github: "GitHub",
   clock: "Date and time",
   calculator: "Maths",
@@ -111,7 +110,7 @@ export const PACK_LABELS: Record<string, string> = {
   report: "Reports",
   search: "Web search",
   sheets: "Google Sheets",
-  team: "Teamwork",
+  team: "Specialists",
   builder: "Agent builder",
 };
 

@@ -6,7 +6,7 @@ import type { IconName } from "./icons";
  * Drawn here rather than fetched from a logo CDN, for three reasons:
  * the app has to work behind a firewall and offline, where a remote
  * image is a broken box; an image request from a signed-in page tells
- * a third party which services this company uses, on every page view;
+ * a third party which services you use, on every page view;
  * and logo CDNs move their paths without telling anybody.
  *
  * They are used to say "your work went to Gmail" — identifying the

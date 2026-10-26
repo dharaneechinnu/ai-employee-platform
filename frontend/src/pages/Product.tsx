@@ -26,22 +26,22 @@ const FEATURES: Feature[] = [
     id: "live",
     alt: "A run streaming its steps live, with steps taken, AI usage and cost",
     scene: "assign",
-    kicker: "Assign and watch",
-    title: "Give it the work. Watch every step.",
-    body: "Hire an AI Employee by answering three plain questions, then assign a task the way you would to a colleague. Every thought, tool call and result streams live.",
+    kicker: "Ask and watch",
+    title: "Ask in plain words. Watch every step.",
+    body: "Type what you need in chat, the way you would ask a friend. Set up your own helpers by answering three plain questions. Every thought, tool call and result streams live.",
     points: [
-      { icon: "employees", text: "Guided setup: what it does, what it must never do, when to ask" },
+      { icon: "employees", text: "Guided setup: what it does, what it must never do, when to ask you" },
       { icon: "terminal", text: "A live, replayable log of every step, token and cost" },
-      { icon: "tree", text: "A manager can hand parts of the job to specialists, shown as a live tree" },
+      { icon: "tree", text: "Bigger questions are split between specialists, shown as a live tree" },
     ],
   },
   {
     id: "safety",
-    alt: "An approval request showing the full email before anyone agrees",
+    alt: "An approval request showing the full email before you agree",
     scene: "approval",
     kicker: "Safety and approvals",
-    title: "Anything risky waits for a person.",
-    body: "For every tool, each company chooses Always allow, Ask me first, or Blocked. A paused run waits safely, then picks up exactly where it stopped.",
+    title: "Anything risky waits for you.",
+    body: "For every tool, you choose Always allow, Ask me first, or Blocked. A paused run waits safely, then picks up exactly where it stopped.",
     points: [
       { icon: "approvals", text: "Approve from the app, your inbox or Slack, with the full action shown" },
       { icon: "lock", text: "Reading is automatic, sending asks first, catastrophic actions are blocked for everyone" },
@@ -54,7 +54,7 @@ const FEATURES: Feature[] = [
     scene: "connect",
     kicker: "Connected apps",
     title: "One click to the tools you already use.",
-    body: "Connect Google Workspace or Microsoft 365 once, and your AI Employees can search mail, draft replies, check calendars and read files. Nothing to paste, nothing to copy.",
+    body: "Connect Google Workspace or Microsoft 365 once, and your assistant can search mail, draft replies, check calendars and read files. Nothing to paste, nothing to copy.",
     points: [
       { icon: "mail", text: "Gmail and Outlook: search, read, draft, and send with approval" },
       { icon: "calendar", text: "Google Calendar and Outlook: see the week, create events" },
@@ -63,15 +63,15 @@ const FEATURES: Feature[] = [
   },
   {
     id: "memory",
-    alt: "Company memory, searchable by meaning and exact words",
+    alt: "Your memory, searchable by meaning and exact words",
     scene: "memory",
-    kicker: "Memory, your own key, many companies",
-    title: "It learns your company. You hold the keys.",
-    body: "Company memory is recalled by meaning, so lessons from one run help the next. Bring your own model key; your bill stays yours. Run many companies from one platform.",
+    kicker: "Memory and your own key",
+    title: "It learns how you work. You hold the keys.",
+    body: "Your memory is recalled by meaning, so what you said once helps every later chat. Bring your own model key; your bill stays yours.",
     points: [
-      { icon: "memory", text: "Shared and per-employee memory, searched by meaning" },
+      { icon: "memory", text: "Your memory, searched by meaning; forget anything, any time" },
       { icon: "providers", text: "Bring your own key: Gemini, OpenRouter and more" },
-      { icon: "members", text: "Each company sealed off; platform staff see counts, never content" },
+      { icon: "members", text: "Your account is sealed off; whoever runs the server sees counts, never content" },
     ],
   },
 ];
@@ -79,14 +79,14 @@ const FEATURES: Feature[] = [
 const WORKS_WITH = ["Gmail", "Google Calendar", "Google Drive", "Outlook", "OneDrive", "Slack", "PostgreSQL", "Gemini", "OpenRouter"];
 
 const STEPS: { icon: IconName; title: string; body: string }[] = [
-  { icon: "employees", title: "Hire", body: "Describe the job in three plain answers and pick its tools." },
-  { icon: "link", title: "Connect", body: "Sign in to Google or Microsoft once. Set what needs approval." },
-  { icon: "tasks", title: "Assign", body: "Hand over work and watch it happen, step by step." },
+  { icon: "link", title: "Connect", body: "Sign in to Google or Microsoft once. Set what needs your approval." },
+  { icon: "tasks", title: "Ask", body: "Type what you need in chat and watch it happen, step by step." },
+  { icon: "employees", title: "Make it yours", body: "Set up your own helpers in three plain answers and pick their tools." },
 ];
 
 export default function Product() {
   const { me } = useAuth();
-  const primary = me ? { to: "/tasks", label: "Open your workspace" } : { to: "/login", label: "Sign in" };
+  const primary = me ? { to: "/chat", label: "Open your chat" } : { to: "/login", label: "Sign in" };
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -127,10 +127,10 @@ export default function Product() {
             Now with Google, Microsoft and approve-from-email
           </span>
           <h1 className="rise mt-6 max-w-[880px] font-display text-[42px] font-semibold leading-[1.05] tracking-[-0.035em] sm:text-[68px]" style={{ animationDelay: ".05s" }}>
-            Your AI team, <span className="spectrum-text">already at work.</span>
+            Your assistant, <span className="spectrum-text">already at work.</span>
           </h1>
           <p className="rise mt-5 max-w-[640px] text-[17px] leading-relaxed text-muted sm:text-lg" style={{ animationDelay: ".16s" }}>
-            Hire AI Employees, give them your email, calendar and files, and watch every step, while anything risky waits for a person.
+            Ask in plain words, let it use your email, calendar and files, and watch every step, while anything risky waits for you.
           </p>
           <div className="rise mt-8 flex flex-wrap justify-center gap-3" style={{ animationDelay: ".24s" }}>
             <Link to={primary.to} className="btn btn-primary">
@@ -144,8 +144,8 @@ export default function Product() {
           {/* The product itself, the way Google and Microsoft open their pages. */}
           <figure className="rise mt-14 w-full" style={{ animationDelay: ".1s" }}>
             <div className="overflow-hidden rounded-2xl border border-line bg-panel shadow-lift">
-              <img className="only-light block w-full" src="/media/screens/hero-light.webp" alt="The Tasks screen: assigning work to Ravi and watching the run step by step" />
-              <img className="only-dark block w-full" src="/media/screens/hero-dark.webp" alt="The Tasks screen: assigning work to Ravi and watching the run step by step" />
+              <img className="only-light block w-full" src="/media/screens/hero-light.webp" alt="Asking for help and watching the work happen step by step" />
+              <img className="only-dark block w-full" src="/media/screens/hero-dark.webp" alt="Asking for help and watching the work happen step by step" />
             </div>
           </figure>
         </div>
@@ -155,13 +155,13 @@ export default function Product() {
       <section id="film" className="scroll-mt-20 border-t border-line">
         <div className="mx-auto flex max-w-[1000px] flex-col items-center gap-6 px-4 py-20 text-center sm:px-6">
           <h2 className="font-display text-[32px] font-semibold tracking-[-0.02em] sm:text-[40px]">See it in a minute</h2>
-          <p className="max-w-[560px] text-muted">The real product, recorded live: connect Google, give an AI Employee tools, assign a task, approve from email.</p>
+          <p className="max-w-[560px] text-muted">The real product, recorded live: connect Google, ask for help, watch it work, approve from email.</p>
           <div className="w-full overflow-hidden rounded-2xl border border-line bg-[#070915] shadow-lift">
             <AutoVideo
               sound
               src="/media/product-ad.mp4"
               poster="/media/product-ad.jpg"
-              label="A one-minute live demo: connecting Google, giving an AI Employee tools, assigning a task, watching it run and delegate, approving from email, and the finished result."
+              label="A one-minute live demo: connecting Google, asking for help, watching it run and bring in specialists, approving from email, and the finished result."
             />
           </div>
         </div>
@@ -239,9 +239,9 @@ export default function Product() {
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {(
             [
-              ["lock", "Encrypted per company", "Keys and tokens are sealed with each company's own key and can never be read back."],
-              ["shield", "Capability, not hope", "A tool an employee was not given is invisible to it, whatever a prompt says."],
-              ["approvals", "Humans decide", "Sends and invites wait for a person. Approval links never act on their own."],
+              ["lock", "Encrypted for you", "Your keys and tokens are sealed with your own key and can never be read back."],
+              ["shield", "Capability, not hope", "A tool a helper was not given is invisible to it, whatever a prompt says."],
+              ["approvals", "You decide", "Sends and invites wait for you. Approval links never act on their own."],
               ["eye", "Nothing hidden", "Every step is written to an append-only log you can replay."],
             ] as [IconName, string, string][]
           ).map(([icon, title, body]) => (
@@ -260,7 +260,7 @@ export default function Product() {
         <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-4 px-4 py-8 text-[13px] text-dim sm:px-6">
           <BrandMark size={24} />
           <span>AI Employees</span>
-          <span className="ml-auto">For operations, sales, HR and engineering teams.</span>
+          <span className="ml-auto">For students, professionals and developers.</span>
         </div>
       </footer>
     </div>

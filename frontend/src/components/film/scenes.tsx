@@ -203,20 +203,20 @@ function IntroVisual() {
         AI Employees
       </div>
       <h1 className="f-display" style={{ margin: "14px 0 0", fontSize: 92, lineHeight: 1.02, fontWeight: 700 }}>
-        <span style={{ display: "block", ...A(s("f-rise", 900, 900)) }}>Your AI team,</span>
+        <span style={{ display: "block", ...A(s("f-rise", 900, 900)) }}>Your assistant,</span>
         <span className="f-spectrum" style={{ display: "block", ...A(s("f-rise", 1200, 900)) }}>
           already at work.
         </span>
       </h1>
       <p style={{ marginTop: 28, fontSize: 24, color: "var(--muted)", ...A(s("f-fade", 2000, 900)) }}>
-        Hire AI Employees. Give them your tools. Stay in control.
+        Ask in plain words. Give it your tools. Stay in control.
       </p>
       {(
         [
-          ["Manager · running", "run", 140, 160, 2600],
+          ["Assistant · running", "run", 140, 160, 2600],
           ["Specialist · done", "ok", 1010, 210, 2800],
           ["Needs you", "ask", 1010, 620, 3000],
-          ["Remembers your company", "brand", 120, 630, 3200],
+          ["Remembers what you teach it", "brand", 120, 630, 3200],
         ] as [string, Tone, number, number, number][]
       ).map(([text, tone, x, y, at], i) => (
         <div key={text} style={{ position: "absolute", left: x, top: y, ...A(s("f-pop", at, 600)) }}>
@@ -231,7 +231,7 @@ function IntroVisual() {
   );
 }
 
-// ---------------------------------------------------------------- 2. hire
+// ---------------------------------------------------------------- 2. set up
 
 function HireVisual() {
   const tools: [string, Tone][] = [
@@ -250,7 +250,7 @@ function HireVisual() {
           <div className="f-display" style={{ fontSize: 28, fontWeight: 600 }}>
             <Typed text="Ravi" delay={700} dur={400} />
           </div>
-          <div style={{ color: "var(--muted)", fontSize: 16, ...A(s("f-fade", 1100)) }}>Operations Analyst</div>
+          <div style={{ color: "var(--muted)", fontSize: 16, ...A(s("f-fade", 1100)) }}>Incident helper</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, ...A(s("f-fade", 1000)) }}>
           <Swap at={6100} before={<Chip tone="brand">draft</Chip>} after={<Chip tone="ok">active</Chip>} />
@@ -261,13 +261,13 @@ function HireVisual() {
       <div style={{ display: "flex", flexDirection: "column", gap: 8, ...A(s("f-rise", 1300)) }}>
         <span style={label}>1 · What should it do?</span>
         <div style={field}>
-          <Typed text="Investigate incidents and brief the team." delay={1600} dur={1300} />
+          <Typed text="Investigate incidents and brief me." delay={1600} dur={1300} />
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, ...A(s("f-rise", 2600)) }}>
         <span style={label}>2 · What must it never do?</span>
         <div style={field}>
-          <Typed text="Never email customers without approval." delay={2900} dur={1300} />
+          <Typed text="Never send an email without asking me." delay={2900} dur={1300} />
         </div>
       </div>
 
@@ -301,7 +301,7 @@ function AssignVisual() {
       <div className="f-card" style={{ position: "absolute", left: 20, top: 20, width: 700, padding: 14, display: "flex", alignItems: "center", gap: 12, ...A(s("f-fall", 150, 800)) }}>
         <Avatar letter="R" size={40} />
         <div style={{ ...field, flex: 1, minHeight: 46, display: "flex", alignItems: "center", fontSize: 16 }}>
-          <Typed text="Why did checkouts fail overnight? Email the team a summary." delay={500} dur={2000} />
+          <Typed text="Why did checkouts fail overnight? Email me a summary." delay={500} dur={2000} />
         </div>
         <span
           style={{
@@ -394,7 +394,7 @@ function TreeVisual() {
           </g>
         ))}
       </svg>
-      <TreeNode x={370} y={110} letter="R" name="Ravi" role="Manager" at={300} status={<Chip tone="run">running</Chip>} />
+      <TreeNode x={370} y={110} letter="R" name="Ravi" role="Lead helper" at={300} status={<Chip tone="run">running</Chip>} />
       <TreeNode
         x={170}
         y={380}
@@ -458,7 +458,7 @@ function ApprovalVisual() {
           {(
             [
               ["tool", "gmail_send · destructive"],
-              ["to", "ops-team@victopia.com"],
+              ["to", "priya@example.com"],
               ["subject", "Checkout incident summary"],
               ["body", "1,284 checkouts failed overnight when the payment vendor timed out. Retries are now on."],
             ] as [string, string][]
@@ -470,7 +470,7 @@ function ApprovalVisual() {
           ))}
         </div>
         <div style={{ fontSize: 13, color: "var(--dim)", ...A(s("f-fade", 1800)) }}>
-          <Swap at={5700} before={<span>Waiting for a person · expires in 24 h</span>} after={<span style={{ color: "var(--ok-text)" }}>Approved by Priya from her inbox</span>} />
+          <Swap at={5700} before={<span>Waiting for you · expires in 24 h</span>} after={<span style={{ color: "var(--ok-text)" }}>Approved by you from your inbox</span>} />
         </div>
       </div>
 
@@ -485,7 +485,7 @@ function ApprovalVisual() {
               Mail · now
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>Approval needed: Ravi wants to gmail send</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>To ops-team@victopia.com · “Checkout incident summary”</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>To priya@example.com · “Checkout incident summary”</div>
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <span style={{ flex: 1, textAlign: "center", padding: "9px 0", borderRadius: 10, fontSize: 13, fontWeight: 600, position: "relative", overflow: "hidden" }}>
                 <span style={{ position: "absolute", inset: 0, background: "#2b4ee0" }} />
@@ -613,7 +613,7 @@ function ConnectVisual() {
         </div>
       </div>
       <div style={{ position: "absolute", left: 0, top: 560, width: 740, textAlign: "center", fontSize: 14, color: "var(--dim)", ...A(s("f-fade", 6300)) }}>
-        Tokens are encrypted per company and never enter the prompt.
+        Tokens are encrypted with your own key and never enter the prompt.
       </div>
     </div>
   );
@@ -624,13 +624,13 @@ function ConnectVisual() {
 function MemoryVisual() {
   const memories = [
     { text: "ERR_4021 at checkout means the payment vendor timed out. Retry once, then hand to a human.", match: true },
-    { text: "The ops team wants incident summaries before 9am, in three bullet points.", match: false },
+    { text: "I want incident summaries before 9am, in three bullet points.", match: false },
     { text: "Vendor maintenance runs 01:00–03:00 UTC on the first Tuesday.", match: false },
   ];
   return (
     <div style={{ position: "absolute", inset: 0 }}>
       <div className="f-card" style={{ position: "absolute", left: 0, top: 40, width: 420, padding: 20, display: "flex", flexDirection: "column", gap: 12, ...A(s("f-slide-right", 150, 800)) }}>
-        <div className="f-display" style={{ fontSize: 19, fontWeight: 600 }}>Company memory</div>
+        <div className="f-display" style={{ fontSize: 19, fontWeight: 600 }}>Your memory</div>
         <div style={{ ...field, display: "flex", alignItems: "center", gap: 10 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" strokeWidth={2}>
             <path d="M11 5a6 6 0 1 1 0 12 6 6 0 0 1 0-12zM20 20l-4.5-4.5" />
@@ -684,7 +684,7 @@ function MemoryVisual() {
           <Chip tone="mute" dot={false}>your key, your bill</Chip>
         </div>
         <div style={{ fontSize: 13, color: "var(--dim)", lineHeight: 1.45, ...A(s("f-fade", 5000)) }}>
-          Encrypted with your company’s own key. Nobody can read it back, not even us.
+          Encrypted with your own key. Nobody can read it back, not even us.
         </div>
       </div>
     </div>
@@ -695,8 +695,8 @@ function MemoryVisual() {
 
 function OutroVisual() {
   const pillars: [string, string, string][] = [
-    ["Many companies", "Each one sealed off from the others", "var(--jade)"],
-    ["Staff see counts", "Never your tasks, memory or keys", "#a48bff"],
+    ["Just for you", "Your account is sealed off from everyone else", "var(--jade)"],
+    ["The server sees counts", "Never your chats, memory or keys", "#a48bff"],
     ["Every step logged", "Replay any run, step by step", "var(--spark)"],
   ];
   return (
@@ -710,12 +710,12 @@ function OutroVisual() {
         ))}
       </div>
       <h2 className="f-display" style={{ margin: "30px 0 0", fontSize: 76, fontWeight: 700, lineHeight: 1.05 }}>
-        <span style={{ display: "block", ...A(s("f-rise", 1500, 900)) }}>Your AI team,</span>
+        <span style={{ display: "block", ...A(s("f-rise", 1500, 900)) }}>Your assistant,</span>
         <span className="f-spectrum" style={{ display: "block", ...A(s("f-rise", 1800, 900)) }}>already at work.</span>
       </h2>
       <div style={{ position: "relative", overflow: "hidden", marginTop: 6, padding: "16px 34px", borderRadius: 16, fontWeight: 600, fontSize: 20, color: "#0a0c18", background: "linear-gradient(135deg,#7b93ff,#a48bff 60%,#ff8a4c)", boxShadow: "0 24px 70px -20px rgba(123,147,255,.7)", ...A(s("f-pop", 2700, 700)) }}>
         <span style={{ position: "absolute", top: 0, bottom: 0, width: 80, background: "linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent)", ...A(loop("f-sheen", 2200, 3400, "ease-in-out")) }} />
-        Assign your first task →
+        Ask your first question →
       </div>
     </div>
   );
@@ -743,30 +743,30 @@ export const SCENES: SceneDef[] = [
   { id: "intro", label: "Intro", duration: 6000, Visual: IntroVisual },
   {
     id: "hire",
-    label: "Hire",
+    label: "Set up",
     duration: 8000,
-    caption: { n: "01", kicker: "Hire", title: "Hire an AI Employee in a minute", body: "Answer three plain questions and pick its tools. No prompt engineering." },
+    caption: { n: "01", kicker: "Set up", title: "Set up a helper in a minute", body: "Answer three plain questions and pick its tools. No prompt engineering." },
     Visual: HireVisual,
   },
   {
     id: "assign",
-    label: "Assign",
+    label: "Ask",
     duration: 9000,
-    caption: { n: "02", kicker: "Assign", title: "Assign work, watch every step", body: "Every thought, tool call and result streams live, and is kept for replay." },
+    caption: { n: "02", kicker: "Ask", title: "Ask for help, watch every step", body: "Every thought, tool call and result streams live, and is kept for replay." },
     Visual: AssignVisual,
   },
   {
     id: "tree",
     label: "Delegate",
     duration: 9000,
-    caption: { n: "03", kicker: "Delegate", title: "A manager hands work to specialists", body: "One level deep, on purpose: errors multiply with every hop." },
+    caption: { n: "03", kicker: "Delegate", title: "Your helper hands parts to specialists", body: "One level deep, on purpose: errors multiply with every hop." },
     Visual: TreeVisual,
   },
   {
     id: "approval",
     label: "Approve",
     duration: 10000,
-    caption: { n: "04", kicker: "Stay in control", title: "Risky actions wait for a person", body: "Approve from the app, your inbox or Slack. Opening a link never decides anything." },
+    caption: { n: "04", kicker: "Stay in control", title: "Risky actions wait for you", body: "Approve from the app, your inbox or Slack. Opening a link never decides anything." },
     Visual: ApprovalVisual,
   },
   {
@@ -780,10 +780,10 @@ export const SCENES: SceneDef[] = [
     id: "memory",
     label: "Remember",
     duration: 8000,
-    caption: { n: "06", kicker: "Remember", title: "It learns your company, on your own key", body: "Shared memory recalled by meaning. Bring your own model key; it is never shown again." },
+    caption: { n: "06", kicker: "Remember", title: "It learns how you work, on your own key", body: "Your memory, recalled by meaning. Bring your own model key; it is never shown again." },
     Visual: MemoryVisual,
   },
-  { id: "outro", label: "Platform", duration: 7000, Visual: OutroVisual },
+  { id: "outro", label: "Private", duration: 7000, Visual: OutroVisual },
 ];
 
 export const TOTAL_MS = SCENES.reduce((sum, scene) => sum + scene.duration, 0);

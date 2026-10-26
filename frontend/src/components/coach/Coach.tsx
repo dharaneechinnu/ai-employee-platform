@@ -12,8 +12,8 @@ import Welcome from "./Welcome";
  * How it works:
  * - A tour is a list of steps; each step points at an element marked
  *   `data-coach="name"`. Steps whose element is missing or hidden (a
- *   member does not see admin buttons) are skipped, so one tour fits
- *   every role and screen size.
+ *   panel that is closed, a button only shown on wide screens) are
+ *   skipped, so one tour fits every screen size.
  * - Page tours start on first visit; feature tours start when their
  *   element first appears (opening a panel, a first approval).
  * - The spotlight is a hole in a full-screen mask. It glides between

@@ -12,13 +12,13 @@ const SLIDES = [
   {
     kicker: "Welcome",
     title: "Meet your assistant",
-    body: "Ask anything. It reads the web, remembers what matters, works in your real apps, and brings in a team of specialists for bigger questions.",
+    body: "Ask anything. It reads the web, remembers what matters, works in your real apps, and brings in specialists for bigger questions.",
     visual: "team",
   },
   {
     kicker: "Safety",
     title: "You stay in control",
-    body: "Reading happens on its own. Anything that sends or changes something waits for a person, with the full action shown first.",
+    body: "Reading happens on its own. Anything that sends or changes something waits for you, with the full action shown first.",
     visual: "control",
   },
   {
@@ -76,12 +76,12 @@ function ControlVisual() {
             <Icon name="approvals" size={18} />
           </span>
           <span className="text-sm font-medium">
-            Ravi wants to <span className="text-ask-text">send a Gmail email</span>
+            Your assistant wants to <span className="text-ask-text">send a Gmail email</span>
           </span>
         </div>
         <div className="welcome-mail">
           <span className="text-xs text-dim">To</span>
-          <span className="text-[13px]">ops-team@victopia.com</span>
+          <span className="text-[13px]">priya@example.com</span>
           <span className="mt-1 text-xs text-dim">Message</span>
           <span className="welcome-lines">
             <i />
@@ -104,9 +104,9 @@ function ControlVisual() {
 
 function LiveVisual() {
   const rows = [
-    { t: "Looked up company memory", d: "found ERR_4021", tone: "ok" },
+    { t: "Looked up your memory", d: "found ERR_4021", tone: "ok" },
     { t: "Looked up data (read-only)", d: "1,284 failed checkouts", tone: "ok" },
-    { t: "Asked a colleague", d: "Kiran is helping", tone: "brand" },
+    { t: "Asked a specialist", d: "Researcher is helping", tone: "brand" },
     { t: "Waiting for approval", d: "send a Gmail email", tone: "ask" },
     { t: "Finished", d: "9 steps · all on record", tone: "ok" },
   ];
