@@ -13,7 +13,6 @@ from app.services.notification_service import NotificationService
 router = APIRouter(prefix="/me", tags=["notifications"])
 
 
-
 class NotificationSettingsResponse(BaseModel):
     email_enabled: bool
     # False when the platform has no SMTP server: the toggle is shown

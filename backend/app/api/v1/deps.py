@@ -108,8 +108,6 @@ CanWrite = ContextDep
 CanManage = ContextDep
 
 
-
-
 async def get_refresh_token_cookie(
     refresh_token: Annotated[str | None, Header(alias="Cookie")] = None,
 ) -> str | None:

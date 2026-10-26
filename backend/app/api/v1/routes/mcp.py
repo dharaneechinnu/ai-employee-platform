@@ -21,7 +21,6 @@ from app.services.mcp_service import McpService
 router = APIRouter(prefix="/me", tags=["mcp"])
 
 
-
 class AddServerRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     url: str = Field(min_length=8, max_length=500)

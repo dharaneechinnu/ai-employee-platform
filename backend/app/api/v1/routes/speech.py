@@ -14,7 +14,6 @@ from app.services.speech_service import MAX_AUDIO_BYTES, WHISPER_MODEL, SpeechSe
 router = APIRouter(prefix="/me/speech", tags=["speech"])
 
 
-
 class SpeechEngineResponse(BaseModel):
     # "browser" means the frontend uses the browser's own recogniser
     # and never sends audio here.

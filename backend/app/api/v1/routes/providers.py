@@ -21,7 +21,6 @@ from app.services.provider_service import ProviderService
 router = APIRouter(prefix="/me", tags=["providers"])
 
 
-
 class AvailableProvider(BaseModel):
     key: str
     display_name: str

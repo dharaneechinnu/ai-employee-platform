@@ -28,7 +28,6 @@ from app.workers.queue import enqueue_task
 router = APIRouter(prefix="/me", tags=["policy and approvals"])
 
 
-
 class PolicyRowResponse(BaseModel):
     scope: PolicyScope
     scope_value: str

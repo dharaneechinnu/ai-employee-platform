@@ -27,8 +27,6 @@ class UserRepository(BaseRepository[User]):
         return await self.get_by_email(email) is not None
 
 
-
-
 class RefreshTokenRepository(BaseRepository[RefreshToken]):
     model = RefreshToken
 

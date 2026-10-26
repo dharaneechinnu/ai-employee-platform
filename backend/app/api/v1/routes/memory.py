@@ -17,7 +17,6 @@ from app.services.memory_service import MemoryService
 router = APIRouter(prefix="/me", tags=["memory"])
 
 
-
 class MemoryResponse(BaseModel):
     id: uuid.UUID
     content: str

@@ -82,9 +82,7 @@ class OwnerScopedRepository[ModelT: Base](BaseRepository[ModelT]):
 
     async def count(self) -> int:
         stmt = (
-            select(func.count())
-            .select_from(self.model)
-            .where(self._owner_column == self.owner_id)
+            select(func.count()).select_from(self.model).where(self._owner_column == self.owner_id)
         )
         return (await self.session.scalar(stmt)) or 0
 

@@ -42,8 +42,6 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         return f"<User {self.email}>"
 
 
-
-
 class RefreshToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """One issued refresh token.
 
