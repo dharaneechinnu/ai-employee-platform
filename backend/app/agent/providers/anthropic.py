@@ -35,6 +35,7 @@ from app.agent.providers.base import (
     ToolSchema,
     Usage,
     parse_retry_after,
+    too_large_error,
 )
 
 BASE_URL = "https://api.anthropic.com/v1"
@@ -234,6 +235,8 @@ def _raise_for_status(response: httpx.Response) -> None:
         return
     detail = response.text[:300]
     code = response.status_code
+    if (too_large := too_large_error("Claude", code, detail)) is not None:
+        raise too_large
     if code in (401, 403):
         raise ProviderAuthError(f"Claude rejected the API key: {detail}", status_code=code)
     if code == 429:

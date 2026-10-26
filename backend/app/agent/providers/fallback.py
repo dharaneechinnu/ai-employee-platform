@@ -14,6 +14,9 @@ What happens depends on what went wrong:
   are often a blip, then the next AI.
 - Key refused, or the model is not available to this account: waiting
   cannot help, so the next AI at once.
+- A request too big for this AI (over its token limit): waiting cannot
+  help, but another AI may have room for it, so the next AI at once. If
+  none is left, the error goes up and the loop sends a slimmer request.
 - A request the AI rejected as malformed is not retried anywhere: the
   next AI would most likely reject it too, and the error is more useful
   to the person than three identical failures.
@@ -33,6 +36,7 @@ from app.agent.providers.base import (
     ProviderAuthError,
     ProviderModelNotFoundError,
     ProviderRateLimitError,
+    ProviderTooLargeError,
     ProviderUnavailableError,
     ToolSchema,
 )
@@ -127,7 +131,7 @@ class FallbackProvider(LLMProvider):
                     await (self._sleep or pause)(delay)
                     continue
                 worth_switching = exc.retryable or isinstance(
-                    exc, ProviderAuthError | ProviderModelNotFoundError
+                    exc, ProviderAuthError | ProviderModelNotFoundError | ProviderTooLargeError
                 )
                 if not worth_switching or self.index + 1 >= len(self.options):
                     raise

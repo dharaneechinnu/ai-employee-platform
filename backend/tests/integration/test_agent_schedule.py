@@ -158,21 +158,64 @@ async def test_creating_an_agent_with_a_schedule_sets_its_next_run(
     assert next_run - datetime.now(UTC) <= timedelta(days=1, minutes=1)
 
 
-async def test_a_scheduled_agent_must_list_its_tools(
+async def test_an_agent_with_no_list_gets_its_tools_from_its_instructions(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    """With no list it would have every tool the person has ever connected."""
+    """Nobody picks tools by hand: a run on its own is still limited to a
+    named list, worked out from what the instructions say."""
     _, headers = await _person(api, session)
-    refused = await api.post(AGENTS, json=_new(tools=None, schedule=NIGHTLY), headers=headers)
-    assert refused.status_code == 422
+    sheet_job = {
+        "instructions": "Search the web for developer meetups and add them to a Google Sheet.",
+    }
 
+    made = await api.post(
+        AGENTS, json=_new(tools=None, schedule=NIGHTLY, **sheet_job), headers=headers
+    )
+    assert made.status_code == 201
+    agent = made.json()
+    assert agent["tools_auto"] is True
+    assert {"web_search", "sheets_create", "sheets_append_rows"} <= set(agent["tools"])
+    assert agent["schedule_enabled"] is True
+
+    # Scheduling an agent that was made without a list works too.
     plain = (await api.post(AGENTS, json=_new(tools=None), headers=headers)).json()
     later = await api.patch(f"{AGENTS}/{plain['id']}", json={"schedule": NIGHTLY}, headers=headers)
-    assert later.status_code == 422
+    assert later.status_code == 200 and later.json()["tools"]
 
-    scheduled = (await api.post(AGENTS, json=_new(schedule=NIGHTLY), headers=headers)).json()
-    widen = await api.patch(f"{AGENTS}/{scheduled['id']}", json={"tools": None}, headers=headers)
-    assert widen.status_code == 422
+    # Asking for "everything" on a scheduled agent means "pick for me", not all tools.
+    widen = await api.patch(f"{AGENTS}/{agent['id']}", json={"tools": None}, headers=headers)
+    assert widen.status_code == 200
+    assert "gmail_send" not in widen.json()["tools"]
+
+
+async def test_an_automatic_list_follows_changed_instructions_but_a_chosen_one_does_not(
+    api: AsyncClient, session: AsyncSession
+) -> None:
+    _, headers = await _person(api, session)
+    auto = (
+        await api.post(
+            AGENTS,
+            json=_new(tools=None, instructions="Search the web for news about our product."),
+            headers=headers,
+        )
+    ).json()
+    assert "sheets_append_rows" not in auto["tools"]
+
+    changed = await api.patch(
+        f"{AGENTS}/{auto['id']}",
+        json={"instructions": "Search the web for news and add each story to a Google Sheet."},
+        headers=headers,
+    )
+    assert "sheets_append_rows" in changed.json()["tools"]
+
+    chosen = (await api.post(AGENTS, json=_new(tools=["current_time"]), headers=headers)).json()
+    assert chosen["tools_auto"] is False
+    kept = await api.patch(
+        f"{AGENTS}/{chosen['id']}",
+        json={"instructions": "Search the web and add each story to a Google Sheet."},
+        headers=headers,
+    )
+    assert kept.json()["tools"] == ["current_time"]
 
 
 @pytest.mark.parametrize(
@@ -323,7 +366,7 @@ async def test_an_agent_with_no_tools_cannot_be_run_on_its_own(
     api: AsyncClient, session: AsyncSession, queued: list[uuid.UUID]
 ) -> None:
     _, headers = await _person(api, session)
-    agent = (await api.post(AGENTS, json=_new(tools=None), headers=headers)).json()
+    agent = (await api.post(AGENTS, json=_new(tools=[]), headers=headers)).json()
     assert (await api.post(f"{AGENTS}/{agent['id']}/run", headers=headers)).status_code == 422
 
 

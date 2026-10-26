@@ -42,6 +42,9 @@ class Agent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Tool names this agent may use, or None for everything the person
     # allows. It can only narrow what Permissions already allow.
     tools: Mapped[list[str] | None] = mapped_column(JSONB)
+    # True when `tools` was worked out from the instructions (see
+    # `app.agent.tool_infer`), so it is worked out again when they change.
+    tools_auto: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # --- running on its own -------------------------------------------

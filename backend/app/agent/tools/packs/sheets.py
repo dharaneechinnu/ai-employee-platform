@@ -19,6 +19,7 @@ from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 
+from app.agent.tools import sheet_log
 from app.agent.tools.base import SideEffect, ToolContext, ToolResult
 from app.agent.tools.packs._http import ApiTool, request
 from app.agent.tools.registry import register
@@ -139,6 +140,7 @@ class SheetsCreate(ApiTool):
                 },
             )
         await _keep_for_the_agent(ctx, new_id)
+        sheet_log.note(ctx.config, action="created", sheet_id=new_id, title=args.title)
         return ToolResult.success(
             {
                 "spreadsheet_id": new_id,
@@ -216,6 +218,7 @@ class SheetsRead(ApiTool):
             ctx, "GET", f"{SHEETS}/{sheet_id}/values/{_tab_range(tab, args.cells or '')}"
         )
         rows = data.get("values", [])
+        sheet_log.note(ctx.config, action="read", sheet_id=sheet_id)
         truncated = len(rows) > MAX_READ_ROWS
         return ToolResult.success(
             {
@@ -271,6 +274,13 @@ class SheetsAppendRows(ApiTool):
             json={"values": rows},
         )
         updates = done.get("updates", {})
+        sheet_log.note(
+            ctx.config,
+            action="added",
+            sheet_id=sheet_id,
+            tab=args.tab,
+            rows=int(updates.get("updatedRows", len(rows))),
+        )
         return ToolResult.success(
             {
                 "appended_rows": updates.get("updatedRows", len(rows)),
@@ -325,6 +335,12 @@ class SheetsUpdateCells(ApiTool):
             f"{SHEETS}/{sheet_id}/values/{_tab_range(args.tab, args.cells)}",
             params={"valueInputOption": "USER_ENTERED"},
             json={"values": values},
+        )
+        sheet_log.note(
+            ctx.config,
+            action="updated",
+            sheet_id=sheet_id,
+            cells=int(done.get("updatedCells") or sum(len(r) for r in values)),
         )
         return ToolResult.success(
             {"updated_cells": done.get("updatedCells"), "range": done.get("updatedRange")}

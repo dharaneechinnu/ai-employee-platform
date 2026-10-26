@@ -60,6 +60,8 @@ class AgentResponse(BaseModel):
     model: str
     routing: Preference
     tools: list[str] | None
+    # True when the list was worked out from the instructions.
+    tools_auto: bool = False
     created_at: datetime
     usage: UsageResponse
     schedule: Schedule | None = None
@@ -196,6 +198,7 @@ def _agent(agent: Agent, usage: Usage | None) -> AgentResponse:
         model=agent.model,
         routing=Preference(agent.routing),
         tools=agent.tools,
+        tools_auto=agent.tools_auto,
         created_at=agent.created_at,
         usage=_usage(usage),
         schedule=schedule,
@@ -377,8 +380,12 @@ async def run_agent_now(
     agent_id: uuid.UUID, ctx: ContextDep, session: SessionDep
 ) -> RunNowResponse:
     agent = await AgentService(session, ctx.owner_id).get(agent_id)
+    # An agent with no list (made before tools were chosen for it) gets one now.
+    AgentService.choose_tools(agent)
     if not agent.tools:
-        raise ValidationError("Give this agent some tools before running it on its own.")
+        raise ValidationError(
+            "This agent has no tools to work with. Describe its job in its instructions."
+        )
     result = await AgentRunner(session, ctx.owner_id).start(agent, user_id=ctx.user_id)
     await session.commit()
     if result.task is not None:

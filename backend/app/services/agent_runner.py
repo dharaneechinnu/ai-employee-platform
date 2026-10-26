@@ -25,6 +25,7 @@ from app.core.errors import ValidationError
 from app.db.models.agent import Agent
 from app.db.models.conversation import Conversation
 from app.db.models.task import TERMINAL_STATUSES, Task
+from app.services.agent_service import AgentService
 from app.services.conversation_service import ConversationService
 from app.services.readiness_service import Readiness, ReadinessService
 
@@ -55,6 +56,8 @@ class AgentRunner:
 
     async def start(self, agent: Agent, *, user_id: uuid.UUID) -> StartResult:
         now = datetime.now(UTC)
+        # A schedule must never start an agent with "everything".
+        AgentService.choose_tools(agent)
         readiness = await ReadinessService(self.session, self.owner_id).check(
             agent.tools or [], scheduled=True, scope=agent.scope
         )

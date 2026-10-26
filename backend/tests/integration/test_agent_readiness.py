@@ -363,9 +363,11 @@ async def test_web_search_needs_the_platform_to_have_a_key(
     _, headers = await _person(api, session)
 
     monkeypatch.setattr(get_settings(), "brave_api_key", None)
+    monkeypatch.setattr(get_settings(), "tavily_api_key", None)
     assert "setup:ask_admin" in _failed(await _check(api, headers, ["web_search"]))
 
     monkeypatch.setattr(get_settings(), "brave_api_key", "k")
+    monkeypatch.setattr(get_settings(), "tavily_api_key", None)
     assert (await _check(api, headers, ["web_search"]))["ok"] is True
 
 

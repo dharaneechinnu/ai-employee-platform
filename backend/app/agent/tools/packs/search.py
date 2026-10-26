@@ -2,7 +2,7 @@
 
 `get_webpage` can read a page it is given; this finds the pages. One
 search service for the whole platform, set by whoever runs it
-(`BRAVE_API_KEY`); with no key the tool says so instead of failing
+(`TAVILY_API_KEY`, else `BRAVE_API_KEY`); with no key the tool says so instead of failing
 mysteriously, and the agent readiness check reports it before an agent
 that needs it is created.
 
@@ -23,8 +23,12 @@ BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
 FRESHNESS = {"day": "pd", "week": "pw", "month": "pm", "year": "py"}
 
 
+TAVILY_URL = "https://api.tavily.com/search"
+
+
 def search_configured() -> bool:
-    return bool(get_settings().brave_api_key)
+    settings = get_settings()
+    return bool(settings.tavily_api_key or settings.brave_api_key)
 
 
 class WebSearchArgs(BaseModel):
@@ -48,8 +52,48 @@ class WebSearch(Tool):
     side_effect = SideEffect.READ
     timeout_s = 20.0
 
+    async def _tavily(self, key: str, args: WebSearchArgs) -> ToolResult:
+        body: dict[str, str | int] = {"query": args.query, "max_results": args.count}
+        if args.freshness in FRESHNESS:
+            body["time_range"] = args.freshness
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+                response = await client.post(
+                    TAVILY_URL, json=body, headers={"Authorization": f"Bearer {key}"}
+                )
+        except httpx.HTTPError as exc:
+            return ToolResult.failure("unreachable", f"Search is not reachable: {exc}")
+        if response.status_code in (429, 432, 433):
+            return ToolResult.failure("rate_limited", "Search is rate limited. Try again later.")
+        if response.status_code in (401, 403):
+            return ToolResult.failure(
+                "not_configured", "The platform's search key was refused. Ask whoever runs it."
+            )
+        if not response.is_success:
+            return ToolResult.failure(
+                "search_error", f"Search answered with status {response.status_code}."
+            )
+        results = response.json().get("results") or []
+        return ToolResult.success(
+            {
+                "query": args.query,
+                "results": [
+                    {
+                        "title": r.get("title"),
+                        "url": r.get("url"),
+                        "summary": (r.get("content") or "")[:300],
+                        "age": r.get("published_date"),
+                    }
+                    for r in results[: args.count]
+                ],
+            }
+        )
+
     async def run(self, ctx: ToolContext, args: WebSearchArgs) -> ToolResult:  # type: ignore[override]
-        key = get_settings().brave_api_key
+        settings = get_settings()
+        if settings.tavily_api_key:
+            return await self._tavily(settings.tavily_api_key, args)
+        key = settings.brave_api_key
         if not key:
             return ToolResult.failure(
                 "not_configured",

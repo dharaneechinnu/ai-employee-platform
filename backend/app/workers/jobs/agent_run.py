@@ -37,6 +37,7 @@ from app.agent.routing import (
 )
 from app.agent.supervisor import run_supervised
 from app.agent.team import AskSpecialist, Team, specialist_policy
+from app.agent.tools import sheet_log
 from app.agent.tools.base import ToolContext
 from app.agent.tools.packs.builder import ProposeAgent, ProposeAgentArgs
 from app.agent.tools.packs.sheets import sheet_ids_in
@@ -264,7 +265,8 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             tools = [*tools, ProposeAgent]
         # The memory tools need the run's session. What they remember
         # belongs to the person.
-        context_config: dict[str, Any] = {"_session": session}
+        # What the sheet tools really did, for the closing block of the reply.
+        context_config: dict[str, Any] = {"_session": session, sheet_log.KEY: []}
         sheet_ids = sheet_ids_in(agent_row.scope) if agent_row else []
         if agent_row is not None:
             context_config["_agent_id"] = agent_row.id
@@ -417,6 +419,17 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         run_db.output_tokens = outcome.output_tokens
         run_db.cost_usd = cost
         run_db.output = outcome.output
+        if outcome.completed and (
+            sheets := sheet_log.closing(
+                context_config[sheet_log.KEY],
+                blocked=[
+                    (str(e.payload.get("tool")), str(e.payload.get("reason")))
+                    for e in outcome.events
+                    if e.type == "tool_blocked"
+                ],
+            )
+        ):
+            run_db.output = f"{(outcome.output or '').rstrip()}\n\n{sheets}".strip()
 
         status = {
             StopCause.COMPLETED: RunStatus.COMPLETED,
@@ -504,7 +517,10 @@ async def _agent_ran(session: Any, task: Task, *, run: Run, completed: bool) -> 
 
 _STOP_MESSAGES = {
     "max_steps": "I used all my steps before finishing. Try a narrower question.",
-    "max_tokens": "That answer grew too long for one turn. Try asking for less at once.",
+    "max_tokens": (
+        "I used up my work limit before finishing, so some of the job may be undone. "
+        "Try a narrower job, such as fewer places or fewer results at once."
+    ),
     "timeout": "That took too long, so I stopped.",
     "provider_error": "The AI service returned an error.",
 }

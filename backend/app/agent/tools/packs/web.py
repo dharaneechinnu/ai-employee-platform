@@ -17,7 +17,7 @@ from app.agent.tools.packs._http import html_to_text
 from app.agent.tools.registry import register
 from app.core.urls import is_private_address as _is_private_address
 
-MAX_CHARS = 20_000
+MAX_CHARS = 6_000
 
 
 class GetWebpageArgs(BaseModel):

@@ -19,15 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.routing import Preference
 from app.agent.schedule import Schedule, next_run
+from app.agent.tool_infer import NEVER_GIVEN, infer_tools
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.db.models.agent import DEFAULT_RUN_STEPS, MAX_AGENTS, MAX_RUN_STEPS, Agent
 from app.db.models.conversation import Conversation
 from app.db.models.task import Run, Task
 from app.services.conversation_service import ConversationService
 from app.services.provider_service import AUTO_MODEL
-
-# Tools an agent may never be given: they exist for one chat only.
-NEVER_GIVEN = {"propose_agent", "ask_specialist"}
 
 
 def make_handle(name: str) -> str:
@@ -91,9 +89,11 @@ class AgentService:
             model=await self._check_model(model),
             routing=routing.value,
             tools=self._check_tools(tools),
+            tools_auto=tools is None,
             scope=self._check_scope(scope),
             max_steps=self._check_steps(max_steps),
         )
+        self.choose_tools(agent)
         self.apply_schedule(agent, schedule)
         self.session.add(agent)
         await self.session.flush()
@@ -128,16 +128,32 @@ class AgentService:
             agent.routing = routing.value
         if set_tools:
             agent.tools = self._check_tools(tools)
+            # No list given means "pick them for me".
+            agent.tools_auto = tools is None
         if scope is not None:
             agent.scope = self._check_scope(scope)
         if max_steps is not None:
             agent.max_steps = self._check_steps(max_steps)
+        # Worked out again when the words that describe the job changed.
+        self.choose_tools(agent, refresh=instructions is not None or description is not None)
         if set_schedule:
             self.apply_schedule(agent, schedule)
-        elif agent.schedule_enabled and agent.tools is None:
-            raise ValidationError("A scheduled agent needs its list of tools, not 'everything'.")
         await self.session.flush()
         return agent
+
+    @staticmethod
+    def choose_tools(agent: Agent, *, refresh: bool = False) -> None:
+        """Give an agent the tools its instructions call for.
+
+        An agent with no list (one made before this existed, or one that
+        asked to be set up automatically) gets one now. An automatic list
+        is worked out again when `refresh` is set. A list somebody chose
+        by hand is never touched.
+        """
+        if agent.tools is None:
+            agent.tools_auto = True
+        if agent.tools_auto and (agent.tools is None or refresh):
+            agent.tools = infer_tools(agent.name, agent.description, agent.instructions)
 
     # --- running on its own ----------------------------------------
 
@@ -148,10 +164,8 @@ class AgentService:
         if schedule is None:
             agent.schedule, agent.schedule_enabled, agent.next_run_at = None, False, None
             return
-        if agent.tools is None:
-            # An unattended run must be limited to named tools: with no
-            # list it would have every tool the person has ever connected.
-            raise ValidationError("A scheduled agent needs its list of tools, not 'everything'.")
+        # An unattended run is limited to named tools, never "everything".
+        AgentService.choose_tools(agent)
         agent.schedule = schedule.model_dump()
         agent.schedule_enabled = True
         agent.next_run_at = next_run(schedule, datetime.now(UTC))

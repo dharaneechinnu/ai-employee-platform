@@ -36,6 +36,7 @@ from app.agent.providers.base import (
     ToolSchema,
     Usage,
     parse_retry_after,
+    too_large_error,
 )
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -147,6 +148,8 @@ class GeminiProvider(LLMProvider):
             return
 
         detail = response.text[:300]
+        if (too_large := too_large_error("Gemini", response.status_code, detail)) is not None:
+            raise too_large
         if response.status_code in (401, 403):
             raise ProviderAuthError(
                 f"Gemini rejected the API key: {detail}", status_code=response.status_code

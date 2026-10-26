@@ -29,6 +29,7 @@ from app.agent.providers.base import (
     ToolSchema,
     Usage,
     parse_retry_after,
+    too_large_error,
 )
 
 # Base URLs per provider key. Adding a vendor that speaks this format is
@@ -167,6 +168,9 @@ class OpenAICompatibleProvider(LLMProvider):
 
         detail = response.text[:300]
         code = response.status_code
+        # Before the 429 check: some vendors report an oversized request as one.
+        if (too_large := too_large_error(self.provider_key, code, detail)) is not None:
+            raise too_large
         if code in (401, 403):
             raise ProviderAuthError(
                 f"{self.provider_key} rejected the API key: {detail}", status_code=code

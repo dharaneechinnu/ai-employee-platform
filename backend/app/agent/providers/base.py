@@ -15,6 +15,7 @@ request/response pairs that are trivial to replay in tests.
 
 from __future__ import annotations
 
+import re
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -194,3 +195,53 @@ class LLMProvider(ABC):
         Raises an LLMError subclass on failure so the caller can tell a
         bad key from an outage rather than reporting both as "failed".
         """
+
+
+class ProviderTooLargeError(LLMError):
+    """The request is bigger than this AI will take, whatever the wait.
+
+    Not a rate limit: a request over a per-minute token cap, or over the
+    model's context, fails again however long we pause. So it is never
+    retried on the same AI. Another AI with a bigger limit may take it,
+    and the loop can send a slimmer request (see `app.agent.slim`).
+    """
+
+    retryable = False
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        limit_tokens: int | None = None,
+        requested_tokens: int | None = None,
+    ):
+        super().__init__(message, status_code=status_code)
+        self.limit_tokens = limit_tokens
+        self.requested_tokens = requested_tokens
+
+
+# What vendors say when the request itself is too big. Groq answers 413
+# ("Request too large ... tokens per minute"), Claude answers 413
+# "request_too_large", and others answer 400 about the context window.
+_TOO_LARGE = re.compile(
+    r"request too large|request_too_large|payload too large|context[ _]length|"
+    r"maximum context|exceeds? the maximum number of tokens|too many tokens",
+    re.IGNORECASE,
+)
+_LIMIT_AND_REQUESTED = re.compile(r"Limit (\d+), Requested (\d+)")
+
+
+def too_large_error(provider: str, status_code: int, detail: str) -> ProviderTooLargeError | None:
+    """A `ProviderTooLargeError` if this failed response means "too big"."""
+    if status_code != 413 and not _TOO_LARGE.search(detail):
+        return None
+    numbers = _LIMIT_AND_REQUESTED.search(detail)
+    limit, requested = (int(numbers[1]), int(numbers[2])) if numbers else (None, None)
+    size = f" ({requested} tokens against a limit of {limit})" if numbers else ""
+    return ProviderTooLargeError(
+        f"{provider} cannot take a request this large{size}. Provider said: {detail}",
+        status_code=status_code,
+        limit_tokens=limit,
+        requested_tokens=requested,
+    )

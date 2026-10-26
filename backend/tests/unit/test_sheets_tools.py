@@ -212,6 +212,7 @@ async def test_search_without_a_key_says_so(monkeypatch: pytest.MonkeyPatch) -> 
     from app.config import get_settings
 
     monkeypatch.setattr(get_settings(), "brave_api_key", None)
+    monkeypatch.setattr(get_settings(), "tavily_api_key", None)
     result = await _run(
         "web_search", ToolContext(owner_id=uuid.uuid4()), {"query": "chennai meetup"}
     )
@@ -225,6 +226,7 @@ async def test_search_returns_titles_addresses_and_summaries(
     from app.config import get_settings
 
     monkeypatch.setattr(get_settings(), "brave_api_key", "k")
+    monkeypatch.setattr(get_settings(), "tavily_api_key", None)
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["X-Subscription-Token"] == "k"

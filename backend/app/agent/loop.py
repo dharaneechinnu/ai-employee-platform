@@ -24,10 +24,18 @@ from app.agent.providers.base import (
     LLMReply,
     Message,
     ProviderRequestError,
+    ProviderTooLargeError,
     Role,
     StopReason,
     ToolCall,
     ToolSchema,
+)
+from app.agent.slim import (
+    MAX_LEVEL,
+    compact_old_results,
+    estimate_tokens,
+    slim_messages,
+    slim_tools,
 )
 from app.agent.tools.base import Tool, ToolContext, ToolResult
 from app.core.observability import get_logger
@@ -89,6 +97,23 @@ class Budget:
         if time.monotonic() - self.started_at >= self.max_seconds:
             return StopCause.TIMEOUT
         return None
+
+    def nearly_exceeded(self) -> bool:
+        """True once about four fifths of the tokens, or all but two of the
+        steps, are used: time to wrap up while there is still room to."""
+        return (
+            self.tokens_used >= self.max_tokens * WRAP_UP_AT
+            or self.steps_used >= self.max_steps - 2
+        )
+
+
+WRAP_UP_AT = 0.8
+WRAP_UP_NOTE = (
+    "You are almost out of your work limit. Do not search or read any more pages. "
+    "Save what you have found so far (for example, add the rows you already have to "
+    "the sheet), then finish with a short summary that says what was done and what "
+    "was left out."
+)
 
 
 @dataclass(slots=True)
@@ -156,6 +181,11 @@ class AgentLoop:
         self._approved_call = approved_call
         self._events: list[AgentEvent] = []
         self._tools_unsupported = False
+        # How much of the request is cut to fit an AI with a small limit
+        # (see `app.agent.slim`). Starts at 0 and only rises, so once an AI
+        # has refused a size, later steps of the run do not try it again.
+        self._slim_level = 0
+        self._wrapping_up = False
 
     @property
     def resuming(self) -> bool:
@@ -177,14 +207,44 @@ class AgentLoop:
             for t in self.tools.values()
         ]
 
+    def _schemas_for_request(self) -> list[ToolSchema]:
+        schemas = self._schemas()
+        return slim_tools(schemas) if self._slim_level >= 1 else schemas
+
     async def _complete(self, messages: list[Message]) -> LLMReply:
-        """One model call. A model that cannot take tools is retried once
+        """One model call. If the AI says the request is too big (and there
+        is no other AI left to send it to), send a slimmer one, a level at
+        a time, instead of failing the run."""
+        while True:
+            sent = slim_messages(compact_old_results(messages), self._slim_level)
+            try:
+                return await self._complete_once(sent)
+            except ProviderTooLargeError as exc:
+                if self._slim_level >= MAX_LEVEL:
+                    raise
+                before = estimate_tokens(sent, self._schemas_for_request())
+                self._slim_level += 1
+                after = estimate_tokens(
+                    slim_messages(compact_old_results(messages), self._slim_level),
+                    self._schemas_for_request(),
+                )
+                await self._emit(
+                    "request_slimmed",
+                    level=self._slim_level,
+                    limit_tokens=exc.limit_tokens,
+                    requested_tokens=exc.requested_tokens,
+                    estimated_tokens_before=before,
+                    estimated_tokens_after=after,
+                )
+
+    async def _complete_once(self, messages: list[Message]) -> LLMReply:
+        """A model call. A model that cannot take tools is retried once
         without them (and told so), instead of failing the run."""
         try:
             return await self.provider.complete(
                 messages=messages,
                 model=self.model,
-                tools=None if self._tools_unsupported else (self._schemas() or None),
+                tools=None if self._tools_unsupported else (self._schemas_for_request() or None),
                 temperature=self.temperature,
             )
         except LLMError as exc:
@@ -255,6 +315,13 @@ class AgentLoop:
             if self._is_cancelled and await self._is_cancelled():
                 await self._emit("run_stopped", cause=StopCause.CANCELLED)
                 return self._outcome(StopCause.CANCELLED, None, prompt_tokens, output_tokens)
+
+            if not self._wrapping_up and self.budget.nearly_exceeded():
+                # Out of room soon: tell the model to save what it has and
+                # finish, so the run ends with a result instead of a failure.
+                self._wrapping_up = True
+                messages.append(Message(role=Role.USER, content=WRAP_UP_NOTE))
+                await self._emit("wrapping_up", steps=self.budget.steps_used)
 
             await self._emit("thinking", step=self.budget.steps_used + 1)
 
