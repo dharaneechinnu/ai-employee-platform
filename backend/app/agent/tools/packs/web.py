@@ -50,7 +50,7 @@ class GetWebpage(Tool):
         ):
             return ToolResult.failure(
                 "not_allowed",
-                f"{parsed.hostname} is not on the allowed list. Ask an admin to add it.",
+                f"{parsed.hostname} is not on the allowed list, so it cannot be read.",
             )
 
         if _is_private_address(parsed.hostname):

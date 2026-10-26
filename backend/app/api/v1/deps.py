@@ -1,12 +1,11 @@
-"""Request dependencies: who is calling, which company, and what they may do.
+"""Request dependencies: who is calling, and whose data they may reach.
 
 Two rules are enforced here and nowhere else:
 
-1. The active company is resolved from the caller's **memberships**,
-   never taken on trust from the request body. A client cannot name a
-   company it does not belong to.
+1. The scope is the signed-in person, taken from their token and never
+   from the request body. A client cannot name somebody else's data.
 
-2. A caller who asks for another company's resource gets **404**, not
+2. A caller who asks for another person's resource gets **404**, not
    403. A 403 would confirm the resource exists.
 """
 
@@ -101,28 +100,7 @@ async def get_context(current: CurrentUserDep) -> RequestContext:
 
 
 ContextDep = Annotated[RequestContext, Depends(get_context)]
-# Kept as a name so routes read the same, now that every signed-in
-# person is simply the owner of what they are asking about.
-CanRead = ContextDep
-CanWrite = ContextDep
-CanManage = ContextDep
 
-
-async def get_refresh_token_cookie(
-    refresh_token: Annotated[str | None, Header(alias="Cookie")] = None,
-) -> str | None:
-    """Pull the refresh token out of the Cookie header.
-
-    Read from a cookie rather than the body so the browser sends it
-    automatically and JavaScript cannot read it.
-    """
-    if not refresh_token:
-        return None
-    for part in refresh_token.split(";"):
-        name, _, value = part.strip().partition("=")
-        if name == REFRESH_COOKIE_NAME:
-            return value or None
-    return None
-
-
+# Read from a cookie rather than the body so the browser sends it
+# automatically and JavaScript cannot read it.
 REFRESH_COOKIE_NAME = "refresh_token"

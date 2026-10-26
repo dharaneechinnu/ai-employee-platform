@@ -6,7 +6,7 @@ can do (`tools/list`); a server that does not answer is not saved, so
 the list never fills with broken entries.
 
 The token is handled like every other secret: encrypted with the
-company's key, never returned, and handed to a tool only at call time.
+person's key, never returned, and handed to a tool only at call time.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ class McpService:
 
         existing = await self.servers()
         if len(existing) >= MAX_SERVERS:
-            raise ValidationError(f"A company can connect up to {MAX_SERVERS} tool servers.")
+            raise ValidationError(f"You can connect up to {MAX_SERVERS} tool servers.")
 
         taken = {s.slug for s in existing}
         base = slugify(name)
@@ -98,7 +98,7 @@ class McpService:
 
     async def sync(self, server_id: uuid.UUID) -> McpServer:
         """Ask the server again what it offers. Tools it dropped stop
-        appearing; new ones arrive switched off for every employee."""
+        appearing; new ones arrive switched off for every agent."""
         server = await self.get(server_id)
         try:
             server.tools = await self._discover(server.url, self._token(server))
@@ -131,7 +131,7 @@ class McpService:
     # --- what a run sees ------------------------------------------
 
     async def tools(self) -> dict[str, type[Tool]]:
-        """This company's MCP tools, by name. From the cached list, so no
+        """This person's MCP tools, by name. From the cached list, so no
         network call: a server that is down fails one tool call, not the
         whole run or the settings screens."""
         found: dict[str, type[Tool]] = {}

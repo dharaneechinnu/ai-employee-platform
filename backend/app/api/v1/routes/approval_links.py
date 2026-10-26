@@ -1,15 +1,16 @@
 """Approval links: decide from an email or a Slack message.
 
-The token in the link names one approval in one company, and expires
-when the approval does. Two kinds:
+The token in the link names one approval and its owner (the `org`
+claim, kept under that name so links already sent keep working), and
+expires when the approval does. Two kinds:
 
-- **Personal** (emailed to one admin): carries that admin's user id,
-  so the link alone is enough to decide, as that admin.
+- **Personal** (emailed to the owner): carries their user id, so the
+  link alone is enough to decide, as them.
 - **Shared** (posted to Slack): carries no user. Whoever clicks must be
   signed in, and the decision is recorded against them.
 
 Either way the person's rights are checked now, at decision time: an
-admin demoted since the email was sent can no longer use its link.
+account suspended since the email was sent can no longer use its link.
 Reading a link (GET) never decides anything; only the POST from the
 page's button does, so a mail scanner that follows links is harmless.
 """

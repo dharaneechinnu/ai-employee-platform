@@ -6,7 +6,7 @@ Sheets, Calendar), and each service into two levels: `read` (look only)
 and `edit` (change or send). Three layers then decide whether a tool
 may run, and every one of them has to say yes:
 
-1. the platform, and the company within it (`ServiceAccessService`);
+1. the platform, for everyone and for this person (`ServiceAccessService`);
 2. the person's own connection, which holds only the permissions they
    granted when connecting (`granted_scopes`);
 3. the agent, which lists the tools it may use.

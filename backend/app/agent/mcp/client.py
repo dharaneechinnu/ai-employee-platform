@@ -165,7 +165,7 @@ def _raise_for_status(response: httpx.Response) -> None:
     if code in (401, 403):
         raise McpError(
             "auth_failed",
-            "The tool server refused the access token. An admin can update it under Connections.",
+            "The tool server refused the access token. Update it under Connections.",
         )
     if code == 404:
         raise McpError("not_found", "Nothing answered at that address. Check the server's MCP URL.")

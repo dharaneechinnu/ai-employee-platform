@@ -1,11 +1,11 @@
 """Application error hierarchy, mapped to HTTP responses.
 
-One rule worth stating explicitly: **cross-tenant access returns 404, not
+One rule worth stating explicitly: **cross-account access returns 404, not
 403**. A 403 confirms the resource exists, which tells an attacker that
-company X has a project with that id. 404 tells them nothing.
+person X has a project with that id. 404 tells them nothing.
 
 So `NotFoundError` is raised both when a row is genuinely absent and when
-it belongs to another company. The caller cannot tell the difference,
+it belongs to another person. The caller cannot tell the difference,
 which is the point.
 """
 
@@ -79,13 +79,8 @@ class ConflictError(AppError):
     default_message = "That conflicts with something that already exists."
 
 
-class LimitReachedError(ConflictError):
-    error_code = "limit_reached"
-    default_message = "You have reached your plan limit."
-
-
 class UpstreamError(AppError):
-    """A service we call on the company's behalf failed."""
+    """A service we call on the person's behalf failed."""
 
     status_code = 502
     error_code = "upstream_error"

@@ -1,6 +1,6 @@
 """Permission policy and approval routes.
 
-A company may set any action looser or stricter than the platform
+A person may set any action looser or stricter than the platform
 default. The one exception is the catastrophic blocklist, which the
 service refuses in the backend — not merely greys out on the screen,
 since a screen-only check is bypassed by calling the API directly.
@@ -33,7 +33,7 @@ class PolicyRowResponse(BaseModel):
     scope_value: str
     side_effect: str | None
     setting: PolicySetting
-    # False means this company changed it from the platform default.
+    # False means this person changed it from the platform default.
     is_default: bool
 
 
@@ -113,7 +113,7 @@ async def reset_policies(ctx: ContextDep, session: SessionDep) -> None:
 @router.get(
     "/tools",
     response_model=list[ToolCatalogueEntry],
-    summary="Every tool and what this company's policy says about it",
+    summary="Every tool and what this person's policy says about it",
 )
 async def tool_catalogue(ctx: ContextDep, session: SessionDep) -> list[ToolCatalogueEntry]:
     resolver = await PolicyService(session, ctx.owner_id).resolver()

@@ -1,8 +1,8 @@
 """Voice typing: turn a short recording into text.
 
-Whisper Large v3 Turbo, served by Groq, using the company's own Groq
+Whisper Large v3 Turbo, served by Groq, using the person's own Groq
 key, so voice costs the platform nothing and needs no GPU here. A
-company without a Groq key gets the browser's built-in recogniser
+person without a Groq key gets the browser's built-in recogniser
 instead; that fallback lives entirely in the frontend.
 
 The audio passes straight through. It is never stored, and neither the
@@ -65,7 +65,7 @@ class SpeechService:
         self.owner_id = owner_id
 
     async def engine(self) -> str:
-        """``whisper`` when the company has a Groq key, else ``browser``."""
+        """``whisper`` when the person has a Groq key, else ``browser``."""
         connected = await self.providers.connected()
         return "whisper" if any(c.provider_key == "groq" for c in connected) else "browser"
 

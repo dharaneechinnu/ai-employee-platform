@@ -100,14 +100,10 @@ def generate_refresh_token() -> str:
 
 
 def hash_token(token: str) -> str:
-    """SHA-256 for refresh tokens and invite tokens.
+    """SHA-256 for refresh tokens and setup-link tokens.
 
     Deliberately not Argon2: these are high-entropy random strings, not
     user-chosen passwords, so there is nothing to brute-force and we do
     not want a slow hash on the hot refresh path.
     """
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-def constant_time_compare(a: str, b: str) -> bool:
-    return secrets.compare_digest(a, b)

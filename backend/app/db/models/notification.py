@@ -1,4 +1,4 @@
-"""Per-company notification settings.
+"""Per-person notification settings.
 
 A run that pauses for approval is only useful if someone notices. These
 settings decide who hears about it, and where: email to the people

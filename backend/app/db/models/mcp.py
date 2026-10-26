@@ -1,8 +1,8 @@
-"""MCP tool servers a company has connected.
+"""MCP tool servers a person has connected.
 
 MCP (Model Context Protocol) is the open standard for "a server that
 offers tools". Connect one, and every tool it offers becomes a tool
-the company's AI Employees can use, with the same permissions,
+the person's agents can use, with the same permissions,
 approvals and audit trail as a built-in one. No code on our side per
 tool: the server describes its own tools.
 

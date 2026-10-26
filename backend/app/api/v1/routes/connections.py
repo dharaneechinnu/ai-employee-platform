@@ -1,4 +1,4 @@
-"""Connection routes: link the outside apps AI Employees work in.
+"""Connection routes: link the outside apps your agents work in.
 
 As with provider keys, there is no endpoint that returns a credential.
 The list shows which account is connected and whether it works, never
@@ -7,7 +7,7 @@ the token or password behind it.
 The OAuth callback is the one public route here. It is safe to leave
 open because it trusts nothing in the request except the signed
 `state`, which only this server can produce and which names the
-company and person who started the sign-in.
+person who started the sign-in.
 """
 
 from __future__ import annotations
@@ -136,8 +136,6 @@ async def available(ctx: ContextDep, session: SessionDep) -> list[AvailableConne
 
 @router.get("/connections", response_model=list[ConnectionResponse], summary="Our connected apps")
 async def list_connections(ctx: ContextDep, session: SessionDep) -> list[ConnectionResponse]:
-    # Members may see which apps are connected (it explains what their
-    # AI Employees can do); only admins can change them.
     return [
         ConnectionResponse(**asdict(c))
         for c in await ConnectionService(session, ctx.owner_id).list_all()
@@ -230,7 +228,7 @@ def _back_to_app(**params: str) -> RedirectResponse:
 
 @callback_router.get(
     "/oauth/{kind}/callback",
-    summary="Where Google or Microsoft sends the admin back (public)",
+    summary="Where Google or Microsoft sends the person back (public)",
     include_in_schema=False,
 )
 async def oauth_callback(
@@ -241,7 +239,7 @@ async def oauth_callback(
     error: Annotated[str | None, Query(max_length=200)] = None,
 ) -> RedirectResponse:
     if error:
-        # The admin pressed Cancel on the consent screen, most likely.
+        # The person pressed Cancel on the consent screen, most likely.
         return _back_to_app(error="The sign-in was cancelled.")
     if not code or not state:
         return _back_to_app(error="The sign-in did not complete.")
@@ -303,10 +301,10 @@ async def list_own_oauth_apps(ctx: ContextDep, session: SessionDep) -> list[OwnO
 async def save_own_oauth_app(
     kind: str, body: OwnOAuthAppRequest, ctx: ContextDep, session: SessionDep
 ) -> OwnOAuthAppResponse:
-    """Switch one-click on for this company without anyone else acting.
+    """Switch one-click on for yourself without anyone else acting.
 
     The platform operator can register one app for everybody; this is
-    the other route, for a company that would rather its own name be
+    the other route, for a person who would rather their own app be
     on the consent screen, or that does not want to wait.
     """
     row = await ConnectionService(session, ctx.owner_id).save_own_oauth_app(

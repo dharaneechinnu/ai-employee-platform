@@ -1,10 +1,10 @@
 """Conversations: the personal assistant, ChatGPT-style.
 
 A conversation is a thread of messages with one person. Each thing the
-person sends becomes an ordinary task (with `conversation_id` set and
-no AI Employee), so a chat turn gets everything a task already has:
-the agent loop with tools, live streaming, approvals, cancel, cost and
-the full run record. Only the persona and the history differ.
+person sends becomes an ordinary task (with `conversation_id` set),
+so a chat turn gets everything a task already has: the agent loop
+with tools, live streaming, approvals, cancel, cost and the full run
+record. Only the persona and the history differ.
 
 The model is a setting of the conversation, not of each message, and it
 can change at any time: history is stored as plain text, so a thread
@@ -48,7 +48,7 @@ class Conversation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     mode: Mapped[ChatMode] = mapped_column(
         StrEnumType(ChatMode, 20), nullable=False, default=ChatMode.GENERAL
     )
-    # "auto" or "provider:model", exactly as an AI Employee's model.
+    # "auto" or "provider:model", exactly as an agent's model.
     model: Mapped[str] = mapped_column(String(200), nullable=False, default="auto")
     # With "auto": balanced, quality, cost or private (see agent/routing).
     routing: Mapped[str] = mapped_column(String(20), nullable=False, default="balanced")

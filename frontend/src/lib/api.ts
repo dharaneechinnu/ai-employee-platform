@@ -546,7 +546,7 @@ export interface ServiceAccessRow {
   allowed: boolean;
 }
 
-export interface CompanyServiceRow extends ServiceAccessRow {
+export interface PersonServiceRow extends ServiceAccessRow {
   overridden: boolean;
   note: string | null;
 }

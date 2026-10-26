@@ -1,14 +1,14 @@
 """Turn an MCP server's tools into platform tools.
 
 Built-in tools are Python classes registered at import. MCP tools
-depend on what each company connected, so they are built per company
+depend on what each person connected, so they are built per person
 from the cached tool list, and never enter the global registry: one
-company's tools cannot appear in another's run.
+person's tools cannot appear in another's run.
 
 Each one is an ordinary `Tool` subclass, so everything downstream
 (permissions, approvals, the run timeline, delegation) needs no special
 case. The name says where it came from: `mcp__crm__find_customer` is
-the `find_customer` tool on the server this company called "crm".
+the `find_customer` tool on the server this person called "crm".
 """
 
 from __future__ import annotations

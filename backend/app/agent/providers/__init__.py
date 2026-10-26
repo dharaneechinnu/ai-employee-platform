@@ -21,7 +21,7 @@ from app.agent.providers.base import (
 from app.agent.providers.gemini import GeminiProvider
 from app.agent.providers.openai_compatible import BASE_URLS, OpenAICompatibleProvider
 
-# The one provider whose address the company gives us.
+# The one provider whose address the person gives us.
 CUSTOM_PROVIDER = "custom"
 
 

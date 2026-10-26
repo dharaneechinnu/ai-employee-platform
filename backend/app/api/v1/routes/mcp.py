@@ -28,7 +28,7 @@ class AddServerRequest(BaseModel):
 
 
 class ServerTool(BaseModel):
-    name: str  # what an employee's tool list stores
+    name: str  # what an agent's tool list stores
     remote_name: str  # what the server calls it
     title: str | None
     description: str

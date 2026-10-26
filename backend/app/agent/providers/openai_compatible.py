@@ -1,7 +1,7 @@
 """One adapter for every provider that speaks the OpenAI chat format.
 
 Covers Groq, NVIDIA NIM, DeepSeek, OpenRouter, Together, Mistral and
-OpenAI itself, plus any server a company runs (vLLM, Ollama, LM
+OpenAI itself, plus any server a person runs (vLLM, Ollama, LM
 Studio, LiteLLM). They differ only in base URL, so a single adapter
 is less code and fewer places for a bug to hide than one per vendor.
 """

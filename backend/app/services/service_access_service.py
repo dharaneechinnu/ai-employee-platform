@@ -1,7 +1,8 @@
-"""Level 1 of service permissions: what the platform and the company allow.
+"""Level 1 of service permissions: what the platform allows, for everyone
+and for one person.
 
-Reads and writes the two rule tables. A company ruling beats the
-platform's (a Platform Admin can open Sheets for one pilot company while
+Reads and writes the two rule tables. A per-person ruling beats the
+platform's (a Platform Admin can open Sheets for one pilot account while
 it is off for everyone else); no ruling at either level means allowed,
 so introducing this changed nothing for anyone already connected.
 
@@ -25,7 +26,7 @@ from app.db.models.provider import OrgServiceAccess, PlatformServiceAccess
 @dataclass(frozen=True, slots=True)
 class Decision:
     allowed: bool
-    # "company", "platform" or "default": who made the call, so a
+    # "person", "platform" or "default": who made the call, so a
     # refusal can say who to ask.
     source: str
     note: str | None = None
@@ -49,7 +50,7 @@ class ServiceAccessService:
         rows = await self.session.scalars(select(PlatformServiceAccess))
         return {(r.service, r.level): r.allowed for r in rows.all()}
 
-    async def _company(self, owner_id: uuid.UUID) -> dict[tuple[str, str], OrgServiceAccess]:
+    async def _person(self, owner_id: uuid.UUID) -> dict[tuple[str, str], OrgServiceAccess]:
         rows = await self.session.scalars(
             select(OrgServiceAccess).where(OrgServiceAccess.owner_id == owner_id)
         )
@@ -58,7 +59,7 @@ class ServiceAccessService:
     async def snapshot(self) -> Snapshot:
         """Everything needed to decide, loaded once for a whole check."""
         assert self.owner_id is not None
-        return Snapshot(await self._platform(), await self._company(self.owner_id))
+        return Snapshot(await self._platform(), await self._person(self.owner_id))
 
     async def decide(self, service: str, level: str) -> Decision:
         return (await self.snapshot()).decide(service, level)
@@ -93,12 +94,9 @@ class ServiceAccessService:
             row.allowed, row.updated_by = allowed, admin_id
         await self.session.flush()
 
-    # --- Platform Admin: one company -----------------------------------
+    # --- Platform Admin: one person ------------------------------------
 
-    async def company_rules(self, owner_id: uuid.UUID) -> dict[tuple[str, str], OrgServiceAccess]:
-        return await self._company(owner_id)
-
-    async def set_company(
+    async def set_person(
         self,
         owner_id: uuid.UUID,
         service: str,
@@ -108,7 +106,7 @@ class ServiceAccessService:
         note: str | None,
         admin_id: uuid.UUID | None,
     ) -> None:
-        """`allowed=None` removes the ruling, so the company inherits again."""
+        """`allowed=None` removes the ruling, so the person inherits again."""
         _check(service, level)
         if allowed is None:
             await self.session.execute(
@@ -120,7 +118,7 @@ class ServiceAccessService:
             )
             await self.session.flush()
             return
-        row = (await self._company(owner_id)).get((service, level))
+        row = (await self._person(owner_id)).get((service, level))
         if row is None:
             self.session.add(
                 OrgServiceAccess(
@@ -142,11 +140,11 @@ class ServiceAccessService:
 @dataclass(frozen=True, slots=True)
 class Snapshot:
     platform: dict[tuple[str, str], bool]
-    company: dict[tuple[str, str], OrgServiceAccess]
+    person: dict[tuple[str, str], OrgServiceAccess]
 
     def _rule(self, service: str, level: str) -> Decision:
-        if (ruling := self.company.get((service, level))) is not None:
-            return Decision(ruling.allowed, "company", ruling.note)
+        if (ruling := self.person.get((service, level))) is not None:
+            return Decision(ruling.allowed, "person", ruling.note)
         if (service, level) in self.platform:
             return Decision(self.platform[(service, level)], "platform")
         return Decision(True, "default")

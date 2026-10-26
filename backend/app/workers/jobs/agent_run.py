@@ -239,7 +239,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
 
         checkpoint, approved_call = await take_approved_call(session, run_db.id)
 
-        # The company's connected apps, resolved once per run (and
+        # The person's connected apps, resolved once per run (and
         # again on resume, so a token refreshed while the run waited
         # for approval is picked up). Tools receive only the grant
         # they declare; the model never sees any of it.

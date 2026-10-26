@@ -26,7 +26,7 @@ class TranscriptResponse(BaseModel):
     text: str
 
 
-@router.get("", summary="Which voice-typing engine this company uses")
+@router.get("", summary="Which voice-typing engine this person uses")
 async def speech_engine(ctx: ContextDep, session: SessionDep) -> SpeechEngineResponse:
     engine = await SpeechService(session, ctx.owner_id).engine()
     return SpeechEngineResponse(

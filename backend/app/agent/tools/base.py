@@ -6,7 +6,7 @@ whether that is allowed, and we execute it with the customer's
 credential attached.
 
 That indirection is the strongest security property in the design. If
-an employee has no `delete_repository` tool, deleting a repository is
+an agent has no `delete_repository` tool, deleting a repository is
 impossible no matter what text an attacker plants in a GitHub issue.
 Capability limits beat instruction-following.
 """
@@ -64,7 +64,7 @@ class ToolContext:
     credential: str | None = None
     config: dict[str, Any] | None = None
     dry_run: bool = False
-    # The company's connected apps, keyed by connection kind. Resolved
+    # The person's connected apps, keyed by connection kind. Resolved
     # by the worker at the start of a run; a tool sees only the one
     # grant it declares in `requires_connection`.
     grants: dict[str, Grant] | None = None

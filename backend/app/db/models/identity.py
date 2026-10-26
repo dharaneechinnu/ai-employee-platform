@@ -1,4 +1,4 @@
-"""Identity: users, memberships, invitations, refresh tokens, platform admins.
+"""Identity: users, setup links, refresh tokens, platform admins.
 
 Two separations matter here and are deliberate:
 
@@ -6,9 +6,9 @@ Two separations matter here and are deliberate:
    role-checking logic can then never escalate a customer to platform
    staff, because they are not in the same table to begin with.
 
-2. `users` has no `owner_id`. A person may belong to several companies;
-   the link lives in `memberships`. This is why `users` is on the
-   tenant-isolation whitelist.
+2. `users` has no `owner_id`: a user *is* the owner, and every other
+   table's `owner_id` points here. This is why `users` is on the
+   owner-scoping whitelist.
 """
 
 from __future__ import annotations
@@ -73,8 +73,8 @@ class RefreshToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 class PlatformAdmin(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """Platform staff. Separate table from `users` on purpose.
 
-    2FA is compulsory: this account can create and suspend companies, so
-    a password alone is not enough.
+    This account can create and suspend every account on the platform,
+    which is why it lives apart from `users`.
     """
 
     __tablename__ = "platform_admins"
@@ -110,7 +110,7 @@ class PlatformAdminAudit(Base, UUIDPrimaryKeyMixin):
 class SetupToken(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """The one-time link a new account uses to set its own password.
 
-    Replaces the old company invitation. The Platform Admin creates
+    The Platform Admin creates
     the account but never sets a password for it, so there is no point
     at which staff know a customer's credentials or could sign in as
     them. Only the hash is stored: a lost link means issuing another,

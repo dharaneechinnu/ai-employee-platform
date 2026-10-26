@@ -1,9 +1,9 @@
 """Authentication routes.
 
-Note there is no `/auth/register`. Accounts exist only by accepting an
-invitation, and invitations are created by a Company Admin or by the
-Platform Admin when a company is created. That removes a whole class of
-abuse and is simpler than building a sign-up approval queue.
+Note there is no `/auth/register`. Accounts are created only by the
+Platform Admin, and each person sets their own password through the
+setup link that comes with it. That removes a whole class of abuse and
+is simpler than building a sign-up approval queue.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ async def logout(request: Request, response: Response, session: SessionDep) -> N
 
 @router.get("/me", response_model=MeResponse, summary="Who am I")
 async def me(current: CurrentUserDep) -> MeResponse:
-    """No company to resolve any more: you are the scope.
+    """You are the scope: there is nothing else to resolve.
 
     Everything this account can reach is filtered by this id in the
     repository layer, so there is nothing else for the client to pick.

@@ -1,15 +1,15 @@
-"""Connections: the outside apps a company lets its AI Employees use.
+"""Connections: the outside apps a person lets their agents use.
 
 Two ways in:
 
-- **One click (OAuth)** for Google and Microsoft. The admin signs in
+- **One click (OAuth)** for Google and Microsoft. The person signs in
   with their provider, approves the listed permissions, and we keep the
   refresh token. Nobody pastes a password.
 - **Manual** for a mailbox over IMAP/SMTP or a PostgreSQL database,
   where the secret is an app password or a read-only database password.
 
 Either way the secret is handled like a provider key: encrypted with
-the company's own key, never returned by any endpoint, and never placed
+the person's own key, never returned by any endpoint, and never placed
 in the model's context. `resolve_grants` is the single read path, and
 only the worker calls it, at the start of a run.
 """
@@ -161,7 +161,7 @@ class AvailableConnection:
     fields: list[dict[str, str]] = field(default_factory=list)
     secret_label: str | None = None
     # False when a Platform Admin has closed this connection for this
-    # company specifically. Separate from `configured` so the UI can
+    # person specifically. Separate from `configured` so the UI can
     # say which of the two it is — "nobody has set this up" and "your
     # provider turned this off for you" need different next steps.
     allowed: bool = True
@@ -203,7 +203,7 @@ class ConnectionService:
     # --- reading -------------------------------------------------------
 
     async def _access(self) -> dict[ConnectionKind, OrgConnectionAccess]:
-        """This company's rulings, keyed by kind. Absent means inherit."""
+        """This person's rulings, keyed by kind. Absent means inherit."""
         rows = await self.session.scalars(
             select(OrgConnectionAccess).where(OrgConnectionAccess.owner_id == self.owner_id)
         )
@@ -277,10 +277,10 @@ class ConnectionService:
             config=public,
         )
 
-    # --- this company's own OAuth app ----------------------------------
+    # --- this person's own OAuth app -----------------------------------
 
     async def own_oauth_apps(self) -> dict[str, dict[str, str]]:
-        """What this company has registered, by provider key.
+        """What this person has registered, by provider key.
 
         Only the client id and the last four of the secret. There is no
         read path for the secret itself, here or anywhere.
@@ -296,10 +296,10 @@ class ConnectionService:
     async def save_own_oauth_app(
         self, *, kind: str, client_id: str, client_secret: str
     ) -> OrgOAuthApp:
-        """Register this company's own Google or Microsoft app.
+        """Register this person's own Google or Microsoft app.
 
-        The point is that nobody else has to act first: a company can
-        switch one-click on for itself, with its own name on the
+        The point is that nobody else has to act first: a person can
+        switch one-click on for themselves, with their own app on the
         consent screen, without the platform operator registering
         anything.
         """
@@ -314,7 +314,7 @@ class ConnectionService:
                 OrgOAuthApp.owner_id == self.owner_id, OrgOAuthApp.provider == provider.kind
             )
         )
-        # The company's own key, so their scope opens it.
+        # The person's own key, so their scope opens it.
         ciphertext = encrypt(client_secret, scope=self.owner_id)
         last4 = client_secret[-4:] if len(client_secret) >= 4 else "????"
 
@@ -348,7 +348,7 @@ class ConnectionService:
             else None
         )
         if row is None:
-            raise NotFoundError(f"No {kind} app is registered for this company.")
+            raise NotFoundError(f"No {kind} app is registered for you.")
         await self.session.delete(row)
 
     # --- one click (OAuth) --------------------------------------------
@@ -363,17 +363,17 @@ class ConnectionService:
         ruling = (await self._access()).get(kind)
         if ruling is not None and not ruling.allowed:
             # Forbidden, not unprocessable: the request is well formed
-            # and the company simply may not do this. A client that
+            # and this person simply may not do this. A client that
             # retries on 422 would retry this forever.
             raise PermissionDeniedError(
                 ruling.note
                 or f"{CATALOGUE[kind]['display_name']} is not available on your plan. "
-                "Ask whoever runs AI Employees for your organisation."
+                "Ask whoever runs AI Employees to open it for you."
             )
 
     async def _allowed_grant(self, kind: str, services: dict[str, str]) -> dict[str, str]:
         """What the person asked to share, cut down to what the platform
-        and this company allow. Edit falls back to read when only read
+        allows for this person. Edit falls back to read when only read
         is open; a service nothing allows is dropped."""
         from app.agent.services import EDIT, LEVELS, READ, SERVICES
         from app.services.service_access_service import ServiceAccessService
@@ -464,8 +464,8 @@ class ConnectionService:
         a scary line on the consent screen for no reason."""
         provider, (client_id, _) = await self._provider(kind, services)
         await self._require_allowed(provider.kind)
-        # The state is signed, so the callback can trust which company
-        # and person started this without a table of pending sign-ins.
+        # The state is signed, so the callback can trust which person
+        # started this without a table of pending sign-ins.
         state = sign_for(
             "oauth_state",
             {"org": str(self.owner_id), "sub": str(user_id), "kind": provider.kind.value},
@@ -488,7 +488,7 @@ class ConnectionService:
         provider, (client_id, client_secret) = await self._provider(kind)
         # Checked again here: a sign-in started before the block, or a
         # callback replayed by hand, would otherwise land a connection
-        # the company is not entitled to.
+        # the person is not entitled to.
         await self._require_allowed(provider.kind)
 
         async with _client() as http:
@@ -575,7 +575,7 @@ class ConnectionService:
 
     async def _fresh_access_token(self, conn: Connection, *, force: bool = False) -> str:
         """The stored access token, refreshed first if it is close to
-        expiring. A refresh that the provider rejects means the company
+        expiring. A refresh that the provider rejects means the person
         revoked access, so the connection is marked for reconnecting."""
         secret = json.loads(decrypt(conn.credential_enc, scope=self.owner_id))
         if not force and secret.get("expires_at", 0) - time.time() > REFRESH_MARGIN_S:
@@ -680,7 +680,7 @@ class ConnectionService:
                 conn.config = {**(conn.config or {}), "account": login}
             conn.status = STATUS_CONNECTED
             conn.last_error = None
-        except Exception as exc:  # noqa: BLE001 - the reason is shown to the admin
+        except Exception as exc:  # noqa: BLE001 - the reason is shown to the person
             if conn.status != STATUS_RECONNECT:
                 conn.status = STATUS_FAILED
             conn.last_error = _short(exc)
@@ -743,7 +743,7 @@ def _short(exc: BaseException) -> str:
 def _check_hosts(config: dict[str, Any]) -> None:
     """Outside development, refuse hosts inside our own network.
 
-    Otherwise a company could point a "database connection" at the
+    Otherwise someone could point a "database connection" at the
     platform's own Postgres or a cloud metadata address, and use the
     agent as a way in.
     """

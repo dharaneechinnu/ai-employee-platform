@@ -1,8 +1,8 @@
 """The OAuth apps behind one-click connections.
 
 One OAuth app per provider is registered for the whole platform; each
-company then signs in through it with its own account. What we keep is
-that company's refresh token, encrypted with the company's key.
+person then signs in through it with their own account. What we keep is
+that person's refresh token, encrypted with their key.
 
 Scopes are the narrowest that still let the tools do their job, and
 they follow the services the person chose when connecting (see
@@ -128,13 +128,13 @@ async def resolve_client(
 
     Three sources, most specific first:
 
-    1. the company's own app, if it registered one — its name on the
+    1. the person's own app, if they registered one — its name on the
        consent screen, its quota, and nobody else in the way;
     2. the platform's app, registered once by the operator and shared
-       by every company that has not brought its own;
+       by everyone who has not brought their own;
     3. the environment, for local development.
 
-    A company's own app wins even when the platform has one, because
+    A person's own app wins even when the platform has one, because
     registering it is a deliberate act. A disabled platform row beats
     the environment, or "turn it off" would quietly fail wherever the
     variables were still set.

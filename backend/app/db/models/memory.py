@@ -1,6 +1,6 @@
-"""Memory: what an AI Employee remembers between tasks.
+"""Memory: what the assistant remembers between tasks.
 
-Without this an employee is amnesiac. You correct it on Monday and it
+Without this the assistant is amnesiac. You correct it on Monday and it
 makes the same mistake on Tuesday.
 
 The trap we are avoiding is the obvious fix — sending all past history
@@ -44,7 +44,7 @@ SUPPORTED_DIMENSIONS = (384, 768, 1024, 1536)
 
 
 class MemoryKind(StrEnum):
-    FACT = "fact"  # something true about this company
+    FACT = "fact"  # something true about this person or their work
     CORRECTION = "correction"  # a human told the AI it was wrong
     SUMMARY = "summary"  # distilled from a finished run
     DOCUMENT = "document"  # a chunk of an uploaded file
@@ -130,9 +130,9 @@ VECTOR_TABLES: dict[int, type[Base]] = {
 
 
 class EmbeddingConfig(Base, TimestampMixin):
-    """One company's choice of embedding provider.
+    """One person's choice of embedding provider.
 
-    Chosen once per company, not per AI Employee: every memory must be
+    Chosen once per person, not per agent: every memory must be
     embedded by the same model for distances to mean anything.
     """
 
@@ -151,7 +151,7 @@ class EmbeddingConfig(Base, TimestampMixin):
 class RunSummary(Base, TimestampMixin):
     """What a finished run distilled into.
 
-    This is how an employee stops repeating a mistake: a later, similar
+    This is how the assistant stops repeating a mistake: a later, similar
     task can recall what happened last time.
     """
 

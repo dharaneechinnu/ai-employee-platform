@@ -3,8 +3,8 @@
 Resolution order, most specific first:
 
     1. catastrophic blocklist   platform-wide, nobody can override
-    2. company rule for a tool
-    3. company rule for a pack + side effect
+    2. your own rule for a tool
+    3. your own rule for a pack + side effect
     4. platform default for a tool
     5. platform default for a pack + side effect
     6. safe fallback by side effect
@@ -60,11 +60,11 @@ class PolicyRow:
     scope_value: str
     side_effect: str | None
     setting: PolicySetting
-    is_default: bool  # False means the company changed it
+    is_default: bool  # False means the person changed it
 
 
 class PolicyResolver:
-    """A snapshot of one company's effective policy.
+    """A snapshot of one person's effective policy.
 
     Loaded once per run rather than queried per tool call: a run makes
     ten to fifteen calls, and the policy cannot change mid-run in any
@@ -74,13 +74,13 @@ class PolicyResolver:
     def __init__(
         self,
         *,
-        org_rules: dict[tuple[PolicyScope, str, str | None], PolicySetting],
+        own_rules: dict[tuple[PolicyScope, str, str | None], PolicySetting],
         defaults: dict[tuple[PolicyScope, str, str | None], PolicySetting],
         extra_tools: dict[str, type[Tool]] | None = None,
     ) -> None:
-        self._org = org_rules
+        self._own = own_rules
         self._defaults = defaults
-        # The company's MCP tools: gated by the same rules as built-ins.
+        # The person's MCP tools: gated by the same rules as built-ins.
         self.extra_tools = extra_tools or {}
 
     def tool(self, tool_name: str) -> type[Tool] | None:
@@ -100,10 +100,10 @@ class PolicyResolver:
 
         pack, effect = tool.pack, tool.side_effect.value
 
-        if (s := self._org.get((PolicyScope.TOOL, tool_name, None))) is not None:
-            return Decision(s, "set by your company for this tool")
-        if (s := self._org.get((PolicyScope.PACK, pack, effect))) is not None:
-            return Decision(s, f"set by your company for {pack} {effect} actions")
+        if (s := self._own.get((PolicyScope.TOOL, tool_name, None))) is not None:
+            return Decision(s, "set by you for this tool")
+        if (s := self._own.get((PolicyScope.PACK, pack, effect))) is not None:
+            return Decision(s, f"set by you for {pack} {effect} actions")
         if (s := self._defaults.get((PolicyScope.TOOL, tool_name, None))) is not None:
             return Decision(s, "platform default for this tool")
         if (s := self._defaults.get((PolicyScope.PACK, pack, effect))) is not None:
@@ -122,7 +122,7 @@ class PolicyService:
             (d.scope, d.scope_value, d.side_effect): d.setting
             for d in (await self.session.scalars(select(PolicyDefault))).all()
         }
-        org_rules = {
+        own_rules = {
             (p.scope, p.scope_value, p.side_effect): p.setting
             for p in (
                 await self.session.scalars(select(Policy).where(Policy.owner_id == self.owner_id))
@@ -131,14 +131,14 @@ class PolicyService:
         from app.services.mcp_service import McpService
 
         return PolicyResolver(
-            org_rules=org_rules,
+            own_rules=own_rules,
             defaults=defaults,
             extra_tools=await McpService(self.session, self.owner_id).tools(),
         )
 
     async def effective(self) -> list[PolicyRow]:
         """Every rule in force, marked default or changed, so the UI can
-        show which ones this company has touched."""
+        show which ones this person has touched."""
         defaults = (await self.session.scalars(select(PolicyDefault))).all()
         overrides = {
             (p.scope, p.scope_value, p.side_effect): p
@@ -188,7 +188,7 @@ class PolicyService:
         user_id: uuid.UUID,
     ) -> Policy:
         if scope is PolicyScope.TOOL and scope_value in BLOCKED_ACTIONS:
-            # The one thing a company cannot do. Refused in the backend,
+            # The one thing nobody can turn on. Refused in the backend,
             # not merely greyed out on the screen.
             raise ValidationError(
                 f"'{scope_value}' is blocked platform-wide and cannot be enabled: "
@@ -221,7 +221,7 @@ class PolicyService:
         return policy
 
     async def reset(self) -> None:
-        """Drop every override, returning the company to the defaults."""
+        """Drop every override, returning the person to the defaults."""
         for policy in (
             await self.session.scalars(select(Policy).where(Policy.owner_id == self.owner_id))
         ).all():

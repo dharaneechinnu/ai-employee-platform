@@ -1,7 +1,7 @@
 """Shared plumbing for tools that call a REST API with an OAuth token.
 
 Every failure becomes a sentence the model can act on. A 401 means the
-company must reconnect, which the model cannot fix, so it says so; a
+person must reconnect, which the model cannot fix, so it says so; a
 404 means the id was wrong, which it can.
 """
 
@@ -62,7 +62,7 @@ async def request(
         raise ApiError(
             "auth_expired",
             "The connected account's access has expired or was revoked. "
-            "Tell the user an admin should reconnect it under Settings > Connections.",
+            "Tell the user to reconnect it under Settings > Connections.",
         )
     if resp.status_code == 403:
         raise ApiError(

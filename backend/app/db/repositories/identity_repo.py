@@ -23,9 +23,6 @@ class UserRepository(BaseRepository[User]):
     async def get_by_email(self, email: str) -> User | None:
         return await self.session.scalar(select(User).where(User.email == email.lower()))
 
-    async def exists_by_email(self, email: str) -> bool:
-        return await self.get_by_email(email) is not None
-
 
 class RefreshTokenRepository(BaseRepository[RefreshToken]):
     model = RefreshToken

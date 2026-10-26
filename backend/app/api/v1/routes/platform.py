@@ -2,7 +2,7 @@
 
 Everything here lives under /platform and requires a platform token,
 which is a different token type from a customer's. A customer access
-token is rejected even if the caller is a Company Admin.
+token is rejected, whoever it belongs to.
 
 Note what is absent: no endpoint returns task text, memory, credentials
 or any other customer content. That is the control — not an access
@@ -77,7 +77,7 @@ class PersonRow(BaseModel):
 class AuditEntry(BaseModel):
     """One line of the diary.
 
-    Records who did what to which company. It never holds customer
+    Records who did what to which account. It never holds customer
     content, because no platform-admin action can read any.
     """
 
@@ -114,7 +114,7 @@ class ConnectionAccessRow(BaseModel):
 
 
 class SetConnectionAccessRequest(BaseModel):
-    # None clears the ruling and returns the company to the platform
+    # None clears the ruling and returns the person to the platform
     # default, which is not the same as allowing it outright.
     allowed: bool | None = None
     note: str | None = Field(default=None, max_length=300)
@@ -132,7 +132,7 @@ class SetOAuthAppEnabledRequest(BaseModel):
 
 
 class ProviderStatusRow(BaseModel):
-    """Whether a company has connected a provider. Nothing else.
+    """Whether a person has connected a provider. Nothing else.
 
     No key, not even masked, and no usage. A customer's API key is
     their money; being unable to read it is the point.
@@ -289,12 +289,12 @@ async def audit_log(
 @router.get(
     "/people/{owner_id}",
     response_model=PersonDetail,
-    summary="One company: counts and health only",
+    summary="One person: counts and health only",
 )
-async def company_detail(owner_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> PersonDetail:
+async def person_detail(owner_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> PersonDetail:
     """Deliberately thin.
 
-    There is no sibling endpoint that returns this company's tasks,
+    There is no sibling endpoint that returns this person's tasks,
     memories, emails or credentials, so support work is done by asking
     the customer to share what they see. That trade is the whole point:
     "we technically cannot read your data" is a promise worth keeping.
@@ -339,13 +339,13 @@ async def company_detail(owner_id: uuid.UUID, admin: AdminDep, session: SessionD
     summary="The Google and Microsoft apps behind one-click",
 )
 async def list_oauth_apps(admin: AdminDep, session: SessionDep) -> list[OAuthAppRow]:
-    """What a company's Connections page depends on.
+    """What everyone's Connections page depends on.
 
     Google and Microsoft issue one app registration per application,
     not per customer, so this is a platform-level setting: every
-    company signs in through the same app and grants it access to
+    person signs in through the same app and grants it access to
     their own mailbox. Until it is set here, the one-click buttons on
-    every company's Connections page are disabled, and nothing inside
+    everyone's Connections page are disabled, and nothing inside
     the product could previously turn them on.
     """
     return [OAuthAppRow(**asdict(app)) for app in await PlatformService(session).oauth_apps()]
@@ -413,14 +413,14 @@ def _one(apps: list[OAuthAppView], provider_key: str) -> OAuthAppRow:
 @router.get(
     "/people/{owner_id}/connections",
     response_model=list[ConnectionAccessRow],
-    summary="Which connections this company may use",
+    summary="Which connections this person may use",
 )
-async def company_connection_access(
+async def person_connection_access(
     owner_id: uuid.UUID, admin: AdminDep, session: SessionDep
 ) -> list[ConnectionAccessRow]:
     """Still counts and settings, never content.
 
-    This says whether Gmail is available to this company. It says
+    This says whether Gmail is available to this person. It says
     nothing about what is in anyone's inbox, and there is no endpoint
     here that would.
     """
@@ -435,9 +435,9 @@ async def company_connection_access(
 @router.put(
     "/people/{owner_id}/connections/{kind}",
     response_model=list[ConnectionAccessRow],
-    summary="Open or close one connection for one company",
+    summary="Open or close one connection for one person",
 )
-async def set_company_connection_access(
+async def set_person_connection_access(
     owner_id: uuid.UUID,
     kind: str,
     body: SetConnectionAccessRequest,
@@ -467,8 +467,8 @@ class ServiceAccessRow(BaseModel):
     allowed: bool
 
 
-class CompanyServiceRow(ServiceAccessRow):
-    # True when this company has its own ruling rather than inheriting.
+class PersonServiceRow(ServiceAccessRow):
+    # True when this person has their own ruling rather than inheriting.
     overridden: bool
     note: str | None
 
@@ -477,8 +477,8 @@ class SetServiceAccessRequest(BaseModel):
     allowed: bool
 
 
-class SetCompanyServiceRequest(BaseModel):
-    # None removes the company's ruling so it inherits the platform's.
+class SetPersonServiceRequest(BaseModel):
+    # None removes the person's ruling so it inherits the platform's.
     allowed: bool | None = None
     note: str | None = Field(default=None, max_length=300)
 
@@ -514,33 +514,33 @@ async def set_service_access(
 
 @router.get(
     "/people/{owner_id}/services",
-    response_model=list[CompanyServiceRow],
-    summary="Which parts of each app this company may use",
+    response_model=list[PersonServiceRow],
+    summary="Which parts of each app this person may use",
 )
-async def company_services(
+async def person_services(
     owner_id: uuid.UUID, admin: AdminDep, session: SessionDep
-) -> list[CompanyServiceRow]:
+) -> list[PersonServiceRow]:
     return [
-        CompanyServiceRow(**asdict(r))
-        for r in await PlatformService(session).company_services(owner_id)
+        PersonServiceRow(**asdict(r))
+        for r in await PlatformService(session).person_services(owner_id)
     ]
 
 
 @router.put(
     "/people/{owner_id}/services/{service}/{level}",
-    response_model=list[CompanyServiceRow],
-    summary="Allow or block one part of an app for one company",
+    response_model=list[PersonServiceRow],
+    summary="Allow or block one part of an app for one person",
 )
-async def set_company_service(
+async def set_person_service(
     owner_id: uuid.UUID,
     service: str,
     level: str,
-    body: SetCompanyServiceRequest,
+    body: SetPersonServiceRequest,
     admin: AdminDep,
     session: SessionDep,
-) -> list[CompanyServiceRow]:
+) -> list[PersonServiceRow]:
     platform = PlatformService(session)
-    await platform.set_company_service(
+    await platform.set_person_service(
         admin_id=admin.id,
         owner_id=owner_id,
         service=service,
@@ -549,7 +549,7 @@ async def set_company_service(
         note=body.note,
     )
     await session.commit()
-    return [CompanyServiceRow(**asdict(r)) for r in await platform.company_services(owner_id)]
+    return [PersonServiceRow(**asdict(r)) for r in await platform.person_services(owner_id)]
 
 
 # --------------------------------------------------- the AI provider catalog

@@ -3,10 +3,10 @@
 Two channels:
 
 - **Email** through the platform's SMTP server, to the people concerned:
-  the company's admins when an approval is waiting, the person who
-  assigned the task when it ends. Each admin's email carries their own
-  signed approval link, so they can decide from their inbox.
-- **Slack** through an incoming webhook the company pastes in. Its
+  the account's owner when an approval is waiting or a run ends. The
+  email carries their own signed approval link, so they can decide
+  from their inbox.
+- **Slack** through an incoming webhook the person pastes in. Its
   buttons open the same approval page, which asks whoever clicks to
   sign in, because a channel is shared and a link in it must not act
   on its own.
@@ -257,7 +257,7 @@ class NotificationService:
             try:
                 await send_email(user.email, message.subject, message.text(), message.html())
                 result["email"] = f"sent to {user.email}"
-            except Exception as exc:  # noqa: BLE001 - reported back to the admin
+            except Exception as exc:  # noqa: BLE001 - reported back to the person
                 result["email"] = f"failed: {exc}"
 
         webhook = self._webhook(row)
@@ -267,7 +267,7 @@ class NotificationService:
             try:
                 await post_slack(webhook, message.slack())
                 result["slack"] = "sent"
-            except Exception as exc:  # noqa: BLE001 - reported back to the admin
+            except Exception as exc:  # noqa: BLE001 - reported back to the person
                 result["slack"] = f"failed: {exc}"
         return result
 
@@ -287,8 +287,8 @@ class NotificationService:
         detail = json.dumps(approval.proposed, indent=2, default=str)[:1500]
 
         if row.email_enabled and get_settings().email_notifications_available:
-            for admin in await self._admins():
-                token = approval_link_token(approval, admin.id)
+            for person in await self._recipients():
+                token = approval_link_token(approval, person.id)
                 link = _app_url(f"/approve/{token}")
                 personal = Message(
                     subject=subject,
@@ -300,7 +300,7 @@ class NotificationService:
                         ("Open in app", _app_url("/approvals"), ""),
                     ],
                 )
-                await self._try_email(admin.email, personal)
+                await self._try_email(person.email, personal)
 
         webhook = self._webhook(row)
         if webhook:
@@ -329,9 +329,9 @@ class NotificationService:
         buttons = [("Open AI Agents", _app_url("/agents"), "primary")]
 
         if row.email_enabled and get_settings().email_notifications_available:
-            for admin in await self._admins():
+            for person in await self._recipients():
                 await self._try_email(
-                    admin.email, Message(subject=subject, lines=lines, buttons=buttons)
+                    person.email, Message(subject=subject, lines=lines, buttons=buttons)
                 )
         webhook = self._webhook(row)
         if webhook:
@@ -343,7 +343,7 @@ class NotificationService:
         run = await self.session.get(Run, run_id)
         return await self.session.get(Task, run.task_id) if run else None
 
-    async def _admins(self) -> list[User]:
+    async def _recipients(self) -> list[User]:
         """Who to tell. On a personal account that is one person: the
         owner of the work, provided their account is still active."""
         user = await self.session.get(User, self.owner_id)

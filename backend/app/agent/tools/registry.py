@@ -15,7 +15,7 @@ from __future__ import annotations
 from app.agent.tools.base import SideEffect, Tool
 
 # Actions nobody may enable, not even by changing their own policy.
-# Deliberately tiny, and each entry carries its reason. A company that
+# Deliberately tiny, and each entry carries its reason. A person who
 # sets "delete repository" to automatic and loses a repository will
 # contact us, not themselves, so the reputational cost lands here
 # either way.

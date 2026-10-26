@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import re
 import time
-import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -496,7 +495,3 @@ def deserialise(state: dict[str, Any]) -> list[Message]:
         )
         for m in state.get("messages", [])
     ]
-
-
-def new_run_id() -> uuid.UUID:
-    return uuid.uuid4()

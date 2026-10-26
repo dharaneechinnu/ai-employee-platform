@@ -16,7 +16,7 @@ import {
   statusTone,
   useToast,
 } from "../components/ui";
-import { ApiError, type CompanyServiceRow, type Person, type ServiceAccessRow } from "../lib/api";
+import { ApiError, type PersonServiceRow, type Person, type ServiceAccessRow } from "../lib/api";
 import { AuthStage } from "./Login";
 
 /**
@@ -678,7 +678,7 @@ function PersonPanel({
         )}
       </div>
 
-      <CompanyServices personId={detail.id} />
+      <PersonServices personId={detail.id} />
 
       <p className="flex items-center gap-2 border-t border-line pt-3 text-[13px] text-dim">
         <Icon name="lock" size={14} className="text-accent-text" />
@@ -776,25 +776,25 @@ function ServiceAccess() {
 }
 
 /** One person's rulings on those same parts: their own, or inherited. */
-function CompanyServices({ personId }: { personId: string }) {
+function PersonServices({ personId }: { personId: string }) {
   const toast = useToast();
-  const [rows, setRows] = useState<CompanyServiceRow[] | null>(null);
+  const [rows, setRows] = useState<PersonServiceRow[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     setRows(null);
-    void call<CompanyServiceRow[]>(`/people/${personId}/services`)
+    void call<PersonServiceRow[]>(`/people/${personId}/services`)
       .then(setRows)
       .catch(() => toast("Could not load this person's service access.", "bad"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personId]);
 
-  async function set(row: CompanyServiceRow, allowed: boolean | null) {
+  async function set(row: PersonServiceRow, allowed: boolean | null) {
     const key = `${row.service}:${row.level}`;
     setBusy(key);
     try {
       setRows(
-        await call<CompanyServiceRow[]>(
+        await call<PersonServiceRow[]>(
           `/people/${personId}/services/${row.service}/${row.level}`,
           {
             allowed,

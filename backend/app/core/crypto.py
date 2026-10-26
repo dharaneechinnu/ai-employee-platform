@@ -3,17 +3,16 @@
 Used for customer API keys, OAuth client secrets and connection
 credentials.
 
-    master key (env)  ->  wraps  ->  per-company data key  ->  encrypts  ->  secret
+    master key (env)  ->  wraps  ->  per-person data key  ->  encrypts  ->  secret
 
-Per-company keys mean breaking one company does not expose the others.
-The company id is passed as AES-GCM associated data, so a ciphertext
-cannot be moved between companies — decryption fails rather than
+Per-person keys mean breaking one account does not expose the others.
+The owner id is passed as AES-GCM associated data, so a ciphertext
+cannot be moved between accounts — decryption fails rather than
 silently succeeding with someone else's secret.
 """
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import os
 import uuid
@@ -33,7 +32,7 @@ def _master_key() -> bytes:
 
 
 def _derive_key(scope: str) -> bytes:
-    """A distinct key per scope (a company id, or "platform").
+    """A distinct key per scope (an owner id, or "platform").
 
     HKDF would be the textbook choice; SHA-256 over master + scope is
     sufficient here and keeps the dependency surface small.
@@ -67,14 +66,3 @@ def decrypt(blob: bytes, *, scope: str | uuid.UUID = "platform") -> str:
     except InvalidTag as exc:
         raise SecretUnreadableError() from exc
     return plaintext.decode()
-
-
-def mask(secret: str) -> str:
-    """What a stored secret looks like in an API response: never the value."""
-    return f"{'•' * 6}{secret[-4:]}" if len(secret) >= 4 else "•" * 6
-
-
-def fingerprint(secret: str) -> str:
-    """A short non-reversible id, so two keys can be told apart in logs
-    without the logs containing either of them."""
-    return base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())[:8].decode()

@@ -110,9 +110,7 @@ async def get_task(task_id: uuid.UUID, ctx: ContextDep, session: SessionDep) -> 
 async def cancel_task(task_id: uuid.UUID, ctx: ContextDep, session: SessionDep) -> TaskResponse:
     service = TaskService(session, ctx.owner_id)
     # `get` is what enforces ownership: it returns None, and so 404s,
-    # for a task belonging to anybody else. The role check that used
-    # to follow told a member from an admin, and there is no such
-    # distinction on a personal account.
+    # for a task belonging to anybody else.
     await service.get(task_id)
 
     task = await service.request_cancel(task_id)

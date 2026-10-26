@@ -1,4 +1,4 @@
-"""Authentication: invite acceptance, login, and refresh-token rotation.
+"""Authentication: account setup, login, and refresh-token rotation.
 
 The interesting part is rotation. Every refresh issues a new token and
 revokes the old one, and every token descended from one login shares a

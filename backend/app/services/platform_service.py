@@ -1,4 +1,4 @@
-"""Platform Admin operations: creating and governing companies.
+"""Platform Admin operations: creating and governing personal accounts.
 
 The boundary that matters: nothing here reads customer content. A
 Platform Admin sees how many and how healthy, never what. There is no
@@ -58,15 +58,15 @@ class OAuthAppView:
 
 @dataclass(slots=True)
 class ConnectionAccessView:
-    """One connection, as it stands for one company."""
+    """One connection, as it stands for one person."""
 
     kind: str
     display_name: str
     # True when the platform has this connection working at all. A
-    # company cannot be granted something nobody has registered.
+    # person cannot be granted something nobody has registered.
     platform_ready: bool
     allowed: bool
-    # False when no ruling exists and the company simply inherits.
+    # False when no ruling exists and the person simply inherits.
     overridden: bool
     note: str | None
 
@@ -99,7 +99,7 @@ class PlatformService:
 
         Second-factor was removed on request. Worth being plain about
         what that costs: this account can create and suspend every
-        company on the platform, so a single leaked or guessed password
+        account on the platform, so a single leaked or guessed password
         is now enough to reach all of them. The compensating controls
         are what remain — the separate token type, the append-only
         audit log, and the fact that no platform endpoint returns
@@ -122,7 +122,7 @@ class PlatformService:
             token_type="platform_access",  # noqa: S106 - a token kind, not a secret
         )
 
-    # ------------------------------------------------------------- companies
+    # ------------------------------------------------------------- accounts
 
     async def create_person(
         self,
@@ -154,11 +154,12 @@ class PlatformService:
         self.session.add(user)
         await self.session.flush()
 
+        expiry = timedelta(hours=self.settings.setup_link_expiry_hours)
         self.session.add(
             SetupToken(
                 user_id=user.id,
                 token_hash=hash_token(raw_token),
-                expires_at=datetime.now(UTC) + timedelta(hours=self.settings.invite_expiry_hours),
+                expires_at=datetime.now(UTC) + expiry,
             )
         )
 
@@ -259,8 +260,8 @@ class PlatformService:
             select(PlatformOAuthApp).where(PlatformOAuthApp.provider == kind)
         )
 
-        # Encrypted under the platform scope, not a company's: the app
-        # belongs to the platform, and every company signs in through it.
+        # Encrypted under the platform scope, not a person's: the app
+        # belongs to the platform, and everyone signs in through it.
         ciphertext = encrypt(client_secret, scope="platform")
         last4 = client_secret[-4:] if len(client_secret) >= 4 else "????"
 
@@ -331,7 +332,7 @@ class PlatformService:
             raise NotFoundError(f"No OAuth app is registered for '{provider_key}'.")
         return app
 
-    # --- which connections a company may use --------------------------
+    # --- which connections a person may use ---------------------------
 
     async def connection_access(self, owner_id: uuid.UUID) -> list[ConnectionAccessView]:
         from app.services.connection_service import CATALOGUE
@@ -375,9 +376,9 @@ class PlatformService:
         allowed: bool | None,
         note: str | None = None,
     ) -> None:
-        """Open or close one connection for one company.
+        """Open or close one connection for one person.
 
-        `allowed=None` removes the ruling and returns the company to
+        `allowed=None` removes the ruling and returns the person to
         inheriting the platform default, which is a different state
         from "allowed" and worth being able to get back to.
         """
@@ -458,21 +459,21 @@ class PlatformService:
             detail=f"{service}:{level}",
         )
 
-    async def company_services(self, owner_id: uuid.UUID) -> list[CompanyServiceView]:
-        """Per service and level: what this company gets, and whether that
-        is its own ruling or inherited from the platform."""
+    async def person_services(self, owner_id: uuid.UUID) -> list[PersonServiceView]:
+        """Per service and level: what this person gets, and whether that
+        is their own ruling or inherited from the platform."""
         await self._person(owner_id)
         rules = ServiceAccessService(self.session, owner_id)
         snapshot = await rules.snapshot()
-        out: list[CompanyServiceView] = []
+        out: list[PersonServiceView] = []
         for sid, svc in SERVICES.items():
             for level in LEVELS:
                 if level == EDIT and not svc.has_edit:
                     continue
-                own = snapshot.company.get((sid, level))
+                own = snapshot.person.get((sid, level))
                 decision = snapshot.decide(sid, level)
                 out.append(
-                    CompanyServiceView(
+                    PersonServiceView(
                         service=sid,
                         app=svc.app,
                         name=svc.name,
@@ -484,7 +485,7 @@ class PlatformService:
                 )
         return out
 
-    async def set_company_service(
+    async def set_person_service(
         self,
         *,
         admin_id: uuid.UUID,
@@ -494,10 +495,10 @@ class PlatformService:
         allowed: bool | None,
         note: str | None = None,
     ) -> None:
-        """`allowed=None` removes the company's ruling, so it inherits the
+        """`allowed=None` removes the person's ruling, so they inherit the
         platform's again."""
         await self._person(owner_id)
-        await ServiceAccessService(self.session, owner_id).set_company(
+        await ServiceAccessService(self.session, owner_id).set_person(
             owner_id, service, level, allowed, note=note, admin_id=admin_id
         )
         self.admins.record_audit(
@@ -525,7 +526,7 @@ class ServiceAccessView:
 
 
 @dataclass(slots=True)
-class CompanyServiceView:
+class PersonServiceView:
     service: str
     app: str
     name: str

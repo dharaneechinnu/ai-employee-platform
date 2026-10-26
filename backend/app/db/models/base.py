@@ -13,7 +13,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 class Base(DeclarativeBase):
     """All models inherit from this.
 
-    The tenant-isolation test (tests/isolation/) walks every mapper
+    The owner-scoping test (tests/isolation/) walks every mapper
     registered here and fails if a table is missing ``owner_id`` and is not
     on the explicit global-table whitelist.
     """

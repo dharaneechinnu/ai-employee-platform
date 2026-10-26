@@ -1,7 +1,7 @@
 """BYOK provider routes.
 
 Note what is missing: there is no endpoint that returns an API key.
-Not a masked one, not to the company that set it, not to the Platform
+Not a masked one, not to the person who set it, not to the Platform
 Admin. `key_last4` exists so the UI can show which key is in place
 without the value ever leaving the database.
 """
@@ -202,7 +202,7 @@ async def disconnect(provider_key: str, ctx: ContextDep, session: SessionDep) ->
 
 @router.get("/models", response_model=list[ModelChoice], summary="Models we can pick")
 async def models(ctx: ContextDep, session: SessionDep) -> list[ModelChoice]:
-    """Only models from providers this company has actually connected,
+    """Only models from providers this person has actually connected,
     so the dropdown cannot offer something that will fail at run time."""
     return [
         ModelChoice(**choice)

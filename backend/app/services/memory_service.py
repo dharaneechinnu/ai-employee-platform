@@ -28,7 +28,7 @@ from app.db.models.memory import (
 log = get_logger(__name__)
 
 # Meaning search alone misses exact strings: an error code or a file
-# name is what a DevOps employee searches for most, and a vector model
+# name is what a DevOps agent searches for most, and a vector model
 # is poor at those. Keyword search alone misses paraphrase. Both,
 # merged, beats either.
 VECTOR_WEIGHT = 0.7
@@ -53,7 +53,7 @@ class MemoryService:
         config = await self.session.get(EmbeddingConfig, self.owner_id)
         if config is None:
             # Local by default: free, no key, no rate limit, and no
-            # company document leaves the server.
+            # document of yours leaves the server.
             spec = AVAILABLE_MODELS[DEFAULT_PROVIDER]
             config = EmbeddingConfig(
                 owner_id=self.owner_id,

@@ -1,4 +1,4 @@
-"""Notification settings: where a company hears about its runs."""
+"""Notification settings: where a person hears about their runs."""
 
 from __future__ import annotations
 

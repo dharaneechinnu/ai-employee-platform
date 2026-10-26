@@ -9,30 +9,12 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 # Long enough to resist guessing, short enough not to push people toward
 # writing it down. Length beats composition rules, so there are none.
 MIN_PASSWORD_LENGTH = 12
 MAX_PASSWORD_LENGTH = 200
-
-
-class _PasswordMixin(BaseModel):
-    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
-
-    @field_validator("password")
-    @classmethod
-    def _not_entirely_whitespace(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("password cannot be only whitespace")
-        return v
-
-
-class AcceptInviteRequest(_PasswordMixin):
-    """The only way an account is created — there is no public sign-up."""
-
-    token: str = Field(min_length=10, max_length=200)
-    full_name: str | None = Field(default=None, max_length=200)
 
 
 class LoginRequest(BaseModel):
@@ -61,5 +43,5 @@ class SetupRequest(BaseModel):
     """Setting a password from the link the Platform Admin sent."""
 
     token: str = Field(min_length=10, max_length=200)
-    password: str = Field(min_length=12, max_length=200)
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)
     full_name: str | None = Field(default=None, max_length=200)

@@ -6,7 +6,7 @@ behind it, and a broken link found at 2am helps nobody. So for the
 tools an agent needs, this walks the chain and reports every link:
 
 - is the app connected, switched on and working?
-- has the platform (or this company's ruling) allowed the part of the
+- has the platform (or its ruling for this person) allowed the part of the
   app it needs, for reading and for editing?
 - did the person grant that permission when they connected?
 - does the person's Permissions page let the tool run?
@@ -95,7 +95,7 @@ class ReadinessService:
     ) -> Readiness:
         resolver = await PolicyService(self.session, self.owner_id).resolver()
         access = await ServiceAccessService(self.session, self.owner_id).snapshot()
-        company_closed = {
+        closed_for_you = {
             r.kind.value: r
             for r in (
                 await self.session.scalars(
@@ -130,7 +130,7 @@ class ReadinessService:
                 app,
                 [t for t in tools if t.requires_connection == app],
                 connections.get(app),
-                company_closed.get(app),
+                closed_for_you.get(app),
                 access,
             )
 
@@ -299,7 +299,7 @@ class ReadinessService:
             what = f"{service.name} {'editing' if level == EDIT else 'reading'}"
             decision = access.decide(sid, level)  # type: ignore[attr-defined]
             if not decision.allowed:
-                who = "your company's setup" if decision.source == "company" else "the platform"
+                who = "your account's setup" if decision.source == "person" else "the platform"
                 checks.append(
                     Check(
                         False,

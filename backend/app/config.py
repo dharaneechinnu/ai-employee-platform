@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 15
     refresh_token_days: int = 30
-    invite_expiry_hours: int = 72
+    # How long the account setup link from the Platform Admin works.
+    setup_link_expiry_hours: int = 72
 
     # Master key for envelope encryption of secrets at rest.
     encryption_key: str = DEV_ENCRYPTION_KEY
@@ -55,7 +56,7 @@ class Settings(BaseSettings):
     public_app_url: str = "http://localhost:5173"
     public_api_url: str = "http://localhost:8000"
 
-    # Lets a company's own AI server or MCP tool server live on a
+    # Lets a person's own AI server or MCP tool server live on a
     # private address or plain http. Local development only: in
     # production it would let anyone make our servers call internal
     # addresses.
@@ -63,8 +64,8 @@ class Settings(BaseSettings):
 
     # --- one-click connections (OAuth) -------------------------------
     # Register one OAuth app per provider for the whole platform. Each
-    # company then connects its own account through it; tokens are
-    # stored per company, encrypted like provider keys.
+    # person then connects their own account through it; tokens are
+    # stored per person, encrypted like provider keys.
     google_client_id: str | None = None
     google_client_secret: str | None = None
     microsoft_client_id: str | None = None

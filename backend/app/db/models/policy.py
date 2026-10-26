@@ -1,12 +1,12 @@
 """Permission policy, approvals, connections and run checkpoints.
 
 The policy model in one line: the Platform Admin sets the **default**
-for each action; a company may override it in either direction, looser
+for each action; a person may override it in either direction, looser
 or stricter. Only the catastrophic blocklist is fixed.
 
 That split is deliberate. It is their repo, their email and their data,
-so a company that understands its own risk should be able to say "we
-trust this, stop asking". The blocklist stays because a company that
+so a person who understands their own risk should be able to say "we
+trust this, stop asking". The blocklist stays because a person who
 sets "delete repository" to automatic and loses a repository contacts
 us, not themselves.
 """
@@ -69,7 +69,7 @@ class PolicyDefault(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 
 class Policy(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """One company's override of a default."""
+    """One person's override of a default."""
 
     __tablename__ = "policies"
 
@@ -163,7 +163,7 @@ class ConnectionKind(StrEnum):
 
 
 class Connection(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """One company's link to one outside app.
+    """One person's link to one outside app.
 
     Same handling as provider keys: encrypted, write-only, never
     returned by any endpoint, and never placed in the model's context.

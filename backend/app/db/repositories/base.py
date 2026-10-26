@@ -4,7 +4,7 @@ Every query in the application goes through a repository. No route and no
 service builds a `select()` itself.
 
 The reason is `owner_id`. Filtering happens in exactly one place here, so
-"can company A read company B's data?" is a single-file audit rather than
+"can person A read person B's data?" is a single-file audit rather than
 a review of every query in the codebase.
 """
 
@@ -21,7 +21,7 @@ from app.db.models.base import Base
 
 
 class BaseRepository[ModelT: Base]:
-    """For tables that are not tenant-scoped (users, platform admins)."""
+    """For tables that are not owner-scoped (users, platform admins)."""
 
     model: type[ModelT]
 
@@ -49,11 +49,9 @@ class OwnerScopedRepository[ModelT: Base](BaseRepository[ModelT]):
     - `create()` sets `owner_id` itself, so a caller cannot pass
       someone else's id even by accident.
 
-    The shape outlived the company concept on purpose. One scope
-    column on every table, filtered in one place, is what keeps "can
-    one person read another's data?" a single-file audit rather than a
-    sweep of every query — as true for individuals as it was for
-    companies.
+    One scope column on every table, filtered in one place, is what
+    keeps "can one person read another's data?" a single-file audit
+    rather than a sweep of every query.
     """
 
     def __init__(self, session: AsyncSession, owner_id: uuid.UUID) -> None:

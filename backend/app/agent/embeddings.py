@@ -5,7 +5,7 @@ memory, every document chunk and every search goes through one. On a
 paid API that becomes the largest line on the bill, so the default is
 a local model that costs nothing and has no rate limit.
 
-API providers are offered for companies that prefer them, using the
+API providers are offered for people who prefer them, using the
 same bring-your-own-key pattern as the LLM providers.
 """
 
@@ -116,7 +116,7 @@ class LocalEmbeddingProvider(EmbeddingProvider):
 
 
 class APIEmbeddingProvider(EmbeddingProvider):
-    """Gemini, OpenAI or Jina, using the company's own key."""
+    """Gemini, OpenAI or Jina, using the person's own key."""
 
     def __init__(self, provider_key: str, api_key: str, model: str, dim: int) -> None:
         self.provider_key = provider_key

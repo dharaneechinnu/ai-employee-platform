@@ -1,11 +1,11 @@
 """BYOK provider configuration.
 
-Each company brings its own API key. That is what makes the platform
+Each person brings their own API key. That is what makes the platform
 viable on no budget: cost per customer is zero, and one heavy customer
 cannot inflate anyone else's bill.
 
 The key is write-only. After it is saved there is no code path that
-returns the plaintext to any caller — not the company that set it, and
+returns the plaintext to any caller — not the person who set it, and
 not the Platform Admin. `resolve_api_key` is the single exception, and
 it is called only by the worker, immediately before a provider call.
 """
@@ -53,7 +53,7 @@ from app.db.models.provider import (
 
 log = get_logger(__name__)
 
-# "Use whichever AI the company connected." `gemini-flash` is the old
+# "Use whichever AI the person connected." `gemini-flash` is the old
 # default, which was never a real Gemini model id, so it is treated the
 # same way rather than sent to Google and rejected.
 AUTO_MODEL = "auto"
@@ -119,9 +119,9 @@ class ConnectedProvider:
     last_tested_at: datetime | None
     last_error: str | None
     trains_on_data: bool
-    # What runs: the company's chosen model, else the provider's default.
+    # What runs: the person's chosen model, else the provider's default.
     default_model: str | None
-    # True when the company picked it, rather than taking the default.
+    # True when the person picked it, rather than taking the default.
     model_chosen: bool = False
     base_url: str | None = None
     # What Automatic routing sends to it, in plain words.
@@ -189,7 +189,7 @@ class ProviderService:
         model = (model or "").strip() or None
 
         if provider_key == CUSTOM_PROVIDER:
-            # Any OpenAI-compatible server: the company says where it is
+            # Any OpenAI-compatible server: the person says where it is
             # and which model it serves. A key is optional, because a
             # self-hosted server often has none.
             if not base_url:
@@ -394,33 +394,6 @@ class ProviderService:
             raise NotFoundError(f"'{provider_key}' is not connected.")
         return config
 
-    async def resolve_model(self, configured: str) -> tuple[str, str]:
-        """The provider and model a run should use.
-
-        An explicit "provider:model" is used as it is. "auto" picks the
-        company's connected provider (a working one first) and that
-        provider's default model, so a new company that connected only
-        Groq does not fail on a Gemini default it never set up.
-        """
-        if configured.strip() not in _AUTO_ALIASES:
-            return split_model(configured)
-
-        candidates = [c for c in await self.connected() if c.default_model]
-        if not candidates:
-            raise NotFoundError("No AI provider is connected.")
-
-        def rank(c: ConnectedProvider) -> tuple[int, int]:
-            failed = 1 if c.status is ConnectionStatus.FAILED else 0
-            order = (
-                _AUTO_PREFERENCE.index(c.provider_key)
-                if c.provider_key in _AUTO_PREFERENCE
-                else len(_AUTO_PREFERENCE)
-            )
-            return failed, order
-
-        best = min(candidates, key=rank)
-        return best.provider_key, best.default_model or ""
-
     async def candidates(self) -> list[Candidate]:
         """Every connected AI, with the model this person picked for it."""
         return [
@@ -500,7 +473,7 @@ class ProviderService:
         ]
 
     async def model_choices(self) -> list[dict[str, object]]:
-        """Models this company can actually pick, which means only the
+        """Models this person can actually pick, which means only the
         providers they have connected."""
         return [
             {

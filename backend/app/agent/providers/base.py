@@ -161,7 +161,7 @@ class ProviderModelNotFoundError(LLMError):
 
 
 class LLMProvider(ABC):
-    """One vendor. Constructed with the company's own API key."""
+    """One vendor. Constructed with the person's own API key."""
 
     provider_key: str
 
@@ -184,7 +184,7 @@ class LLMProvider(ABC):
         """Model ids this key can use, for the model picker.
 
         Optional: an adapter that cannot list returns nothing, and the
-        company types a model name instead.
+        person types a model name instead.
         """
         return []
 
