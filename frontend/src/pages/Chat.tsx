@@ -194,11 +194,43 @@ export default function Chat() {
     await api.post(`/me/tasks/${conversation.turn.task_id}/cancel`).catch(() => undefined);
   }
 
-  async function remove(item: ConversationItem) {
-    await api.del(`/me/conversations/${item.id}`);
-    if (item.id === id) navigate("/chat");
-    void loadList();
+  // A deleted conversation leaves the list at once but is only deleted
+  // on the server after the Undo toast has gone. A list refresh in that
+  // window must not bring it back, so it is hidden by id.
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const UNDO_MS = 5000;
+
+  function unhide(cid: string) {
+    setHidden((current) => {
+      const next = new Set(current);
+      next.delete(cid);
+      return next;
+    });
   }
+
+  function remove(item: ConversationItem) {
+    setHidden((current) => new Set(current).add(item.id));
+    if (item.id === id) navigate("/chat");
+    const timer = window.setTimeout(() => {
+      void api
+        .del(`/me/conversations/${item.id}`)
+        .catch(() => toast("Could not delete that conversation.", "bad"))
+        .finally(() => {
+          unhide(item.id);
+          void loadList();
+        });
+    }, UNDO_MS);
+    toast(`Deleted "${item.title}".`, "info", {
+      label: "Undo",
+      ms: UNDO_MS,
+      onClick: () => {
+        window.clearTimeout(timer);
+        unhide(item.id);
+      },
+    });
+  }
+
+  const visible = list.filter((item) => !hidden.has(item.id));
 
   const onTurnSettled = useCallback(() => {
     if (id) void loadConversation(id);
@@ -223,8 +255,8 @@ export default function Chat() {
           New chat
         </Button>
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pr-1">
-          {list.length === 0 && <p className="px-2 py-3 text-[13px] text-dim">Your conversations appear here.</p>}
-          {list.map((item) => (
+          {visible.length === 0 && <p className="px-2 py-3 text-[13px] text-dim">Your conversations appear here.</p>}
+          {visible.map((item) => (
             <div key={item.id} className={`chat-item group ${item.id === id ? "on" : ""}`}>
               <Link to={`/chat/${item.id}`} className="flex min-w-0 flex-1 items-center gap-2.5">
                 <Icon name={MODE_ICON[item.mode]} size={15} className="shrink-0 text-dim" />
@@ -240,7 +272,7 @@ export default function Chat() {
                 type="button"
                 className="chat-item-del"
                 aria-label={`Delete ${item.title}`}
-                onClick={() => void remove(item)}
+                onClick={() => remove(item)}
               >
                 <Icon name="x" size={14} />
               </button>

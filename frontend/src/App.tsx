@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import Layout from "./components/Layout";
 import { Spinner } from "./components/ui";
@@ -15,6 +16,10 @@ import Product from "./pages/Product";
 import Providers from "./pages/Providers";
 import Agents from "./pages/Agents";
 import Chat from "./pages/Chat";
+import Usage from "./pages/Usage";
+
+/** The promo film stage is a recording tool, so it only exists in development. */
+const FILM = import.meta.env.DEV ? <FilmStage /> : <Navigate to="/" replace />;
 
 /** After signing in, go where the person was heading (an approval
  * link, say), but only to a path inside this app. */
@@ -37,7 +42,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Product />} />
         <Route path="/product" element={<Product />} />
-        <Route path="/film" element={<FilmStage />} />
+        <Route path="/film" element={FILM} />
         <Route path="/platform" element={<PlatformAdmin />} />
         <Route path="/approve/:token" element={<ApproveLink />} />
         <Route path="/login" element={<Login />} />
@@ -52,7 +57,7 @@ export default function App() {
       <Route path="/platform" element={<PlatformAdmin />} />
       <Route path="/approve/:token" element={<ApproveLink />} />
       <Route path="/product" element={<Product />} />
-      <Route path="/film" element={<FilmStage />} />
+      <Route path="/film" element={FILM} />
       <Route path="/login" element={<AfterSignIn />} />
       <Route element={<Layout />}>
         <Route path="/connections" element={<Connections />} />
@@ -64,6 +69,7 @@ export default function App() {
         <Route path="/tasks" element={<Navigate to="/chat" replace />} />
         <Route path="/employees" element={<Navigate to="/chat" replace />} />
         <Route path="/memory" element={<Memory />} />
+        <Route path="/usage" element={<Usage />} />
                 <Route
           path="/approvals"
           element={

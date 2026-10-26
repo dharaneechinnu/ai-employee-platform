@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AgentTree from "../components/agents/AgentTree";
-import FlowCost from "../components/agents/FlowCost";
 import ReadinessList from "../components/agents/ReadinessList";
 import ScheduleEditor from "../components/agents/ScheduleEditor";
 import StarterSetup from "../components/agents/StarterSetup";
@@ -35,13 +34,13 @@ import {
   type RunNowResult,
 } from "../lib/api";
 
-type Tab = "agents" | "tree" | "flow";
+type Tab = "agents" | "tree";
 
 const START_A_REQUEST = "I want an agent that ";
 
 /**
- * AI Agents: manage the helpers you have made, see how they work
- * together and what they cost. Agents are made in Chat, by describing
+ * AI Agents: manage the helpers you have made and see how they work
+ * together. What they cost is on Usage. Agents are made in Chat, by describing
  * one; this is where they are scheduled, run, paused and edited.
  */
 export default function Agents() {
@@ -99,6 +98,9 @@ export default function Agents() {
   return (
     <>
       <PageHeader title="AI Agents">
+        <Link to="/usage" className="btn btn-sm btn-ghost">
+          See usage
+        </Link>
         <Button icon="plus" size="sm" onClick={describeInChat}>
           New agent in Chat
         </Button>
@@ -111,7 +113,6 @@ export default function Agents() {
           items={[
             { key: "agents", label: "My agents", count: data?.agents.length },
             { key: "tree", label: "Agent tree" },
-            { key: "flow", label: "Flow and cost" },
           ]}
         />
         <ErrorNote message={error} />
@@ -208,8 +209,6 @@ export default function Agents() {
             }}
           />
         )}
-
-        {data && tab === "flow" && <FlowCost runs={data.recent_runs} agents={data.agents} />}
       </PageBody>
     </>
   );

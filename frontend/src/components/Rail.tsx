@@ -37,22 +37,23 @@ interface RailItem {
   to: string;
   label: string;
   icon: IconName;
-  adminOnly: boolean;
   /** Starts a new visual group above this item. */
   startsGroup?: boolean;
 }
 
+// One person owns everything, so every item is shown to everyone.
 const ITEMS: RailItem[] = [
-  { to: "/chat", label: "Chat", icon: "chat", adminOnly: false },
-  { to: "/agents", label: "AI Agents", icon: "employees", adminOnly: false },
-  { to: "/approvals", label: "Approvals", icon: "approvals", adminOnly: true },
+  { to: "/chat", label: "Chat", icon: "chat" },
+  { to: "/agents", label: "AI Agents", icon: "employees" },
+  { to: "/approvals", label: "Approvals", icon: "approvals" },
 
-  { to: "/memory", label: "Memory", icon: "memory", adminOnly: false, startsGroup: true },
+  { to: "/memory", label: "Memory", icon: "memory", startsGroup: true },
+  { to: "/usage", label: "Usage", icon: "tasks" },
 
-  { to: "/connections", label: "Connections", icon: "link", adminOnly: true, startsGroup: true },
-  { to: "/providers", label: "AI Providers", icon: "providers", adminOnly: true },
-  { to: "/policies", label: "Permissions", icon: "lock", adminOnly: true },
-  { to: "/notifications", label: "Notifications", icon: "bell", adminOnly: true },
+  { to: "/connections", label: "Connections", icon: "link", startsGroup: true },
+  { to: "/providers", label: "AI keys", icon: "providers" },
+  { to: "/policies", label: "Permissions", icon: "lock" },
+  { to: "/notifications", label: "Notifications", icon: "bell" },
 ];
 
 export default function Rail({
@@ -75,7 +76,6 @@ export default function Rail({
   const moved = useRef(false);
 
   const horizontal = dock === "bottom";
-  const items = ITEMS.filter((item) => true || !item.adminOnly);
 
   const state: BrandState = waiting > 0 ? "waiting" : running > 0 ? "running" : "idle";
 
@@ -145,7 +145,7 @@ export default function Rail({
       )}
 
       <nav
-        aria-label="Workspace"
+        aria-label="Main menu"
         data-dock={dock}
         className={`rail ${dragging ? "is-dragging" : ""}`}
       >
@@ -157,7 +157,7 @@ export default function Rail({
             setMenuOpen(true);
           }}
           className="rail-grip"
-          aria-label="AI Employees — home. Drag to move this menu."
+          aria-label="Home. Drag to move this menu."
           title="Drag to move this menu"
         >
           <BrandMark size={horizontal ? 26 : 28} state={state} />
@@ -174,7 +174,7 @@ export default function Rail({
         </button>
 
         <div className="rail-items">
-          {items.map((item) => (
+          {ITEMS.map((item) => (
             <div key={item.to} className="contents">
               {item.startsGroup && <span className="rail-divider" aria-hidden="true" />}
               <NavLink

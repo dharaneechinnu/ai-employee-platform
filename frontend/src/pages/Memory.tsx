@@ -90,15 +90,39 @@ export default function Memory() {
     }
   }
 
-  async function forget(item: MemoryItem) {
-    try {
-      await api.del(`/me/memory/${item.id}`);
-      setItems((current) => current?.filter((m) => m.id !== item.id) ?? null);
-      setHits((current) => current?.filter((h) => h.id !== item.id) ?? null);
-      toast("Forgotten.", "info");
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Could not forget that.", "bad");
-    }
+  // A forgotten memory disappears at once, but is only deleted after the
+  // Undo toast has gone. Until then it is just hidden.
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  const UNDO_MS = 5000;
+
+  function unhide(mid: string) {
+    setHidden((current) => {
+      const next = new Set(current);
+      next.delete(mid);
+      return next;
+    });
+  }
+
+  function forget(item: MemoryItem) {
+    setHidden((current) => new Set(current).add(item.id));
+    const timer = window.setTimeout(() => {
+      api
+        .del(`/me/memory/${item.id}`)
+        .then(() => {
+          setItems((current) => current?.filter((m) => m.id !== item.id) ?? null);
+          setHits((current) => current?.filter((h) => h.id !== item.id) ?? null);
+        })
+        .catch((err) => toast(err instanceof ApiError ? err.message : "Could not forget that.", "bad"))
+        .finally(() => unhide(item.id));
+    }, UNDO_MS);
+    toast("Forgotten.", "info", {
+      label: "Undo",
+      ms: UNDO_MS,
+      onClick: () => {
+        window.clearTimeout(timer);
+        unhide(item.id);
+      },
+    });
   }
 
   async function reembed() {
@@ -108,12 +132,13 @@ export default function Memory() {
     await load();
   }
 
-  const visible = items ?? [];
+  const visible = (items ?? []).filter((m) => !hidden.has(m.id));
+  const shownHits = hits?.filter((h) => !hidden.has(h.id)) ?? null;
 
   if (!items || !config) {
     return (
       <>
-        <PageHeader crumb="Team" title="Memory" />
+        <PageHeader title="Memory" />
         <Spinner />
       </>
     );
@@ -123,7 +148,7 @@ export default function Memory() {
 
   return (
     <>
-      <PageHeader crumb="Team" title="Memory" />
+      <PageHeader title="Memory" />
       <PageBody>
         <div className="flex flex-wrap items-start gap-5">
           <section className="flex min-w-0 flex-[999_1_480px] flex-col gap-3.5">
@@ -150,20 +175,20 @@ export default function Memory() {
 
             <ErrorNote message={error} />
 
-            {hits ? (
+            {shownHits ? (
               <>
                 <div className="flex items-center gap-3 text-[13px] text-muted">
                   <span>
-                    {hits.length} result{hits.length === 1 ? "" : "s"} for <b className="font-mono text-ink">{searched}</b>
+                    {shownHits.length} result{shownHits.length === 1 ? "" : "s"} for <b className="font-mono text-ink">{searched}</b>
                   </span>
                   <button type="button" className="ml-auto text-accent-text hover:underline" onClick={() => { setHits(null); setQuery(""); }}>
                     Clear search
                   </button>
                 </div>
-                {hits.length === 0 ? (
+                {shownHits.length === 0 ? (
                   <Empty message="Nothing found" hint="Try different words. Search matches meaning, not only exact text." />
                 ) : (
-                  hits.map((hit, i) => (
+                  shownHits.map((hit, i) => (
                     <MemoryCard
                       key={hit.id}
                       index={i}
@@ -174,7 +199,7 @@ export default function Memory() {
                           matched by {hit.matched_by}
                         </Chip>
                       }
-                      onForget={byId.get(hit.id) ? () => void forget(byId.get(hit.id)!) : undefined}
+                      onForget={byId.get(hit.id) ? () => forget(byId.get(hit.id)!) : undefined}
                     />
                   ))
                 )}
@@ -200,7 +225,7 @@ export default function Memory() {
                           </span>
                         </>
                       }
-                      onForget={true ? () => void forget(item) : undefined}
+                      onForget={() => forget(item)}
                     />
                   ))
                 )}
@@ -243,7 +268,14 @@ export default function Memory() {
             {/* The technical detail (embedding model, dimensions) stays
                 out of sight unless someone opens it; what matters is
                 whether search can find everything. */}
-            <section className="card rise flex flex-col gap-3 bg-sunken p-5" style={{ animationDelay: ".08s" }}>
+            <details className="card rise group bg-sunken p-5" style={{ animationDelay: ".08s" }}>
+              <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-muted hover:text-ink">
+                Advanced: search setup
+                {config.memories_needing_reembedding > 0 && (
+                  <span className="h-[7px] w-[7px] rounded-full bg-ask" aria-label="needs attention" />
+                )}
+              </summary>
+              <div className="mt-3 flex flex-col gap-3">
               <h2 className="text-sm font-semibold text-muted">Search health</h2>
               {config.memories_needing_reembedding > 0 ? (
                 <div className="flex flex-wrap items-center gap-2.5 text-[13px] text-ask-text">
@@ -278,7 +310,8 @@ export default function Memory() {
                   </div>
                 </dl>
               </details>
-            </section>
+              </div>
+            </details>
           </div>
         </div>
       </PageBody>

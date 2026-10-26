@@ -517,24 +517,37 @@ export function Spinner({ rows = 3 }: { rows?: number }) {
 
 type ToastTone = "ok" | "bad" | "info";
 
+/** A single button on a toast, e.g. "Undo". The toast closes when it is pressed. */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+  /** How long the toast stays, so the button can be reached. Default 5 s. */
+  ms?: number;
+}
+
 interface ToastItem {
   id: number;
   message: string;
   tone: ToastTone;
+  action?: ToastAction;
 }
 
-const ToastContext = createContext<(message: string, tone?: ToastTone) => void>(() => {});
+const ToastContext = createContext<(message: string, tone?: ToastTone, action?: ToastAction) => void>(() => {});
 
 /** Every action ends in a short confirmation, then the toast leaves. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const nextId = useRef(1);
 
-  const show = useCallback((message: string, tone: ToastTone = "ok") => {
-    const id = nextId.current++;
-    setItems((current) => [...current.slice(-2), { id, message, tone }]);
-    window.setTimeout(() => setItems((current) => current.filter((t) => t.id !== id)), 4000);
+  const dismiss = useCallback((id: number) => {
+    setItems((current) => current.filter((t) => t.id !== id));
   }, []);
+
+  const show = useCallback((message: string, tone: ToastTone = "ok", action?: ToastAction) => {
+    const id = nextId.current++;
+    setItems((current) => [...current.slice(-2), { id, message, tone, action }]);
+    window.setTimeout(() => dismiss(id), action ? (action.ms ?? 5000) : 4000);
+  }, [dismiss]);
 
   return (
     <ToastContext.Provider value={show}>
@@ -558,6 +571,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <Icon name={toast.tone === "bad" ? "x" : toast.tone === "info" ? "info" : "check"} size={16} strokeWidth={2.4} />
             </span>
             <span className="flex-1">{toast.message}</span>
+            {toast.action && (
+              <button
+                type="button"
+                className="shrink-0 rounded-lg px-2 py-1 text-sm font-semibold text-accent-text hover:bg-accent-soft"
+                onClick={() => {
+                  toast.action?.onClick();
+                  dismiss(toast.id);
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>

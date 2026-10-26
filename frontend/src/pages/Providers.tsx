@@ -5,6 +5,7 @@ import {
   Chip,
   Empty,
   ErrorNote,
+  HoldButton,
   Input,
   PageBody,
   PageHeader,
@@ -116,15 +117,19 @@ export default function Providers() {
   }
 
   async function disconnect(provider: ConnectedProvider) {
-    await api.del(`/me/providers/${provider.provider_key}`);
-    toast(`${provider.display_name} removed.`, "info");
+    try {
+      await api.del(`/me/providers/${provider.provider_key}`);
+      toast(`${provider.display_name} key removed. Paste it again to reconnect.`, "info");
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not remove that key.", "bad");
+    }
     await load();
   }
 
   if (!available) {
     return (
       <>
-        <PageHeader crumb="Settings" title="AI Providers" />
+        <PageHeader title="AI keys" />
         <Spinner />
       </>
     );
@@ -136,7 +141,7 @@ export default function Providers() {
 
   return (
     <>
-      <PageHeader crumb="Settings" title="AI Providers">
+      <PageHeader title="AI keys">
         <span className="max-w-[380px] text-[13px] leading-snug text-muted">
           Your key, your bill. Run costs here are estimates; your provider's invoice is the real number.
         </span>
@@ -251,13 +256,18 @@ export default function Providers() {
                     </div>
                   </div>
 
-                  <div className="mt-auto flex gap-2">
-                    <Button size="sm" variant={provider.status === "untested" ? "brand" : "ghost"} disabled={isTesting} onClick={() => void test(provider)}>
-                      {provider.status === "untested" ? "Test connection" : "Test again"}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => void disconnect(provider)}>
-                      Remove
-                    </Button>
+                  <div className="mt-auto flex flex-col gap-1.5">
+                    <div className="flex gap-2">
+                      <Button size="sm" variant={provider.status === "untested" ? "brand" : "ghost"} disabled={isTesting} onClick={() => void test(provider)}>
+                        {provider.status === "untested" ? "Test connection" : "Test again"}
+                      </Button>
+                      {/* Removing deletes the stored key, and there is no
+                          way to get it back, so it takes a hold, not a click. */}
+                      <HoldButton variant="danger-ghost" className="btn-sm" onConfirm={() => void disconnect(provider)}>
+                        Hold to remove
+                      </HoldButton>
+                    </div>
+                    <p className="text-[12px] text-dim">Removing deletes the key. You will need to paste the key again.</p>
                   </div>
                 </article>
               );
