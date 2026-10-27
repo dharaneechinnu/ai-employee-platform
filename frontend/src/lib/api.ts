@@ -660,3 +660,57 @@ export interface PersonServiceRow extends ServiceAccessRow {
   overridden: boolean;
   note: string | null;
 }
+
+/** One past run in the History list: see `GET /me/history/runs`. */
+export interface HistoryModel {
+  provider_key: string;
+  model: string;
+  /** "unknown" when there is no price on file for the model. */
+  plan: "free" | "paid" | "unknown";
+  prompt_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: string;
+}
+
+export interface HistoryItem {
+  id: string;
+  task_id: string;
+  conversation_id: string;
+  agent_id: string | null;
+  agent_name: string | null;
+  title: string | null;
+  summary: string;
+  status: string;
+  trigger: "chat" | "schedule" | "manual";
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+  duration_seconds: number | null;
+  estimated_cost_usd: string;
+  models: HistoryModel[];
+}
+
+export interface HistoryPage {
+  items: HistoryItem[];
+  next: string | null;
+}
+
+export interface HistoryLane {
+  kind: "agent" | "specialist" | "tool";
+  label: string;
+  key: string;
+  start_ms: number;
+  end_ms: number;
+  ok: boolean | null;
+}
+
+export interface HistoryDetail extends HistoryItem {
+  result: string | null;
+  error_message: string | null;
+  stop_cause: string | null;
+  step_count: number;
+  prompt_tokens: number;
+  output_tokens: number;
+  lanes: HistoryLane[];
+  can_run_again: boolean;
+}

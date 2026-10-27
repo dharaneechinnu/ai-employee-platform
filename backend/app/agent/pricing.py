@@ -57,3 +57,16 @@ def is_priced(provider_key: str, model: str) -> bool:
     """So a UI can mark a cost as "unknown" rather than showing $0.00
     as if the call were free."""
     return (provider_key, model) in PRICING
+
+
+def plan_of(provider_key: str, model: str, cost_usd: Decimal) -> str:
+    """ "paid", "free" or "unknown" for one model call.
+
+    Until a connection says which plan it is on, the price table is all
+    there is: a priced model that was charged for is paid, a priced one
+    that cost nothing is free, and a model with no price is "unknown"
+    rather than free.
+    """
+    if not is_priced(provider_key, model):
+        return "unknown"
+    return "paid" if cost_usd > 0 else "free"

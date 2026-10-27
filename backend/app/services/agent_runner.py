@@ -58,8 +58,9 @@ class AgentRunner:
     async def start(
         self, agent: Agent, *, user_id: uuid.UUID, trigger: str = "manual"
     ) -> StartResult:
-        """`trigger` is "schedule" or "manual"; it is only written to the
-        scheduler events the agent tree shows."""
+        """`trigger` is "schedule" or "manual". It is kept on the task (and
+        so on its run, for History) and written to the scheduler events
+        the agent tree shows."""
         now = datetime.now(UTC)
         # A schedule must never start an agent with "everything".
         AgentService.choose_tools(agent)
@@ -98,6 +99,7 @@ class AgentRunner:
 
         _, task = await conversations.send(conversation.id, text=RUN_PROMPT, user_id=user_id)
         task.agent_id = agent.id
+        task.trigger = trigger
         task.title = f"{agent.name}: run of {now:%d %b %H:%M} UTC"
         agent.last_run_at, agent.last_status, agent.last_summary = now, "running", None
         await self.session.flush()

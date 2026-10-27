@@ -17,6 +17,7 @@ from app.api.v1.routes import (
     connections,
     conversations,
     health,
+    history,
     memory,
     notifications,
     platform,
@@ -90,6 +91,7 @@ def create_app() -> FastAPI:
     app.include_router(agents.router, prefix=settings.api_v1_prefix)
     app.include_router(conversations.router, prefix=settings.api_v1_prefix)
     app.include_router(setup.router, prefix=settings.api_v1_prefix)
+    app.include_router(history.router, prefix=settings.api_v1_prefix)
 
     return app
 

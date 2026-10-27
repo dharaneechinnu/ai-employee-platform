@@ -842,6 +842,15 @@ html[data-dock='right'] body {
   }
 }
 
+@keyframes lane-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -2111,6 +2120,11 @@ html[data-dock='bottom'] .chat-shell {
   .kbd {
     @apply inline-flex min-w-[22px] items-center justify-center rounded-md border border-line2 bg-bg px-1.5 font-mono text-[11.5px] leading-[18px] text-muted;
     border-bottom-width: 2px;
+  }
+  /* A bar in the run timeline: it grows out from where it starts. */
+  .lane-bar {
+    transform-origin: left;
+    animation: lane-grow 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   /* A thin bar that fills to --fill (0 to 1) and eases when it changes. */
   .meter {

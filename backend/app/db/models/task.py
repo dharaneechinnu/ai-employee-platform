@@ -98,6 +98,9 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     agent_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL")
     )
+    # Who started it: "chat" (the person wrote a message), "schedule" or
+    # "manual" (the Run now button). The run copies it when it begins.
+    trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="chat")
 
     __table_args__ = (
         Index("ix_tasks_org_status_created", "owner_id", "status", "created_at"),
@@ -117,6 +120,12 @@ class Run(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
     )
     attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Copied from the task so the history list filters and sorts on one
+    # table. SET NULL: removing an agent keeps its runs readable.
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL")
+    )
+    trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="chat")
     status: Mapped[RunStatus] = mapped_column(
         StrEnumType(RunStatus, 30), nullable=False, default=RunStatus.RUNNING
     )
@@ -142,6 +151,10 @@ class Run(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __table_args__ = (
         Index("ix_runs_task", "task_id"),
         Index("ix_runs_org_status", "owner_id", "status"),
+        # The history list: one person's runs, newest first, optionally
+        # for one agent.
+        Index("ix_runs_owner_created", "owner_id", "created_at"),
+        Index("ix_runs_owner_agent_created", "owner_id", "agent_id", "created_at"),
     )
 
 

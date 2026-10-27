@@ -27,6 +27,7 @@ export const COMMANDS: Command[] = [
   { id: "go-chat", label: "Chat", group: "Go to", icon: "chat", to: "/chat", go: "c" },
   { id: "go-agents", label: "AI Agents", group: "Go to", icon: "employees", to: "/agents", go: "a" },
   { id: "go-tree", label: "Agent tree", group: "Go to", icon: "tree", to: "/agents?tab=tree", go: "t" },
+  { id: "go-history", label: "History", group: "Go to", icon: "history", to: "/agents?tab=history", go: "h" },
   { id: "go-approvals", label: "Approvals", group: "Go to", icon: "approvals", to: "/approvals", go: "p" },
   { id: "go-memory", label: "Memory", group: "Go to", icon: "memory", to: "/memory", go: "m" },
   { id: "go-usage", label: "Usage", group: "Go to", icon: "wallet", to: "/usage", go: "u" },

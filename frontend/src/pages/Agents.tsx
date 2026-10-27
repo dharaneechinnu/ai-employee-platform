@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import HistoryView from "../components/agents/HistoryView";
 import LiveTree from "../components/agents/LiveTree";
 import ReadinessList from "../components/agents/ReadinessList";
 import ScheduleEditor from "../components/agents/ScheduleEditor";
@@ -34,13 +35,14 @@ import {
   type RunNowResult,
 } from "../lib/api";
 
-type Tab = "agents" | "tree";
+type Tab = "agents" | "tree" | "history";
 
 // One line per tab, so a later screen (History, Models and cost) adds a
 // line here and a branch below, and nothing else on this page changes.
 const TABS: { key: Tab; label: string }[] = [
   { key: "agents", label: "Agents" },
   { key: "tree", label: "Tree" },
+  { key: "history", label: "History" },
 ];
 
 const START_A_REQUEST = "I want an agent that ";
@@ -210,6 +212,8 @@ export default function Agents() {
         )}
 
         {data && tab === "tree" && <LiveTree overview={data} onChanged={() => void load()} />}
+
+        {data && tab === "history" && <HistoryView agents={data.agents} />}
       </PageBody>
     </>
   );

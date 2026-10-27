@@ -49,6 +49,8 @@ async def claim_run(session: AsyncSession, task: Task, *, worker_id: str) -> tup
         run = Run(
             owner_id=task.owner_id,
             task_id=task.id,
+            agent_id=task.agent_id,
+            trigger=task.trigger,
             attempt=1,
             status=RunStatus.RUNNING,
             started_at=datetime.now(UTC),
