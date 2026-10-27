@@ -9,18 +9,21 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Header, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
 from app.api.v1.deps import ContextDep, SessionDep
 from app.db.models.task import TERMINAL_STATUSES, RunStatus, TaskStatus
+from app.db.session import get_sessionmaker
+from app.services.live_feed import Cursor, LiveFeed
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/me", tags=["tasks"])
@@ -30,6 +33,11 @@ router = APIRouter(prefix="/me", tags=["tasks"])
 # it, proxies and load balancers quietly drop an idle connection.
 KEEPALIVE_SECONDS = 15
 POLL_SECONDS = 0.5
+# The account stream is long-lived and watched by an open tab, so it
+# polls more gently, and ends after a while: the browser reconnects with
+# where it was, which also keeps proxies from holding connections for ever.
+ACCOUNT_POLL_SECONDS = 1.0
+ACCOUNT_STREAM_SECONDS = 300
 
 
 class RunSummary(BaseModel):
@@ -203,6 +211,61 @@ async def stream_events(
             if idle >= KEEPALIVE_SECONDS:
                 idle = 0.0
                 yield ": keepalive\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/live", summary="Live stream of everything the account is doing (SSE)")
+async def stream_account(
+    ctx: ContextDep,
+    request: Request,
+    last_event_id: Annotated[str, Query()] = "",
+    last_event_id_header: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+    max_seconds: Annotated[int, Query(ge=1, le=ACCOUNT_STREAM_SECONDS)] = ACCOUNT_STREAM_SECONDS,
+) -> StreamingResponse:
+    """Server-sent events for every run and every scheduler step of the
+    signed-in person, in one stream, so the agent tree can show many
+    agents working at once.
+
+    Same sign-in as the per-run stream, and only the caller's own events
+    are ever read. A new viewer sees what happens from now on; one
+    reconnecting sends the position it last saw and receives the rest.
+    Frames carry no `event:` name, so a plain `onmessage` gets them all;
+    the kind is the `type` field.
+    """
+    owner_id = ctx.owner_id
+    resume = Cursor.parse(last_event_id) or Cursor.parse(last_event_id_header)
+    maker = get_sessionmaker()
+
+    async def generate() -> AsyncGenerator[str, None]:
+        # A short session per look, never one held open for minutes.
+        async with maker() as session:
+            cursor = resume or await LiveFeed(session, owner_id).now()
+        yield ": connected\n\n"
+
+        idle = 0.0
+        ends_at = time.monotonic() + max_seconds
+        while time.monotonic() < ends_at:
+            if await request.is_disconnected():
+                break
+            async with maker() as session:
+                events, cursor = await LiveFeed(session, owner_id).after(cursor)
+            for i, event in enumerate(events):
+                idle = 0.0
+                # The position goes on the last frame only: a connection
+                # lost halfway through a batch must resume from before it.
+                mark = f"id: {cursor}\n" if i == len(events) - 1 else ""
+                yield f"{mark}data: {json.dumps(event)}\n\n"
+            if not events:
+                await asyncio.sleep(ACCOUNT_POLL_SECONDS)
+                idle += ACCOUNT_POLL_SECONDS
+                if idle >= KEEPALIVE_SECONDS:
+                    idle = 0.0
+                    yield ": keepalive\n\n"
 
     return StreamingResponse(
         generate(),

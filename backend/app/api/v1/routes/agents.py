@@ -14,12 +14,13 @@ draft before it exists and for a saved agent before it runs.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select
 
 from app.agent.assistant import MODES
 from app.agent.routing import Preference
@@ -30,9 +31,12 @@ from app.agent.tools.registry import registry
 from app.api.v1.deps import ContextDep, SessionDep
 from app.core.errors import ValidationError
 from app.db.models.agent import DEFAULT_RUN_STEPS, MAX_AGENTS, MAX_RUN_STEPS, Agent
+from app.db.models.conversation import Conversation
+from app.db.models.task import Run, RunStatus, Task, TaskStatus
 from app.services.agent_runner import AgentRunner
 from app.services.agent_service import AgentService, Usage
 from app.services.conversation_service import ConversationService
+from app.services.live_feed import LiveFeed
 from app.services.readiness_service import ReadinessService
 from app.workers.queue import enqueue_task
 
@@ -112,6 +116,49 @@ class Overview(BaseModel):
     tools: list[ToolInfo]
     recent_runs: list[RunRow]
     limit: int
+
+
+class TreeAgent(BaseModel):
+    id: uuid.UUID
+    name: str
+    # "idle", "working", "waiting" (for the person) or "failed".
+    state: str
+    next_run_at: datetime | None
+    schedule_text: str | None
+    last_summary: str | None
+    active_run_id: uuid.UUID | None
+    active_task_id: uuid.UUID | None
+
+
+class TreeHelper(BaseModel):
+    # Stable: the role's own key, so a node keeps its place between visits.
+    key: str
+    label: str
+
+
+class TreeScheduler(BaseModel):
+    next_run_at: datetime | None
+    next_agent_id: uuid.UUID | None
+    next_agent_name: str | None
+    scheduled_count: int
+
+
+class TreeLead(BaseModel):
+    state: str
+    active_run_id: uuid.UUID | None
+    active_task_id: uuid.UUID | None
+
+
+class Tree(BaseModel):
+    now: datetime
+    scheduler: TreeScheduler
+    lead: TreeLead
+    agents: list[TreeAgent]
+    helpers: list[TreeHelper]
+    # What the scheduler did in the last few minutes, oldest first.
+    recent_scheduler: list[dict[str, Any]]
+    # Where to start watching the live stream so nothing falls in the gap.
+    cursor: str
 
 
 class CreateAgentRequest(BaseModel):
@@ -277,6 +324,89 @@ async def overview(ctx: ContextDep, session: SessionDep) -> Overview:
         tools=tools,
         recent_runs=runs,
         limit=MAX_AGENTS,
+    )
+
+
+_ACTIVE_TASKS = (TaskStatus.QUEUED, TaskStatus.RUNNING, TaskStatus.AWAITING_APPROVAL)
+# Longer than this since a scheduler step, the tree does not replay it.
+_RECENT_SCHEDULER = timedelta(minutes=10)
+
+
+@router.get("/tree", response_model=Tree, summary="What the agent tree shows right now")
+async def tree(ctx: ContextDep, session: SessionDep) -> Tree:
+    """The tree's starting picture: each agent's state and next run, the
+    scheduler's next start, and the runs going now. The live stream
+    (`/me/live`) then keeps it moving. Everything is the caller's own."""
+    feed = LiveFeed(session, ctx.owner_id)
+    cursor = await feed.now()  # first, so an event after this is replayed, not lost
+    now = datetime.now(UTC)
+
+    # One row per task still going: its agent (from the schedule or the
+    # agent's own chat), its run if a worker has picked it up, its state.
+    rows = (
+        await session.execute(
+            select(
+                Task.id,
+                func.coalesce(Task.agent_id, Conversation.agent_id),
+                Task.status,
+                Run.id,
+                Run.status,
+            )
+            .join(Conversation, Conversation.id == Task.conversation_id)
+            .outerjoin(
+                Run,
+                (Run.task_id == Task.id)
+                & Run.status.in_((RunStatus.RUNNING, RunStatus.AWAITING_APPROVAL)),
+            )
+            .where(Task.owner_id == ctx.owner_id, Task.status.in_(_ACTIVE_TASKS))
+            .order_by(Task.created_at.desc())
+            .limit(100)
+        )
+    ).all()
+    active: dict[uuid.UUID | None, tuple[str, uuid.UUID, uuid.UUID | None]] = {}
+    for task_id, agent_id, task_status, run_id, run_status in rows:
+        waiting = TaskStatus.AWAITING_APPROVAL in (task_status, run_status)
+        active.setdefault(agent_id, ("waiting" if waiting else "working", task_id, run_id))
+
+    agents = list(await AgentService(session, ctx.owner_id).active())
+    scheduled = sorted(
+        (a for a in agents if a.schedule_enabled and a.next_run_at is not None),
+        key=lambda a: a.next_run_at or now,
+    )
+
+    def _state(agent: Agent) -> str:
+        if agent.id in active:
+            return active[agent.id][0]
+        return "failed" if agent.last_status in ("failed", "needs_attention") else "idle"
+
+    lead_state, lead_task, lead_run = active.get(None, ("idle", None, None))
+    return Tree(
+        now=now,
+        scheduler=TreeScheduler(
+            next_run_at=scheduled[0].next_run_at if scheduled else None,
+            next_agent_id=scheduled[0].id if scheduled else None,
+            next_agent_name=scheduled[0].name if scheduled else None,
+            scheduled_count=len(scheduled),
+        ),
+        lead=TreeLead(state=lead_state, active_run_id=lead_run, active_task_id=lead_task),
+        agents=[
+            TreeAgent(
+                id=a.id,
+                name=a.name,
+                state=_state(a),
+                next_run_at=a.next_run_at if a.schedule_enabled else None,
+                schedule_text=(
+                    describe(Schedule.model_validate(a.schedule)) if a.schedule else None
+                ),
+                last_summary=a.last_summary,
+                active_run_id=active[a.id][2] if a.id in active else None,
+                active_task_id=active[a.id][1] if a.id in active else None,
+            )
+            for a in agents
+        ],
+        helpers=[TreeHelper(key=r.key, label=r.label) for r in ROLES.values()],
+        recent_scheduler=await feed.recent_scheduler_events(now - _RECENT_SCHEDULER),
+        cursor=str(cursor),
     )
 
 

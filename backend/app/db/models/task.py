@@ -170,6 +170,36 @@ class RunEvent(Base):
     )
 
 
+class SchedulerEvent(Base):
+    """What the scheduler did for an agent before (or instead of) a run.
+
+    A run's own events need a run, and "due" and "connections checked"
+    happen before one exists. They live here, and the account's live
+    stream (see `app.services.live_feed`) merges the two logs so the tree
+    can show the whole story of a scheduled start. Append-only.
+    """
+
+    __tablename__ = "scheduler_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
+    )
+    # Set once the run's task exists ("started").
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL")
+    )
+    # agent_due, connections_checked, agent_started or agent_skipped.
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (Index("ix_scheduler_events_owner_id", "owner_id", "id"),)
+
+
 class LLMCall(Base):
     """One model call. The basis of cost reporting."""
 

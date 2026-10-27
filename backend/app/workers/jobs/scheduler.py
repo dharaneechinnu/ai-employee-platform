@@ -24,6 +24,7 @@ from app.core.observability import get_logger
 from app.db.models.agent import Agent
 from app.db.session import get_sessionmaker
 from app.services.agent_runner import AgentRunner
+from app.services.live_feed import record_scheduler_event
 from app.services.notification_service import NotificationService, notify_safely
 from app.workers.queue import enqueue_task
 
@@ -53,6 +54,7 @@ async def dispatch_due_agents(ctx: dict[str, Any]) -> int:
         ).all()
 
         for agent in due:
+            was_due = agent.next_run_at
             try:
                 agent.next_run_at = next_run(Schedule.model_validate(agent.schedule), now)
             except ValueError:
@@ -62,7 +64,21 @@ async def dispatch_due_agents(ctx: dict[str, Any]) -> int:
                 log.warning("agent_schedule_invalid", agent_id=str(agent.id))
                 continue
 
-            result = await AgentRunner(session, agent.owner_id).start(agent, user_id=agent.owner_id)
+            # The live tree starts its story here; the runner adds the
+            # connection check and the start (or why it did not start).
+            await record_scheduler_event(
+                session,
+                owner_id=agent.owner_id,
+                agent_id=agent.id,
+                type_="agent_due",
+                payload={
+                    "name": agent.name,
+                    "scheduled_for": was_due.isoformat() if was_due else None,
+                },
+            )
+            result = await AgentRunner(session, agent.owner_id).start(
+                agent, user_id=agent.owner_id, trigger="schedule"
+            )
             if result.task is not None:
                 to_enqueue.append(result.task.id)
             elif result.status == "needs_attention":

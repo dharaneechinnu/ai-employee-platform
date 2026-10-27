@@ -27,6 +27,7 @@ from app.db.models.conversation import Conversation
 from app.db.models.task import TERMINAL_STATUSES, Task
 from app.services.agent_service import AgentService
 from app.services.conversation_service import ConversationService
+from app.services.live_feed import record_scheduler_event
 from app.services.readiness_service import Readiness, ReadinessService
 
 RUN_PROMPT = (
@@ -54,7 +55,11 @@ class AgentRunner:
         self.session = session
         self.owner_id = owner_id
 
-    async def start(self, agent: Agent, *, user_id: uuid.UUID) -> StartResult:
+    async def start(
+        self, agent: Agent, *, user_id: uuid.UUID, trigger: str = "manual"
+    ) -> StartResult:
+        """`trigger` is "schedule" or "manual"; it is only written to the
+        scheduler events the agent tree shows."""
         now = datetime.now(UTC)
         # A schedule must never start an agent with "everything".
         AgentService.choose_tools(agent)
@@ -62,6 +67,13 @@ class AgentRunner:
             agent.tools or [], scheduled=True, scope=agent.scope
         )
         if not readiness.ok:
+            await self._note(
+                agent,
+                "connections_checked",
+                ok=False,
+                message=readiness.sentence(),
+                broken=[c.title for c in readiness.problems][:5],
+            )
             return self._attention(agent, now, readiness, readiness.sentence())
 
         conversations = ConversationService(self.session, self.owner_id)
@@ -69,10 +81,19 @@ class AgentRunner:
             conversation = await self.conversation(agent, conversations)
         except ValidationError as exc:
             # Its chosen AI is no longer connected.
+            await self._note(
+                agent,
+                "connections_checked",
+                ok=False,
+                message=exc.message,
+                broken=["The AI this agent uses"],
+            )
             return self._attention(agent, now, None, exc.message)
+        await self._note(agent, "connections_checked", ok=True)
 
         turn = await conversations.latest_turn(conversation.id)
         if turn is not None and turn.status not in TERMINAL_STATUSES:
+            await self._note(agent, "agent_skipped", message="The last run is still going.")
             return StartResult("busy", message="The last run is still going.")
 
         _, task = await conversations.send(conversation.id, text=RUN_PROMPT, user_id=user_id)
@@ -80,7 +101,21 @@ class AgentRunner:
         task.title = f"{agent.name}: run of {now:%d %b %H:%M} UTC"
         agent.last_run_at, agent.last_status, agent.last_summary = now, "running", None
         await self.session.flush()
+        await self._note(agent, "agent_started", task_id=task.id, trigger=trigger)
         return StartResult("started", task=task, readiness=readiness)
+
+    async def _note(
+        self, agent: Agent, type_: str, *, task_id: uuid.UUID | None = None, **payload: object
+    ) -> None:
+        """One line in the scheduler log, for the live agent tree."""
+        await record_scheduler_event(
+            self.session,
+            owner_id=self.owner_id,
+            agent_id=agent.id,
+            type_=type_,
+            payload={"name": agent.name, **payload},
+            task_id=task_id,
+        )
 
     # ------------------------------------------------------------------
 

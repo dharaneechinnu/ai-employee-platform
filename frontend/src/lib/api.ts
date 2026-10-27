@@ -123,6 +123,94 @@ export function streamRun(
   return () => source.close();
 }
 
+/** One thing that happened to one of your agents or runs. */
+export interface LiveEvent {
+  /** "agent_due", "connections_checked", "agent_started", "agent_skipped", or a run event such as "tool_call". */
+  type: string;
+  at: string;
+  /** Null for the assistant itself (a chat that is no agent's own). */
+  agent_id: string | null;
+  run_id: string | null;
+  task_id: string | null;
+  seq?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Watch everything the account is doing, in one stream.
+ *
+ * EventSource cannot send our sign-in header, so this reads the stream
+ * with fetch instead. It reconnects by itself, from the position it last
+ * saw, and asks for a fresh sign-in if the old one ran out. Returns a
+ * function that stops it.
+ */
+export function streamAccount(
+  onEvent: (event: LiveEvent) => void,
+  since: string | null,
+  onState?: (connected: boolean) => void,
+): () => void {
+  const stop = new AbortController();
+  let cursor = since ?? "";
+
+  async function once(): Promise<void> {
+    const headers = new Headers({ Accept: "text/event-stream" });
+    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+    const query = cursor ? `?last_event_id=${encodeURIComponent(cursor)}` : "";
+    const response = await fetch(`${BASE}/me/live${query}`, {
+      headers,
+      credentials: "include",
+      signal: stop.signal,
+    });
+    if (response.status === 401) {
+      if (!(await refresh())) throw new Error("signed out");
+      return;
+    }
+    if (!response.ok || !response.body) throw new Error(String(response.status));
+
+    onState?.(true);
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      buffer += value;
+      let end: number;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const frame = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        let data = "";
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("id: ")) cursor = line.slice(4);
+          else if (line.startsWith("data: ")) data += line.slice(6);
+        }
+        if (!data) continue;
+        try {
+          onEvent(JSON.parse(data) as LiveEvent);
+        } catch {
+          /* a malformed frame should not kill the stream */
+        }
+      }
+    }
+  }
+
+  void (async () => {
+    let wait = 1000;
+    while (!stop.signal.aborted) {
+      try {
+        await once();
+        wait = 1000; // the server closes it now and then on purpose
+      } catch {
+        if (stop.signal.aborted) return;
+        onState?.(false);
+        wait = Math.min(wait * 2, 15000);
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, wait));
+    }
+  })();
+
+  return () => stop.abort();
+}
+
 // ---------------------------------------------------------------- types
 
 export interface Me {
@@ -506,6 +594,34 @@ export interface AgentsOverview {
   tools: AgentToolInfo[];
   recent_runs: AgentRunRow[];
   limit: number;
+}
+
+/** The agent tree's starting picture: see `GET /me/agents/tree`. */
+export type TreeState = "idle" | "working" | "waiting" | "failed";
+
+export interface AgentsTree {
+  now: string;
+  scheduler: {
+    next_run_at: string | null;
+    next_agent_id: string | null;
+    next_agent_name: string | null;
+    scheduled_count: number;
+  };
+  lead: { state: TreeState; active_run_id: string | null; active_task_id: string | null };
+  agents: {
+    id: string;
+    name: string;
+    state: TreeState;
+    next_run_at: string | null;
+    schedule_text: string | null;
+    last_summary: string | null;
+    active_run_id: string | null;
+    active_task_id: string | null;
+  }[];
+  helpers: { key: string; label: string }[];
+  recent_scheduler: LiveEvent[];
+  /** Where to start the live stream so nothing falls between the two. */
+  cursor: string;
 }
 
 /** The result of "find a model this key can use". */

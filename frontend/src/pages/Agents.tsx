@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import AgentTree from "../components/agents/AgentTree";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import LiveTree from "../components/agents/LiveTree";
 import ReadinessList from "../components/agents/ReadinessList";
 import ScheduleEditor from "../components/agents/ScheduleEditor";
 import StarterSetup from "../components/agents/StarterSetup";
@@ -36,6 +36,13 @@ import {
 
 type Tab = "agents" | "tree";
 
+// One line per tab, so a later screen (History, Models and cost) adds a
+// line here and a branch below, and nothing else on this page changes.
+const TABS: { key: Tab; label: string }[] = [
+  { key: "agents", label: "Agents" },
+  { key: "tree", label: "Tree" },
+];
+
 const START_A_REQUEST = "I want an agent that ";
 
 /**
@@ -46,7 +53,11 @@ const START_A_REQUEST = "I want an agent that ";
 export default function Agents() {
   const toast = useToast();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>("agents");
+  // The tab is in the address (/agents?tab=tree), so it can be linked and "G T" can jump to it.
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get("tab");
+  const tab: Tab = TABS.some((t) => t.key === wanted) ? (wanted as Tab) : "agents";
+  const setTab = (next: Tab) => setParams(next === "agents" ? {} : { tab: next }, { replace: true });
   const [data, setData] = useState<AgentsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -110,10 +121,10 @@ export default function Agents() {
           label="AI Agents sections"
           value={tab}
           onChange={setTab}
-          items={[
-            { key: "agents", label: "My agents", count: data?.agents.length },
-            { key: "tree", label: "Agent tree" },
-          ]}
+          items={TABS.map((t) => ({
+            ...t,
+            count: t.key === "agents" ? data?.agents.length : undefined,
+          }))}
         />
         <ErrorNote message={error} />
         {!data && !error && <Spinner rows={4} />}
@@ -198,17 +209,7 @@ export default function Agents() {
           </div>
         )}
 
-        {data && tab === "tree" && (
-          <AgentTree
-            agents={data.agents}
-            starters={data.starters}
-            assistantUsage={data.assistant_usage}
-            onOpen={(agent) => {
-              setEditing(agent.id);
-              setTab("agents");
-            }}
-          />
-        )}
+        {data && tab === "tree" && <LiveTree overview={data} onChanged={() => void load()} />}
       </PageBody>
     </>
   );

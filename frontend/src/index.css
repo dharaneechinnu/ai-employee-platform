@@ -1943,33 +1943,96 @@ html[data-dock='bottom'] .chat-shell {
 }
 @keyframes agent-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-/* The tree */
-.tree-node {
-  position: absolute;
+/* The agent tree: nodes, the lines between them and the chips on the lines.
+   Colour is never the only signal: every state is also written in words. */
+.tn-slot { position: absolute; width: 220px; height: 64px; }
+.tnode {
+  position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow: hidden;
-  border: 1px solid var(--line);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line2);
   border-radius: 14px;
   background: var(--sunken);
-  padding: 10px 12px;
+  padding: 0 14px;
   text-align: left;
-  font-size: 12.5px;
   color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.2s, border-color 0.2s, background 0.2s;
 }
-.tree-node b { color: var(--text); font-size: 14px; }
-.tree-node svg { color: var(--dim); }
-.tree-node.is-lead { border-color: var(--accent); background: var(--accent-soft); }
-.tree-node.is-lead b, .tree-node.is-lead svg { color: var(--accent-text); }
-.tree-node.is-agent { border-color: var(--accent-line); }
-.tree-node.is-agent.is-ran { border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
-.tree-node.is-starter { border-style: dashed; opacity: 0.75; }
-button.tree-node:not(:disabled):hover { border-color: var(--accent); }
-.tree-line { stroke: var(--line); }
-.tree-line.is-live { stroke: var(--accent); stroke-dasharray: 8 6; animation: tree-flow 1.2s linear infinite; }
-.tree-line.is-idle { stroke-dasharray: 3 5; }
-@keyframes tree-flow { to { stroke-dashoffset: -28; } }
+.tnode:hover { transform: translateY(-2px); border-color: var(--accent); }
+.tnode:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.tnode b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 14px; font-weight: 600; }
+.tnode small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.tnode[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--glow); }
+.tnode.is-you { border-style: dashed; }
+.tnode.is-lead { border-color: var(--accent-line); background: var(--accent-soft); }
+.tnode[data-state="working"] { border-color: var(--ok); background: var(--ok-soft); }
+.tnode[data-state="waiting"] { border-color: var(--ask); background: var(--ask-soft); }
+.tnode[data-state="failed"] { border-color: var(--bad); background: var(--bad-soft); }
+.tnode[data-state="done"] { border-color: var(--ok); }
+.tn-ic {
+  position: relative;
+  display: flex;
+  height: 36px;
+  width: 36px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--tone, var(--muted));
+}
+.tnode[data-state="working"] .tn-ic { background: var(--ok); color: var(--bg); }
+.tnode[data-state="waiting"] .tn-ic { background: var(--ask); color: var(--bg); }
+.tnode[data-state="failed"] .tn-ic { background: var(--bad); color: var(--bg); }
+/* The state ring: a soft pulse while something is happening. */
+.tn-ring {
+  position: absolute;
+  inset: -5px;
+  border-radius: 14px;
+  border: 2px solid var(--ring, var(--ok));
+  pointer-events: none;
+  animation: tn-ring 1.8s ease-in-out infinite;
+}
+.tnode[data-state="waiting"] .tn-ring { --ring: var(--ask); }
+@keyframes tn-ring {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.95; transform: scale(1.04); }
+}
+.tn-now { animation: tn-ring 1.8s ease-in-out infinite; }
+.tnode-ask { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); }
+.tline { fill: none; stroke: var(--line2); stroke-width: 2; transition: stroke 0.3s; }
+.tline.is-quiet { stroke-dasharray: 3 5; }
+.tline.is-on { stroke: var(--ok); stroke-width: 2.6; }
+.tline.is-wait { stroke: var(--ask); stroke-width: 2.4; stroke-dasharray: 3 5; }
+.tline.is-bad { stroke: var(--bad); stroke-width: 2.6; }
+.tline.is-you { stroke: var(--accent); }
+.tchip {
+  position: absolute;
+  display: flex;
+  height: 28px;
+  max-width: 190px;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 1px solid var(--ok);
+  border-radius: 999px;
+  background: var(--ok-soft);
+  padding: 0 11px;
+  color: var(--ok-text);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.tchip.is-done { border-color: var(--line2); background: var(--sunken); color: var(--muted); }
+.tchip.is-failed { border-color: var(--bad); background: var(--bad-soft); color: var(--bad-text); }
+@media (prefers-reduced-motion: reduce) {
+  .tn-ring, .tn-now { animation: none; }
+  .tn-ring { opacity: 0.8; }
+  .tnode:hover { transform: none; }
+}
 
 /* Flow and cost */
 .flow-pick {
@@ -2017,7 +2080,7 @@ button.tree-node:not(:disabled):hover { border-color: var(--accent); }
 .flow-split > span { display: block; height: 100%; }
 @keyframes flow-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .tree-line.is-live, .flow-bar, .agent-draft { animation: none; }
+  .flow-bar, .agent-draft { animation: none; }
 }
 
 /* ============================================================ shared surfaces
