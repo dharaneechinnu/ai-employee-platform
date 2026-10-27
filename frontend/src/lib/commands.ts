@@ -30,7 +30,7 @@ export const COMMANDS: Command[] = [
   { id: "go-history", label: "History", group: "Go to", icon: "history", to: "/agents?tab=history", go: "h" },
   { id: "go-approvals", label: "Approvals", group: "Go to", icon: "approvals", to: "/approvals", go: "p" },
   { id: "go-memory", label: "Memory", group: "Go to", icon: "memory", to: "/memory", go: "m" },
-  { id: "go-usage", label: "Usage", group: "Go to", icon: "wallet", to: "/usage", go: "u" },
+  { id: "go-usage", label: "Models and cost", group: "Go to", icon: "wallet", to: "/agents?tab=cost", go: "u" },
   { id: "go-connections", label: "Connections", group: "Go to", icon: "link", to: "/connections", go: "o" },
   { id: "go-keys", label: "AI keys", group: "Go to", icon: "providers", to: "/providers", go: "k" },
   { id: "go-permissions", label: "Permissions", group: "Go to", icon: "lock", to: "/policies", go: "r" },

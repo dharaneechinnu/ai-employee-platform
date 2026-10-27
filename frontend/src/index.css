@@ -2043,53 +2043,8 @@ html[data-dock='bottom'] .chat-shell {
   .tnode:hover { transform: none; }
 }
 
-/* Flow and cost */
-.flow-pick {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  gap: 2px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 8px 12px;
-  text-align: left;
-}
-.flow-pick:hover { background: var(--raised); }
-.flow-pick[aria-pressed="true"] { border-color: var(--accent-line); background: var(--accent-soft); }
-.flow-track {
-  position: relative;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--raised);
-}
-.flow-bar {
-  position: absolute;
-  top: 7px;
-  height: 12px;
-  border-radius: 6px;
-  opacity: 0.55;
-  transform-origin: left;
-  animation: flow-grow 0.6s ease-out;
-}
-.flow-bar.is-failed { background: var(--bad) !important; }
-.flow-tick {
-  position: absolute;
-  top: 4px;
-  height: 18px;
-  width: 4px;
-  margin-left: -2px;
-  border-radius: 2px;
-  background: var(--text);
-}
-.flow-tick.is-think { background: var(--dim); height: 10px; top: 8px; }
-.flow-tick.is-tool { background: var(--text); }
-.flow-tick.is-blocked { background: var(--bad); }
-.flow-tick.static-tick { position: static; margin: 0; display: inline-block; height: 12px; }
-.flow-split { display: flex; height: 14px; overflow: hidden; border-radius: 7px; background: var(--raised); gap: 2px; }
-.flow-split > span { display: block; height: 100%; }
-@keyframes flow-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .flow-bar, .agent-draft { animation: none; }
+  .agent-draft { animation: none; }
 }
 
 /* ============================================================ shared surfaces

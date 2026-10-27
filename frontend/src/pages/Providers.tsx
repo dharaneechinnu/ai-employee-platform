@@ -23,7 +23,9 @@ import {
   type ConnectedProvider,
   type GuideStep,
   type ProviderOption,
+  type Usage,
 } from "../lib/api";
+import { fmtCost } from "../lib/agents";
 import { formatDateTime } from "../lib/labels";
 import { notifySetup, useSetup } from "../lib/setup";
 
@@ -60,6 +62,8 @@ export default function Providers() {
   const [searches, setSearches] = useState<ProviderOption[]>([]);
   const [connected, setConnected] = useState<ConnectedProvider[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  // What each AI has cost so far, by provider. Left empty if it cannot be read.
+  const [spent, setSpent] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     const [a, s, c, cs] = await Promise.all([
@@ -76,6 +80,17 @@ export default function Providers() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    api
+      .get<Usage>("/me/usage?range=all")
+      .then((u) => {
+        const byProvider: Record<string, number> = {};
+        for (const m of u.models) byProvider[m.provider_key] = (byProvider[m.provider_key] ?? 0) + Number(m.cost_usd);
+        setSpent(byProvider);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const find = useMemo(() => new Map(connected.map((c) => [c.provider_key, c])), [connected]);
   const all = useMemo(() => [...(ais ?? []), ...searches], [ais, searches]);
@@ -124,6 +139,7 @@ export default function Providers() {
                 key={p.key}
                 option={p}
                 conn={find.get(p.key)}
+                spent={spent[p.key]}
                 suggest={aiConnected === 0 && p.recommended_rank === 1}
                 active={open === p.key}
                 onOpen={() => setOpen(p.key)}
@@ -176,12 +192,15 @@ function Section({ title, hint, children }: { title: string; hint: string; child
 function ProviderCard({
   option,
   conn,
+  spent,
   suggest,
   active,
   onOpen,
 }: {
   option: ProviderOption;
   conn: ConnectedProvider | undefined;
+  /** Estimated cost to date, when this AI has been used. */
+  spent?: number;
   suggest: boolean;
   active: boolean;
   onOpen: () => void;
@@ -210,6 +229,12 @@ function ProviderCard({
         {option.is_local ? <Pill>Local</Pill> : option.free_tier ? <Pill tone="ok">Free tier</Pill> : <Pill>Paid</Pill>}
         {conn?.default_model && <Pill mono>{conn.default_model}</Pill>}
       </div>
+      {conn && spent !== undefined && (
+        <div className="text-[12.5px] text-muted">
+          Cost to date <b className="font-mono font-medium text-ink">{spent > 0 ? fmtCost(spent) : "$0"}</b>
+          <span className="text-dim"> (estimate)</span>
+        </div>
+      )}
       <span className="mt-auto flex items-center gap-1 text-[13px] font-medium text-accent-text">
         {conn ? "Manage" : "Connect"}
         <Icon name="chevron" size={14} />

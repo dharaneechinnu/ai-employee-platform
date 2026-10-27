@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { DOCKS, DOCK_LABEL, type Dock, dockForPoint } from "../lib/dock";
 import { useAuth } from "../lib/auth";
 import { BrandMark, type BrandState } from "./BrandMark";
@@ -48,13 +48,21 @@ const ITEMS: RailItem[] = [
   { to: "/approvals", label: "Approvals", icon: "approvals" },
 
   { to: "/memory", label: "Memory", icon: "memory", startsGroup: true },
-  { to: "/usage", label: "Usage", icon: "tasks" },
+  { to: "/agents?tab=cost", label: "Models and cost", icon: "wallet" },
 
   { to: "/connections", label: "Connections", icon: "link", startsGroup: true },
   { to: "/providers", label: "AI keys", icon: "providers" },
   { to: "/policies", label: "Permissions", icon: "lock" },
   { to: "/notifications", label: "Notifications", icon: "bell" },
 ];
+
+/** AI Agents and Models and cost share a page: the tab decides which one is lit. */
+function itemActive(to: string, isActive: boolean, pathname: string, search: string): boolean {
+  const onCost = pathname === "/agents" && new URLSearchParams(search).get("tab") === "cost";
+  if (to === "/agents?tab=cost") return onCost;
+  if (to === "/agents") return isActive && !onCost;
+  return isActive;
+}
 
 export default function Rail({
   dock,
@@ -69,6 +77,7 @@ export default function Rail({
 }) {
   const { me, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
 
   const [dragging, setDragging] = useState(false);
   const [target, setTarget] = useState<Dock>(dock);
@@ -179,7 +188,7 @@ export default function Rail({
               {item.startsGroup && <span className="rail-divider" aria-hidden="true" />}
               <NavLink
                 to={item.to}
-                className={({ isActive }) => `rail-link ${isActive ? "active" : ""}`}
+                className={({ isActive }) => `rail-link ${itemActive(item.to, isActive, pathname, search) ? "active" : ""}`}
                 data-rail-label={item.label}
                 data-coach={item.to === "/approvals" ? "nav-approvals" : undefined}
               >

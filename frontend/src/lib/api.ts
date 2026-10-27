@@ -690,6 +690,50 @@ export interface HistoryItem {
   models: HistoryModel[];
 }
 
+/** What the models cost: see `GET /me/usage`. Every figure is an estimate. */
+export interface UsageModelChoice {
+  provider_key: string;
+  provider_name: string;
+  model: string;
+}
+
+export interface UsagePlanShare {
+  calls: number;
+  tokens: number;
+  cost_usd: string;
+}
+
+export interface UsageModel extends UsageModelChoice {
+  plan: "free" | "paid" | "unknown";
+  runs: number;
+  calls: number;
+  tokens: number;
+  cost_usd: string;
+  /** Null when the model has no price on file: unpriced, not zero. */
+  saved_usd: string | null;
+  is_reference: boolean;
+  /** Share of all calls in the range, 0 to 1. */
+  share: number;
+}
+
+export interface Usage {
+  range: "7d" | "30d" | "all";
+  runs: number;
+  calls: number;
+  tokens: number;
+  total_cost_usd: string;
+  saved_usd: string;
+  unpriced_calls: number;
+  reference: UsageModelChoice | null;
+  reference_is_default: boolean;
+  reference_choices: UsageModelChoice[];
+  free: UsagePlanShare;
+  paid: UsagePlanShare;
+  unknown: UsagePlanShare;
+  agents: { agent_id: string | null; name: string; runs: number; tokens: number; cost_usd: string }[];
+  models: UsageModel[];
+}
+
 export interface HistoryPage {
   items: HistoryItem[];
   next: string | null;

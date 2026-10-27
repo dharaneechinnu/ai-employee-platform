@@ -16,7 +16,6 @@ import Product from "./pages/Product";
 import Providers from "./pages/Providers";
 import Agents from "./pages/Agents";
 import Chat from "./pages/Chat";
-import Usage from "./pages/Usage";
 
 /** The promo film stage is a recording tool, so it only exists in development. */
 const FILM = import.meta.env.DEV ? <FilmStage /> : <Navigate to="/" replace />;
@@ -69,7 +68,7 @@ export default function App() {
         <Route path="/tasks" element={<Navigate to="/chat" replace />} />
         <Route path="/employees" element={<Navigate to="/chat" replace />} />
         <Route path="/memory" element={<Memory />} />
-        <Route path="/usage" element={<Usage />} />
+        <Route path="/usage" element={<Navigate to="/agents?tab=cost" replace />} />
                 <Route
           path="/approvals"
           element={

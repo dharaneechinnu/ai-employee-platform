@@ -26,6 +26,7 @@ from app.api.v1.routes import (
     setup,
     speech,
     tasks,
+    usage,
 )
 from app.config import Settings, get_settings
 from app.core.error_handlers import register_error_handlers
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(conversations.router, prefix=settings.api_v1_prefix)
     app.include_router(setup.router, prefix=settings.api_v1_prefix)
     app.include_router(history.router, prefix=settings.api_v1_prefix)
+    app.include_router(usage.router, prefix=settings.api_v1_prefix)
 
     return app
 

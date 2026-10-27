@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import CostView from "../components/agents/CostView";
 import HistoryView from "../components/agents/HistoryView";
 import LiveTree from "../components/agents/LiveTree";
 import ReadinessList from "../components/agents/ReadinessList";
@@ -35,21 +36,22 @@ import {
   type RunNowResult,
 } from "../lib/api";
 
-type Tab = "agents" | "tree" | "history";
+type Tab = "agents" | "tree" | "history" | "cost";
 
-// One line per tab, so a later screen (History, Models and cost) adds a
-// line here and a branch below, and nothing else on this page changes.
+// One line per tab, so a later screen adds a line here and a branch
+// below, and nothing else on this page changes.
 const TABS: { key: Tab; label: string }[] = [
   { key: "agents", label: "Agents" },
   { key: "tree", label: "Tree" },
   { key: "history", label: "History" },
+  { key: "cost", label: "Models and cost" },
 ];
 
 const START_A_REQUEST = "I want an agent that ";
 
 /**
  * AI Agents: manage the helpers you have made and see how they work
- * together. What they cost is on Usage. Agents are made in Chat, by describing
+ * together. What they cost is under Models and cost. Agents are made in Chat, by describing
  * one; this is where they are scheduled, run, paused and edited.
  */
 export default function Agents() {
@@ -111,9 +113,6 @@ export default function Agents() {
   return (
     <>
       <PageHeader title="AI Agents">
-        <Link to="/usage" className="btn btn-sm btn-ghost">
-          See usage
-        </Link>
         <Button icon="plus" size="sm" onClick={describeInChat}>
           New agent in Chat
         </Button>
@@ -214,6 +213,8 @@ export default function Agents() {
         {data && tab === "tree" && <LiveTree overview={data} onChanged={() => void load()} />}
 
         {data && tab === "history" && <HistoryView agents={data.agents} />}
+
+        {tab === "cost" && <CostView />}
       </PageBody>
     </>
   );
