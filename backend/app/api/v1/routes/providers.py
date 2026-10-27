@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
@@ -67,6 +68,11 @@ class ConnectedProviderResponse(BaseModel):
     model_chosen: bool = False
     base_url: str | None = None
     strengths: list[str] | None = None
+    plan: str | None = None
+
+
+class SetPlanRequest(BaseModel):
+    plan: Literal["free", "paid"]
 
 
 class ModelChoice(BaseModel):
@@ -167,6 +173,21 @@ async def set_model(
     await service.set_model(provider_key, body.model)
     await session.flush()
     match = next(c for c in await service.connected() if c.provider_key == provider_key)
+    return ConnectedProviderResponse(**asdict(match))
+
+
+@router.put(
+    "/providers/{provider_key}/plan",
+    response_model=ConnectedProviderResponse,
+    summary="Say whether this key is on a free or a paid plan",
+)
+async def set_plan(
+    provider_key: str, body: SetPlanRequest, ctx: ContextDep, session: SessionDep
+) -> ConnectedProviderResponse:
+    service = ProviderService(session, ctx.owner_id)
+    await service.set_plan(provider_key, body.plan)
+    await session.flush()
+    match = next(c for c in await service.connected(None) if c.provider_key == provider_key)
     return ConnectedProviderResponse(**asdict(match))
 
 

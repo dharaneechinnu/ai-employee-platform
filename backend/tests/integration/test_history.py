@@ -41,6 +41,8 @@ async def _agent_run(
     api: AsyncClient, headers: dict[str, str], agent_id: str, *, tool: str | None = None
 ) -> tuple[str, dict[str, Any]]:
     """Run an agent now and let the worker finish it. Returns the run id."""
+    # A key on a free plan costs nothing; these tests want a charged call.
+    await api.put("/api/v1/me/providers/gemini/plan", json={"plan": "paid"}, headers=headers)
     Scripted.call_first = tool
     started = (await api.post(f"{AGENTS}/{agent_id}/run", headers=headers)).json()
     done = await _run_task(uuid.UUID(started["task_id"]))
@@ -48,6 +50,7 @@ async def _agent_run(
 
 
 async def _chat_run(api: AsyncClient, headers: dict[str, str], text: str) -> str:
+    await api.put("/api/v1/me/providers/gemini/plan", json={"plan": "paid"}, headers=headers)
     created = await api.post(CONVERSATIONS, json={"mode": "study"}, headers=headers)
     sent = await api.post(
         f"{CONVERSATIONS}/{created.json()['id']}/messages", json={"content": text}, headers=headers

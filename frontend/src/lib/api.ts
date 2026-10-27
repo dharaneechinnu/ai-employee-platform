@@ -259,6 +259,8 @@ export interface ConnectedProvider {
   base_url?: string | null;
   /** What Automatic sends to this AI, in plain words. */
   strengths?: string[] | null;
+  /** The plan this key is on, as the person said; null until they do. */
+  plan?: "free" | "paid" | null;
 }
 
 export type TaskStatus =

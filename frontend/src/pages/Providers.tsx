@@ -349,6 +349,15 @@ function ProviderPanel({
     }
   }
 
+  async function setPlan(plan: "free" | "paid") {
+    try {
+      await api.put(`/me/providers/${option.key}/plan`, { plan });
+      onChanged();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not save that.", "bad");
+    }
+  }
+
   async function remove() {
     try {
       await api.del(`/me/providers/${option.key}`);
@@ -413,6 +422,33 @@ function ProviderPanel({
             <dd className="font-mono">{conn.key_last4 === "none" ? "none" : `••••${conn.key_last4}`}</dd>
           </div>
           {!search && <ModelChoice provider={conn} onSaved={onChanged} />}
+          {!search && (
+            <div className="col-span-2">
+              <dt className="text-dim">Plan on this key</dt>
+              <dd className="mt-1 flex items-center gap-2">
+                <div className="flex gap-1 rounded-full border border-line bg-raised p-0.5" role="group" aria-label="Plan on this key">
+                  {(["free", "paid"] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      aria-pressed={conn.plan === p}
+                      onClick={() => void setPlan(p)}
+                      className={`rounded-full px-3 py-1 text-[12.5px] font-medium ${conn.plan === p ? "bg-accent text-on-accent" : "text-muted"}`}
+                    >
+                      {p === "free" ? "Free" : "Paid"}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[12px] text-dim">
+                  {conn.plan === "free"
+                    ? "New runs count as free."
+                    : conn.plan === "paid"
+                      ? "New runs are priced from the token counts."
+                      : "Not set: priced from the token counts."}
+                </span>
+              </dd>
+            </div>
+          )}
           {conn.base_url && (
             <div className="col-span-2">
               <dt className="text-dim">Server</dt>

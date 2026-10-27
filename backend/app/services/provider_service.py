@@ -126,6 +126,8 @@ class ConnectedProvider:
     base_url: str | None = None
     # What Automatic routing sends to it, in plain words.
     strengths: list[str] | None = None
+    # "free" or "paid", as the person said; None until they do.
+    plan: str | None = None
 
 
 class ProviderService:
@@ -179,6 +181,7 @@ class ProviderService:
                 strengths=routing_strengths(
                     config.provider_key, config.model or supported.default_model or ""
                 ),
+                plan=config.plan,
             )
             for config, supported in rows.all()
         ]
@@ -243,6 +246,9 @@ class ProviderService:
                 model=model,
                 base_url=base_url,
                 label=label,
+                # A provider with a free tier starts as free, since that
+                # is the plan a new key normally gets; one click changes it.
+                plan="free" if supported.free_tier and not supported.is_local else None,
             )
             self.session.add(config)
 
@@ -317,6 +323,23 @@ class ProviderService:
             )
         )
         return list(rows.all())
+
+    async def set_plan(self, provider_key: str, plan: str) -> ProviderConfig:
+        """Say whether this key is on a free or a paid plan."""
+        if plan not in ("free", "paid"):
+            raise ValidationError("The plan is either free or paid.")
+        config = await self._config(provider_key)
+        config.plan = plan
+        return config
+
+    async def key_plan(self, provider_key: str) -> str | None:
+        """The plan the person set for this provider's key, if any."""
+        return await self.session.scalar(
+            select(ProviderConfig.plan).where(
+                ProviderConfig.owner_id == self.owner_id,
+                ProviderConfig.provider_key == provider_key,
+            )
+        )
 
     async def set_model(self, provider_key: str, model: str | None) -> ProviderConfig:
         """Pick which model this provider runs. None goes back to the

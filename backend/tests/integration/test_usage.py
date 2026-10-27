@@ -36,6 +36,8 @@ USAGE = "/api/v1/me/usage"
 
 
 async def _a_run(api: AsyncClient, headers: dict[str, str]) -> uuid.UUID:
+    # A key on a free plan costs nothing; this test wants a charged call.
+    await api.put("/api/v1/me/providers/gemini/plan", json={"plan": "paid"}, headers=headers)
     agent = (await api.post(AGENTS, json=_new(), headers=headers)).json()
     Scripted.call_first = None
     started = (await api.post(f"{AGENTS}/{agent['id']}/run", headers=headers)).json()

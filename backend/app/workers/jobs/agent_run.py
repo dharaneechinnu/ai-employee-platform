@@ -13,6 +13,7 @@ import asyncio
 import socket
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -399,6 +400,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             }
 
         cost = estimate_cost(provider_key, model, outcome.prompt_tokens, outcome.output_tokens)
+        # A key on a free plan is not charged, whatever the price table says.
+        if await providers.key_plan(provider_key) == "free":
+            cost = Decimal(0)
         session.add(
             LLMCall(
                 run_id=run_db.id,

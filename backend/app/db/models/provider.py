@@ -118,6 +118,10 @@ class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # OpenAI-compatible server lives, and what they call it.
     base_url: Mapped[str | None] = mapped_column(String(500))
     label: Mapped[str | None] = mapped_column(String(100))
+    # Which plan this key is on: "free" or "paid". A call made on a free
+    # key is recorded at no cost, so the cost view counts it as free.
+    # NULL = not said, and the price table decides.
+    plan: Mapped[str | None] = mapped_column(String(10))
 
     __table_args__ = (
         UniqueConstraint("owner_id", "provider_key", name="uq_provider_config_org_provider"),
