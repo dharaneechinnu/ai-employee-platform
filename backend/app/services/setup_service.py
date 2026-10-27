@@ -17,7 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.agent import Agent
 from app.db.models.policy import Connection
-from app.db.models.provider import ConnectionStatus, ProviderConfig
+from app.db.models.provider import (
+    ConnectionStatus,
+    ProviderConfig,
+    ProviderKind,
+    SupportedProvider,
+)
 from app.db.models.setup import SetupProgress
 from app.db.models.task import Run
 
@@ -53,12 +58,15 @@ class SetupService:
     async def _seen(self) -> set[str]:
         """Steps the data proves right now."""
         owner = self.owner_id
+        # Only AI keys count: a search key does not mean an AI was picked.
+        ai = (
+            ProviderConfig.owner_id == owner,
+            ProviderConfig.provider_key == SupportedProvider.key,
+            SupportedProvider.kind == ProviderKind.LLM,
+        )
         checks = {
-            "pick_ai": exists().where(ProviderConfig.owner_id == owner),
-            "add_key": exists().where(
-                ProviderConfig.owner_id == owner,
-                ProviderConfig.status == ConnectionStatus.WORKING,
-            ),
+            "pick_ai": exists().where(*ai),
+            "add_key": exists().where(*ai, ProviderConfig.status == ConnectionStatus.WORKING),
             "connect_app": exists().where(Connection.owner_id == owner),
             # Making an agent or running anything both count: either way
             # the person is past "what is this thing".

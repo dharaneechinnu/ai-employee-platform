@@ -15,7 +15,7 @@ from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
 from app.api.v1.deps import ContextDep, SessionDep
-from app.db.models.provider import ConnectionStatus
+from app.db.models.provider import ConnectionStatus, ProviderKind
 from app.services.provider_service import ProviderService
 
 router = APIRouter(prefix="/me", tags=["providers"])
@@ -30,6 +30,14 @@ class AvailableProvider(BaseModel):
     # is a warning shown before connecting, not a block: it is their
     # key and their choice, but they must be told.
     trains_on_data: bool
+    kind: ProviderKind = ProviderKind.LLM
+    # For the setup cards and the guide, all kept as data on the catalog row.
+    free_tier: bool = False
+    is_local: bool = False
+    signup_url: str | None = None
+    # 1 = the easiest to start with. None = no suggestion.
+    recommended_rank: int | None = None
+    guide: list[dict[str, str]] = []
 
 
 class ConnectRequest(BaseModel):
@@ -72,7 +80,9 @@ class ModelChoice(BaseModel):
 @router.get(
     "/providers/available", response_model=list[AvailableProvider], summary="The provider menu"
 )
-async def available(ctx: ContextDep, session: SessionDep) -> list[AvailableProvider]:
+async def available(
+    ctx: ContextDep, session: SessionDep, kind: ProviderKind = ProviderKind.LLM
+) -> list[AvailableProvider]:
     return [
         AvailableProvider(
             key=p.key,
@@ -80,8 +90,14 @@ async def available(ctx: ContextDep, session: SessionDep) -> list[AvailableProvi
             default_model=p.default_model,
             docs_url=p.docs_url,
             trains_on_data=p.trains_on_data,
+            kind=p.kind,
+            free_tier=p.free_tier,
+            is_local=p.is_local,
+            signup_url=p.signup_url,
+            recommended_rank=p.recommended_rank,
+            guide=p.guide,
         )
-        for p in await ProviderService(session, ctx.owner_id).available()
+        for p in await ProviderService(session, ctx.owner_id).available(kind)
     ]
 
 
@@ -90,10 +106,12 @@ async def available(ctx: ContextDep, session: SessionDep) -> list[AvailableProvi
     response_model=list[ConnectedProviderResponse],
     summary="Which providers we have connected",
 )
-async def connected(ctx: ContextDep, session: SessionDep) -> list[ConnectedProviderResponse]:
+async def connected(
+    ctx: ContextDep, session: SessionDep, kind: ProviderKind = ProviderKind.LLM
+) -> list[ConnectedProviderResponse]:
     return [
         ConnectedProviderResponse(**asdict(c))
-        for c in await ProviderService(session, ctx.owner_id).connected()
+        for c in await ProviderService(session, ctx.owner_id).connected(kind)
     ]
 
 
@@ -115,7 +133,7 @@ async def connect(
         label=body.label,
     )
 
-    match = next(c for c in await service.connected() if c.provider_key == body.provider_key)
+    match = next(c for c in await service.connected(None) if c.provider_key == body.provider_key)
     return ConnectedProviderResponse(**asdict(match))
 
 
@@ -133,7 +151,7 @@ async def test(
     await service.test(provider_key)
     await session.flush()
 
-    match = next(c for c in await service.connected() if c.provider_key == provider_key)
+    match = next(c for c in await service.connected(None) if c.provider_key == provider_key)
     return ConnectedProviderResponse(**asdict(match))
 
 

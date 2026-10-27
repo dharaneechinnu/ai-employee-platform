@@ -18,6 +18,13 @@ export interface SetupState {
   guide: Record<string, string[]>;
 }
 
+const EVENT = "setup-changed";
+
+/** Call after something that may have moved a step along, so the bar updates at once. */
+export function notifySetup(): void {
+  window.dispatchEvent(new Event(EVENT));
+}
+
 export function useSetup() {
   const [state, setState] = useState<SetupState | null>(null);
 
@@ -31,6 +38,9 @@ export function useSetup() {
 
   useEffect(() => {
     void refresh();
+    const again = () => void refresh();
+    window.addEventListener(EVENT, again);
+    return () => window.removeEventListener(EVENT, again);
   }, [refresh]);
 
   const markGuideStep = useCallback(async (provider: string, step: string) => {

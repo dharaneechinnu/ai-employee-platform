@@ -18,7 +18,17 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, LargeBinary, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,6 +39,9 @@ from app.db.models.policy import ConnectionKind
 class ProviderKind(StrEnum):
     LLM = "llm"
     EMBEDDING = "embedding"
+    # A web search service (Tavily, Brave). Its key is kept like an AI
+    # key, but it is never offered as an AI to run a task on.
+    SEARCH = "search"
 
 
 class ConnectionStatus(StrEnum):
@@ -64,6 +77,16 @@ class SupportedProvider(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     api_format: Mapped[str] = mapped_column(String(20), nullable=False, default="openai")
     base_url: Mapped[str | None] = mapped_column(String(500))
     auth_header: Mapped[str | None] = mapped_column(String(60))
+
+    # What the setup screens show, as data so a new provider needs no
+    # release: has a free tier, runs on the person's own machine, where
+    # to sign up, the order to suggest them in (1 = easiest first), and
+    # the guide as a list of {id, title, detail, expect, url?} steps.
+    free_tier: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_local: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    signup_url: Mapped[str | None] = mapped_column(String(500))
+    recommended_rank: Mapped[int | None] = mapped_column(Integer)
+    guide: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False, default=list)
 
 
 class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):

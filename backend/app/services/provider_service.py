@@ -133,10 +133,10 @@ class ProviderService:
         self.session = session
         self.owner_id = owner_id
 
-    async def available(self) -> list[SupportedProvider]:
+    async def available(self, kind: ProviderKind = ProviderKind.LLM) -> list[SupportedProvider]:
         result = await self.session.scalars(
             select(SupportedProvider)
-            .where(SupportedProvider.enabled.is_(True), SupportedProvider.kind == ProviderKind.LLM)
+            .where(SupportedProvider.enabled.is_(True), SupportedProvider.kind == kind)
             .order_by(SupportedProvider.display_name)
         )
         return list(result.all())
@@ -149,13 +149,21 @@ class ProviderService:
             raise ValidationError(f"'{provider_key}' is not an available provider.")
         return supported
 
-    async def connected(self) -> list[ConnectedProvider]:
-        rows = await self.session.execute(
+    async def connected(
+        self, kind: ProviderKind | None = ProviderKind.LLM
+    ) -> list[ConnectedProvider]:
+        # One kind at a time by default: a search key must never show up
+        # as an AI that a task could be routed to. None means every kind,
+        # for looking up one named connection.
+        query = (
             select(ProviderConfig, SupportedProvider)
             .join(SupportedProvider, SupportedProvider.key == ProviderConfig.provider_key)
             .where(ProviderConfig.owner_id == self.owner_id)
             .order_by(SupportedProvider.display_name)
         )
+        if kind is not None:
+            query = query.where(SupportedProvider.kind == kind)
+        rows = await self.session.execute(query)
         return [
             ConnectedProvider(
                 provider_key=config.provider_key,
@@ -188,6 +196,8 @@ class ProviderService:
         api_key = api_key.strip()
         model = (model or "").strip() or None
 
+        if supported.kind is ProviderKind.SEARCH:
+            model = None
         if provider_key == CUSTOM_PROVIDER:
             # Any OpenAI-compatible server: the person says where it is
             # and which model it serves. A key is optional, because a
@@ -250,6 +260,8 @@ class ProviderService:
         mysterious task failure three days later."""
         config = await self._config(provider_key)
         supported = await self._supported(provider_key)
+        if supported.kind is ProviderKind.SEARCH:
+            return await self._test_search(config, supported)
         provider = await self._provider(config)
 
         try:
@@ -264,11 +276,54 @@ class ProviderService:
         config.last_tested_at = datetime.now(UTC)
         return config
 
+    async def _test_search(
+        self, config: ProviderConfig, supported: SupportedProvider
+    ) -> ProviderConfig:
+        """One tiny search with this key."""
+        from app.agent.tools.packs.search import run_search
+
+        result = await run_search(
+            supported.key, decrypt(config.api_key_enc, scope=self.owner_id), "weather today", 1
+        )
+        config.last_tested_at = datetime.now(UTC)
+        if result.ok:
+            config.status = ConnectionStatus.WORKING
+            config.last_error = None
+        else:
+            config.status = ConnectionStatus.FAILED
+            config.last_error = (result.message or "The search failed.")[:500]
+        return config
+
+    async def search_key(self) -> tuple[str, str] | None:
+        """The person's own search provider and key, or None.
+
+        Tavily before Brave, and a key that failed its last test is
+        skipped so a dead key does not hide the platform's working one.
+        """
+        configs = {c.provider_key: c for c in await self._search_configs()}
+        for key in ("tavily", "brave"):
+            config = configs.get(key)
+            if config is not None and config.status is not ConnectionStatus.FAILED:
+                return key, decrypt(config.api_key_enc, scope=self.owner_id)
+        return None
+
+    async def _search_configs(self) -> list[ProviderConfig]:
+        rows = await self.session.scalars(
+            select(ProviderConfig)
+            .join(SupportedProvider, SupportedProvider.key == ProviderConfig.provider_key)
+            .where(
+                ProviderConfig.owner_id == self.owner_id,
+                SupportedProvider.kind == ProviderKind.SEARCH,
+            )
+        )
+        return list(rows.all())
+
     async def set_model(self, provider_key: str, model: str | None) -> ProviderConfig:
         """Pick which model this provider runs. None goes back to the
         provider's default. The connection is marked untested, because
         a wrong model name fails just like a wrong key."""
         config = await self._config(provider_key)
+        await self._require_llm(provider_key)
         model = (model or "").strip() or None
         if model is None and provider_key == CUSTOM_PROVIDER:
             raise ValidationError("Your own server needs a model name.")
@@ -283,6 +338,7 @@ class ProviderService:
         only: embedding, speech and moderation models cannot answer."""
         config = await self._config(provider_key)
         supported = await self._supported(provider_key)
+        await self._require_llm(provider_key)
         provider = await self._provider(config)
         try:
             ids = await provider.list_models()
@@ -303,6 +359,7 @@ class ProviderService:
         """
         config = await self._config(provider_key)
         supported = await self._supported(provider_key)
+        await self._require_llm(provider_key)
         provider = await self._provider(config)
         current = config.model or supported.default_model
 
@@ -345,6 +402,11 @@ class ProviderService:
         config.status = ConnectionStatus.WORKING if working else ConnectionStatus.UNTESTED
         config.last_error = None
         config.last_tested_at = datetime.now(UTC)
+
+    async def _require_llm(self, provider_key: str) -> None:
+        supported = await self._supported(provider_key)
+        if supported.kind is not ProviderKind.LLM:
+            raise ValidationError(f"'{provider_key}' is a search service, not an AI model.")
 
     async def _provider(self, config: ProviderConfig) -> LLMProvider:
         api_key = decrypt(config.api_key_enc, scope=self.owner_id)

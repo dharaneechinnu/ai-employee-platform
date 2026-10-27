@@ -169,9 +169,17 @@ class ReadinessService:
 
         # --- things the platform itself must provide -----------------------
         if any(t.name == "web_search" for t in tools):
-            if search_configured():
+            from app.services.provider_service import ProviderService
+
+            own = await ProviderService(self.session, self.owner_id).search_key()
+            if own is not None or search_configured():
                 checks.append(
-                    Check(True, "setup", "Web search is ready", "The platform has it set up.")
+                    Check(
+                        True,
+                        "setup",
+                        "Web search is ready",
+                        "Your search key is set up." if own else "The platform has it set up.",
+                    )
                 )
             else:
                 checks.append(
@@ -179,8 +187,8 @@ class ReadinessService:
                         False,
                         "setup",
                         "Web search is not set up",
-                        "The platform has no search key yet. Ask whoever runs it to add one.",
-                        fix="ask_admin",
+                        "Add a Tavily or Brave search key under AI keys.",
+                        fix="add_search_key",
                         tool="web_search",
                     )
                 )

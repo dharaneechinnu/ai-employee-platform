@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/icons";
+import { ProviderMark } from "../components/ProviderMark";
 import {
   Button,
   Chip,
-  Empty,
   ErrorNote,
   HoldButton,
   Input,
@@ -15,8 +16,16 @@ import {
   statusTone,
   useToast,
 } from "../components/ui";
-import { ApiError, api, type AutoModelResult, type ConnectedProvider, type ProviderOption } from "../lib/api";
+import {
+  ApiError,
+  api,
+  type AutoModelResult,
+  type ConnectedProvider,
+  type GuideStep,
+  type ProviderOption,
+} from "../lib/api";
 import { formatDateTime } from "../lib/labels";
+import { notifySetup, useSetup } from "../lib/setup";
 
 /** What auto-select found, in a sentence a person can act on. */
 function autoModelMessage(found: AutoModelResult | null): string {
@@ -28,105 +37,52 @@ function autoModelMessage(found: AutoModelResult | null): string {
     : "Key saved. Test it to make sure it works.";
 }
 
-/**
- * Phase 3. Bring your own key: each company pays its own model costs.
- *
- * A saved key is never shown again, to anyone, so this form only ever
- * writes. The last four characters are all the UI gets back.
- */
-const FREE_TIER = ["gemini", "groq"];
-const ORDER = ["gemini", "groq", "openai", "anthropic", "deepseek", "mistral", "sarvam", "openrouter", "custom"];
-// Any open-source model, on the company's own server: vLLM, Ollama,
-// LM Studio and LiteLLM all speak the OpenAI format.
+// Any open-source model on the person's own machine or server: Ollama,
+// LM Studio, vLLM and LiteLLM all speak the OpenAI format.
 const CUSTOM = "custom";
-const rank = (key: string) => (ORDER.includes(key) ? ORDER.indexOf(key) : ORDER.length);
 
+function byRank(a: ProviderOption, b: ProviderOption): number {
+  const ra = a.recommended_rank ?? 99;
+  const rb = b.recommended_rank ?? 99;
+  if (ra !== rb) return ra - rb;
+  if (a.free_tier !== b.free_tier) return a.free_tier ? -1 : 1;
+  return a.display_name.localeCompare(b.display_name);
+}
+
+/**
+ * AI keys: every provider as a card, a guide beside it, and a Web search
+ * section for the search key. Bring your own key: you pay your own model
+ * costs. A saved key is never shown again, so the form only ever writes;
+ * the last four characters are all the UI gets back.
+ */
 export default function Providers() {
-  const toast = useToast();
-  const [available, setAvailable] = useState<ProviderOption[] | null>(null);
+  const [ais, setAis] = useState<ProviderOption[] | null>(null);
+  const [searches, setSearches] = useState<ProviderOption[]>([]);
   const [connected, setConnected] = useState<ConnectedProvider[]>([]);
-  const [selected, setSelected] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
-  const [label, setLabel] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [testing, setTesting] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
 
-  async function load() {
-    // Free tiers first, so a new company's first choice costs nothing.
-    const options = (await api.get<ProviderOption[]>(`/me/providers/available`)).sort(
-      (a, b) => rank(a.key) - rank(b.key),
-    );
-    setAvailable(options);
-    setConnected(await api.get<ConnectedProvider[]>(`/me/providers`));
-    setSelected((current) => current || options[0]?.key || "");
-  }
+  const load = useCallback(async () => {
+    const [a, s, c, cs] = await Promise.all([
+      api.get<ProviderOption[]>(`/me/providers/available`),
+      api.get<ProviderOption[]>(`/me/providers/available?kind=search`),
+      api.get<ConnectedProvider[]>(`/me/providers`),
+      api.get<ConnectedProvider[]>(`/me/providers?kind=search`),
+    ]);
+    setAis(a.sort(byRank));
+    setSearches(s.sort(byRank));
+    setConnected([...c, ...cs]);
+  }, []);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, ["me"]);
+  }, [load]);
 
-  async function connect(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSaving(true);
-    try {
-      const typedModel = model.trim();
-      await api.post(`/me/providers`, {
-        provider_key: selected,
-        api_key: apiKey,
-        model: typedModel || null,
-        ...(selected === CUSTOM ? { base_url: baseUrl, label: label || null } : {}),
-      });
-      setApiKey("");
-      setModel("");
-      setBaseUrl("");
-      setLabel("");
-      if (typedModel) {
-        toast("Key saved. Test it to make sure it works.");
-      } else {
-        // No model named: ask the provider what this key can use and
-        // switch to one that really answers, so a free key does not
-        // start on a model it cannot reach.
-        const found = await api
-          .post<AutoModelResult>(`/me/providers/${selected}/auto-model`)
-          .catch(() => null);
-        toast(autoModelMessage(found));
-      }
-      await load();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not connect that.");
-    } finally {
-      setSaving(false);
-    }
-  }
+  const find = useMemo(() => new Map(connected.map((c) => [c.provider_key, c])), [connected]);
+  const all = useMemo(() => [...(ais ?? []), ...searches], [ais, searches]);
+  const panel = open ? all.find((p) => p.key === open) : undefined;
+  const aiConnected = (ais ?? []).filter((p) => find.has(p.key)).length;
 
-  async function test(provider: ConnectedProvider) {
-    setTesting(provider.provider_key);
-    try {
-      await api.post(`/me/providers/${provider.provider_key}/test`);
-      await load();
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : "The test could not run.", "bad");
-    } finally {
-      setTesting(null);
-    }
-  }
-
-  async function disconnect(provider: ConnectedProvider) {
-    try {
-      await api.del(`/me/providers/${provider.provider_key}`);
-      toast(`${provider.display_name} key removed. Paste it again to reconnect.`, "info");
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : "Could not remove that key.", "bad");
-    }
-    await load();
-  }
-
-  if (!available) {
+  if (!ais) {
     return (
       <>
         <PageHeader title="AI keys" />
@@ -135,211 +91,459 @@ export default function Providers() {
     );
   }
 
-  const chosen = available.find((p) => p.key === selected);
-  const custom = selected === CUSTOM;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="min-w-0 flex-1">
+        <PageHeader title="AI keys">
+          <span className="max-w-[380px] text-[13px] leading-snug text-muted">
+            Your key, your bill. Run costs here are estimates; your provider's invoice is the real number.
+          </span>
+        </PageHeader>
+
+        <PageBody>
+          <div className="flex flex-wrap items-start gap-3 rounded-xl border border-line bg-panel px-4 py-3.5" data-coach="routing-note">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-text">
+              <Icon name="sparkle" size={17} />
+            </span>
+            <div className="min-w-0 flex-1 text-[13.5px] leading-normal">
+              <div className="font-medium">
+                {aiConnected > 1
+                  ? `Automatic picks from your ${aiConnected} AIs for every task`
+                  : "Connect more than one AI and Automatic picks the right one for each task"}
+              </div>
+              <div className="text-muted">
+                Hard work goes to your strongest AI, quick questions to the fastest and cheapest, and if one is busy the next
+                takes over.
+              </div>
+            </div>
+          </div>
+
+          <Section title="AI models" hint="Start with a free one. You can add more later.">
+            {ais.map((p) => (
+              <ProviderCard
+                key={p.key}
+                option={p}
+                conn={find.get(p.key)}
+                suggest={aiConnected === 0 && p.recommended_rank === 1}
+                active={open === p.key}
+                onOpen={() => setOpen(p.key)}
+              />
+            ))}
+          </Section>
+
+          <Section title="Web search" hint="Lets agents look things up on the web. Optional, but the Researcher needs it.">
+            {searches.map((p) => (
+              <ProviderCard
+                key={p.key}
+                option={p}
+                conn={find.get(p.key)}
+                suggest={false}
+                active={open === p.key}
+                onOpen={() => setOpen(p.key)}
+              />
+            ))}
+          </Section>
+
+          <p className="text-[13px] text-dim">Keys are encrypted and cannot be read back, by you or by us.</p>
+        </PageBody>
+      </div>
+
+      {panel && (
+        <ProviderPanel
+          key={panel.key}
+          option={panel}
+          conn={find.get(panel.key)}
+          onClose={() => setOpen(null)}
+          onChanged={() => void load()}
+        />
+      )}
+    </div>
+  );
+}
+
+function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div>
+        <h2 className="font-display text-[17px] font-semibold">{title}</h2>
+        <p className="text-[13px] text-muted">{hint}</p>
+      </div>
+      <div className="stagger grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr))]">{children}</div>
+    </section>
+  );
+}
+
+function ProviderCard({
+  option,
+  conn,
+  suggest,
+  active,
+  onOpen,
+}: {
+  option: ProviderOption;
+  conn: ConnectedProvider | undefined;
+  suggest: boolean;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  const failed = conn?.status === "failed";
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-pressed={active}
+      className={`card lift flex flex-col gap-3 p-4 text-left ${active ? "card-on" : ""}`}
+      style={failed ? { borderColor: "var(--bad)" } : undefined}
+    >
+      <div className="flex items-center gap-3">
+        <ProviderMark provider={option.key} size={36} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-display text-[16px] font-semibold">{conn?.display_name ?? option.display_name}</div>
+          <div className="truncate text-[12px] text-dim">
+            {conn ? (conn.key_last4 === "none" ? "no key" : `key ••••${conn.key_last4}`) : "Not connected"}
+          </div>
+        </div>
+        {conn && <Chip tone={statusTone(conn.status)}>{conn.status}</Chip>}
+      </div>
+      <div className="flex flex-wrap gap-1.5 text-[11.5px]">
+        {suggest && <Pill tone="accent">Recommended first</Pill>}
+        {option.is_local ? <Pill>Local</Pill> : option.free_tier ? <Pill tone="ok">Free tier</Pill> : <Pill>Paid</Pill>}
+        {conn?.default_model && <Pill mono>{conn.default_model}</Pill>}
+      </div>
+      <span className="mt-auto flex items-center gap-1 text-[13px] font-medium text-accent-text">
+        {conn ? "Manage" : "Connect"}
+        <Icon name="chevron" size={14} />
+      </span>
+    </button>
+  );
+}
+
+function Pill({ children, tone, mono }: { children: React.ReactNode; tone?: "ok" | "accent"; mono?: boolean }) {
+  const look =
+    tone === "ok" ? "bg-ok-soft text-ok-text" : tone === "accent" ? "bg-accent-soft text-accent-text" : "bg-raised text-muted";
+  return <span className={`max-w-full truncate rounded-full px-2 py-0.5 font-medium ${look} ${mono ? "font-mono" : ""}`}>{children}</span>;
+}
+
+function ProviderPanel({
+  option,
+  conn,
+  onClose,
+  onChanged,
+}: {
+  option: ProviderOption;
+  conn: ConnectedProvider | undefined;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const { state, markGuideStep } = useSetup();
+  const search = option.kind === "search";
+  const custom = option.key === CUSTOM;
+
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("");
+  const [baseUrl, setBaseUrl] = useState(custom ? "http://localhost:11434/v1" : "");
+  const [label, setLabel] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"save" | "test" | null>(null);
+  const [replacing, setReplacing] = useState(false);
+  const [showGuide, setShowGuide] = useState(true);
+  const [skipped, setSkipped] = useState(false);
+  const [justWorked, setJustWorked] = useState(false);
+
+  const doneSteps = state?.guide[option.key] ?? [];
+  const working = conn?.status === "working";
+  const showForm = !conn || replacing;
+  const firstUndone = option.guide.find((s) => !doneSteps.includes(s.id))?.id;
+  const guideVisible = option.guide.length > 0 && (!working || showGuide) && !skipped;
+
+  async function tick(step: string) {
+    if (!doneSteps.includes(step)) {
+      await markGuideStep(option.key, step);
+      notifySetup();
+    }
+  }
+
+  async function connect(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy("save");
+    try {
+      const typedModel = model.trim();
+      await api.post(`/me/providers`, {
+        provider_key: option.key,
+        api_key: apiKey,
+        model: typedModel || null,
+        ...(custom ? { base_url: baseUrl, label: label || null } : {}),
+      });
+      setApiKey("");
+      await tick("create");
+      await tick("paste");
+      setBusy("test");
+      let ok = false;
+      if (search || typedModel) {
+        const res = await api.post<ConnectedProvider>(`/me/providers/${option.key}/test`);
+        ok = res.status === "working";
+        if (!ok) setError(res.last_error ?? "The key did not work.");
+      } else {
+        // No model named: ask the provider what this key can use and
+        // switch to one that really answers.
+        const found = await api.post<AutoModelResult>(`/me/providers/${option.key}/auto-model`).catch(() => null);
+        ok = found?.provider.status === "working";
+        if (!ok) setError(found?.provider.last_error ?? autoModelMessage(found));
+      }
+      if (ok) {
+        await tick("test");
+        setJustWorked(true);
+        setReplacing(false);
+      }
+      notifySetup();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not connect that.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function test() {
+    setBusy("test");
+    try {
+      const res = await api.post<ConnectedProvider>(`/me/providers/${option.key}/test`);
+      if (res.status === "working") {
+        await tick("test");
+        setJustWorked(true);
+      }
+      notifySetup();
+      onChanged();
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "The test could not run.", "bad");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove() {
+    try {
+      await api.del(`/me/providers/${option.key}`);
+      toast(`${option.display_name} key removed. Paste it again to reconnect.`, "info");
+      setJustWorked(false);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Could not remove that key.", "bad");
+    }
+    notifySetup();
+    onChanged();
+  }
+
   const ready = custom ? Boolean(baseUrl) : Boolean(apiKey);
 
   return (
-    <>
-      <PageHeader title="AI keys">
-        <span className="max-w-[380px] text-[13px] leading-snug text-muted">
-          Your key, your bill. Run costs here are estimates; your provider's invoice is the real number.
-        </span>
-      </PageHeader>
-
-      <PageBody>
-        {/* Several AIs are better than one: Automatic gives each task to
-            the one that suits it, and falls back if one is busy. */}
-        <div className="flex flex-wrap items-start gap-3 rounded-xl border border-line bg-panel px-4 py-3.5" data-coach="routing-note">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-text">
-            <Icon name="sparkle" size={17} />
-          </span>
-          <div className="min-w-0 flex-1 text-[13.5px] leading-normal">
-            <div className="font-medium">
-              {connected.length > 1
-                ? `Automatic picks from your ${connected.length} AIs for every task`
-                : "Connect more than one AI and Automatic picks the right one for each task"}
-            </div>
-            <div className="text-muted">
-              Hard work like coding and analysis goes to your strongest AI, quick questions to the fastest and cheapest, and if
-              one is busy the next takes over. Choose Automatic, or pin one AI, in a chat.
-            </div>
+    <aside className="side-panel w-full shrink-0 overflow-y-auto p-5 lg:sticky lg:top-0 lg:h-screen lg:w-[400px]" aria-label={`${option.display_name} setup`}>
+      <div className="flex items-start gap-3">
+        <ProviderMark provider={option.key} size={40} />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-display text-xl font-semibold">{option.display_name}</h2>
+          <div className="text-[12.5px] text-dim">
+            {search ? "Web search" : option.is_local ? "Runs on your machine" : option.free_tier ? "Has a free tier" : "Paid"}
           </div>
         </div>
+        <button type="button" onClick={onClose} className="icon-btn" aria-label="Close panel">
+          <Icon name="x" size={18} />
+        </button>
+      </div>
 
-        {connected.length === 0 ? (
-          <Empty message="No provider connected" hint="Your assistant cannot answer until you connect at least one key below." />
-        ) : (
-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr))]">
-            {connected.map((provider, i) => {
-              const isTesting = testing === provider.provider_key;
-              const working = provider.status === "working";
-              return (
-                <article
-                  key={provider.provider_key}
-                  className="card lift rise flex flex-col gap-4 p-5"
-                  style={{
-                    animationDelay: `${i * 0.08}s`,
-                    ...(provider.status === "failed" ? { borderColor: "var(--bad)" } : {}),
-                  }}
-                >
-                  <div className="flex items-center gap-3.5">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] border border-line2 bg-raised font-display text-lg font-bold text-accent-text">
-                      {provider.display_name.charAt(0)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-display text-lg font-semibold">{provider.display_name}</div>
-                      <div className="font-mono text-[13px] text-muted">
-                        {provider.key_last4 === "none" ? "no key" : `key ••••••••${provider.key_last4}`}
-                      </div>
-                    </div>
-                    {isTesting ? (
-                      <Chip tone="run" dot={false}>
-                        <Icon name="spinner" size={12} strokeWidth={3} className="spin" />
-                        testing
-                      </Chip>
-                    ) : (
-                      <Chip tone={statusTone(provider.status)}>{provider.status}</Chip>
-                    )}
-                  </div>
-
-                  {working && (
-                    <div className="flex items-center gap-3" aria-hidden="true">
-                      <span className="text-xs text-dim">You</span>
-                      <span className="relative h-0.5 flex-1 rounded" style={{ background: "linear-gradient(90deg,var(--line2),var(--ok),var(--line2))" }}>
-                        {[0, 0.8].map((delay) => (
-                          <span
-                            key={delay}
-                            className="absolute -top-[3px] h-2 w-2 rounded-full bg-ok"
-                            style={{ boxShadow: "0 0 10px var(--ok)", animation: `beam 1.6s ease-in-out ${delay}s infinite` }}
-                          />
-                        ))}
-                      </span>
-                      <span className="text-xs text-dim">{provider.display_name}</span>
-                    </div>
-                  )}
-
-                  {provider.strengths && provider.strengths.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-[12px]">
-                      <span className="text-dim">Automatic sends it</span>
-                      {provider.strengths.map((s) => (
-                        <span key={s} className="rounded-full bg-raised px-2 py-0.5 text-muted">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {provider.trains_on_data && (
-                    <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px] leading-normal">
-                      <Icon name="warn" className="text-ask-text" />
-                      <span>This provider may train on what you send it. Check their terms before using it with customer data.</span>
-                    </div>
-                  )}
-
-                  {provider.last_error && <ErrorNote message={provider.last_error} />}
-
-                  {provider.base_url && (
-                    <div className="text-[13px]">
-                      <div className="text-dim">Server</div>
-                      <div className="truncate font-mono" title={provider.base_url}>{provider.base_url}</div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2.5 text-[13px]">
-                    <ModelChoice provider={provider} onSaved={() => void load()} />
-                    <div>
-                      <div className="text-dim">Last tested</div>
-                      <div className="font-mono" title={provider.last_tested_at ? formatDateTime(provider.last_tested_at) : undefined}>
-                        {provider.last_tested_at ? relativeTime(provider.last_tested_at) : "never"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-auto flex flex-col gap-1.5">
-                    <div className="flex gap-2">
-                      <Button size="sm" variant={provider.status === "untested" ? "brand" : "ghost"} disabled={isTesting} onClick={() => void test(provider)}>
-                        {provider.status === "untested" ? "Test connection" : "Test again"}
-                      </Button>
-                      {/* Removing deletes the stored key, and there is no
-                          way to get it back, so it takes a hold, not a click. */}
-                      <HoldButton variant="danger-ghost" className="btn-sm" onConfirm={() => void disconnect(provider)}>
-                        Hold to remove
-                      </HoldButton>
-                    </div>
-                    <p className="text-[12px] text-dim">Removing deletes the key. You will need to paste the key again.</p>
-                  </div>
-                </article>
-              );
-            })}
+      {justWorked && working && (
+        <div className="mt-4 flex flex-col gap-3 rounded-xl bg-ok-soft p-4 text-ok-text">
+          <div className="flex items-center gap-3 font-medium">
+            <svg className="check-draw" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 12l4 4 10-10" />
+            </svg>
+            {search ? "Search is connected" : "Connected and working"}
           </div>
-        )}
-
-        <form onSubmit={connect} className="card rise flex flex-col gap-4 border-dashed border-line2 p-5" data-coach="provider-form">
-          <h2 className="font-display text-[17px] font-semibold">Connect a provider</h2>
-          <div className="grid items-end gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr))]">
-            <Select
-              label="Provider"
-              value={selected}
-              onChange={setSelected}
-              options={available.map((option) => ({
-                value: option.key,
-                label: FREE_TIER.includes(option.key) ? `${option.display_name} (free tier)` : option.display_name,
-              }))}
-            />
-            {custom && (
-              <>
-                <Input label="Name" value={label} onChange={setLabel} placeholder="Our Llama server" />
-                <Input label="Server address" value={baseUrl} onChange={setBaseUrl} required mono placeholder="https://llm.example.com/v1" />
-              </>
-            )}
-            <Input
-              label={custom ? "Model" : "Model (optional)"}
-              value={model}
-              onChange={setModel}
-              required={custom}
-              mono
-              placeholder={custom ? "llama-3.3-70b" : chosen?.default_model ?? ""}
-            />
-            <Input
-              label={custom ? "API key (if it needs one)" : "API key"}
-              type="password"
-              value={apiKey}
-              onChange={setApiKey}
-              required={!custom}
-              mono
-              autoComplete="off"
-              placeholder="Paste key"
-            />
-            <Button type="submit" variant={connected.length ? "ghost" : "brand"} disabled={!ready || saving}>
-              {saving ? "Saving…" : "Connect"}
+          {!search && (
+            <Button size="sm" icon="chat" onClick={() => navigate("/chat")}>
+              Next: say hello in chat
             </Button>
-          </div>
-          {custom && (
-            <p className="text-[13px] leading-snug text-muted">
-              Run any open-source model (Llama, Qwen, DeepSeek, Mistral, Gemma) on your own server with vLLM, Ollama, LM Studio
-              or LiteLLM, and paste the address of its OpenAI-compatible API, usually ending in <span className="font-mono">/v1</span>.
-              It must be reachable over https.
-            </p>
           )}
-          {chosen?.trains_on_data && (
-            <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px]">
+        </div>
+      )}
+
+      {conn && (
+        <dl className="mt-4 grid grid-cols-2 gap-3 text-[13px]">
+          <div>
+            <dt className="text-dim">Status</dt>
+            <dd>
+              <Chip tone={statusTone(conn.status)}>{conn.status}</Chip>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-dim">Last tested</dt>
+            <dd className="font-mono" title={conn.last_tested_at ? formatDateTime(conn.last_tested_at) : undefined}>
+              {conn.last_tested_at ? relativeTime(conn.last_tested_at) : "never"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-dim">Key</dt>
+            <dd className="font-mono">{conn.key_last4 === "none" ? "none" : `••••${conn.key_last4}`}</dd>
+          </div>
+          {!search && <ModelChoice provider={conn} onSaved={onChanged} />}
+          {conn.base_url && (
+            <div className="col-span-2">
+              <dt className="text-dim">Server</dt>
+              <dd className="truncate font-mono" title={conn.base_url}>{conn.base_url}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      {conn?.last_error && (
+        <div className="mt-3">
+          <ErrorNote message={conn.last_error} />
+        </div>
+      )}
+
+      {conn && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button size="sm" variant={conn.status === "working" ? "ghost" : "brand"} disabled={busy !== null} onClick={() => void test()}>
+            {busy === "test" ? "Testing…" : conn.status === "working" ? "Test again" : "Test connection"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setReplacing((v) => !v)}>
+            {replacing ? "Keep current key" : "Change key"}
+          </Button>
+          {/* Removing deletes the stored key for good, so it takes a hold. */}
+          <HoldButton variant="danger-ghost" className="btn-sm" onConfirm={() => void remove()}>
+            Hold to remove
+          </HoldButton>
+        </div>
+      )}
+
+      {guideVisible && (
+        <Guide
+          steps={option.guide}
+          done={doneSteps}
+          current={firstUndone}
+          onOpenLink={() => void tick("signup")}
+          onSkip={() => setSkipped(true)}
+        />
+      )}
+      {working && guideVisible && showGuide && (
+        <button type="button" className="mt-2 text-[13px] text-dim hover:underline" onClick={() => setShowGuide(false)}>
+          Hide the guide
+        </button>
+      )}
+      {!guideVisible && option.guide.length > 0 && (
+        <button
+          type="button"
+          className="mt-4 text-[13px] text-accent-text hover:underline"
+          onClick={() => {
+            setShowGuide(true);
+            setSkipped(false);
+          }}
+        >
+          <Icon name="book" size={14} className="mr-1 inline" /> Show the setup guide again
+        </button>
+      )}
+
+      {showForm && (
+        <form onSubmit={connect} className="mt-5 flex flex-col gap-3">
+          {custom && (
+            <>
+              <Input label="Name" value={label} onChange={setLabel} placeholder="My local model" />
+              <Input label="Server address" value={baseUrl} onChange={setBaseUrl} required mono placeholder="http://localhost:11434/v1" />
+              <Input label="Model (leave empty to find one)" value={model} onChange={setModel} mono placeholder="llama3.2" />
+            </>
+          )}
+          <Input
+            label={custom ? "API key (only if it needs one)" : "API key"}
+            type="password"
+            value={apiKey}
+            onChange={setApiKey}
+            required={!custom}
+            mono
+            autoComplete="off"
+            placeholder="Paste key"
+          />
+          {option.trains_on_data && (
+            <div className="flex gap-2.5 rounded-xl bg-ask-soft px-3.5 py-3 text-[13px] leading-normal">
               <Icon name="warn" className="text-ask-text" />
-              This provider may use what you send to train its models. Fine for testing; think carefully before real customer data.
+              <span>This provider may train on what you send it. Check their terms before using it with private data.</span>
             </div>
           )}
           <ErrorNote message={error} />
-          <p className="flex flex-wrap gap-x-3 text-[13px] text-dim">
-            Keys are encrypted and cannot be read back, by you or by us. Only the last four characters are shown.
-            {chosen?.docs_url && (
-              <a href={chosen.docs_url} target="_blank" rel="noreferrer" className="hover:underline">
-                Where do I find this key?
-              </a>
-            )}
-          </p>
+          <Button type="submit" disabled={!ready || busy !== null}>
+            {busy === "save" ? "Saving…" : busy === "test" ? "Testing…" : conn ? "Replace key" : "Connect and test"}
+          </Button>
         </form>
-      </PageBody>
-    </>
+      )}
+    </aside>
+  );
+}
+
+/**
+ * The steps, one action each. Steps already done collapse to a single
+ * line and the first undone one is open, so reopening the guide never
+ * walks someone through something they have finished.
+ */
+function Guide({
+  steps,
+  done,
+  current,
+  onOpenLink,
+  onSkip,
+}: {
+  steps: GuideStep[];
+  done: string[];
+  current: string | undefined;
+  onOpenLink: () => void;
+  onSkip: () => void;
+}) {
+  const finished = steps.filter((s) => done.includes(s.id)).length;
+  return (
+    <div className="mt-5 rounded-xl border border-line bg-panel p-4">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="font-display text-[15px] font-semibold">Setup guide</h3>
+        <button type="button" onClick={onSkip} className="text-[12.5px] text-dim hover:underline">
+          I already have a key
+        </button>
+      </div>
+      <div className="meter mb-3" aria-hidden="true">
+        <i style={{ ["--fill" as string]: steps.length ? finished / steps.length : 0, background: "var(--accent)" }} />
+      </div>
+      <ol className="flex flex-col gap-2">
+        {steps.map((s, i) => {
+          const isDone = done.includes(s.id);
+          const isCurrent = s.id === current;
+          return (
+            <li key={s.id} className={`rounded-lg px-3 py-2 ${isCurrent ? "card-on" : ""}`}>
+              <div className={`flex items-center gap-2 text-[13.5px] ${isDone ? "text-ok-text" : "font-medium"}`}>
+                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px] ${isDone ? "bg-ok-soft" : "bg-raised"}`}>
+                  {isDone ? <Icon name="check" size={12} strokeWidth={3} /> : i + 1}
+                </span>
+                {s.title}
+              </div>
+              {isCurrent && (
+                <div className="mt-1.5 pl-7 text-[13px] leading-normal text-muted">
+                  <p>{s.detail}</p>
+                  <p className="mt-1 text-dim">You should see: {s.expect}</p>
+                  {s.url && (
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={onOpenLink}
+                      className="mt-2 inline-flex items-center gap-1 font-medium text-accent-text hover:underline"
+                    >
+                      Open the page <Icon name="external" size={13} />
+                    </a>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 

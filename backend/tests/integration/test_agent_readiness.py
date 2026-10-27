@@ -355,7 +355,7 @@ async def test_asking_first_is_fine_in_chat_but_not_for_an_agent_that_runs_alone
 # --------------------------------------------- what the platform must provide
 
 
-async def test_web_search_needs_the_platform_to_have_a_key(
+async def test_web_search_needs_a_key_from_the_person_or_the_platform(
     api: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from app.config import get_settings
@@ -364,7 +364,7 @@ async def test_web_search_needs_the_platform_to_have_a_key(
 
     monkeypatch.setattr(get_settings(), "brave_api_key", None)
     monkeypatch.setattr(get_settings(), "tavily_api_key", None)
-    assert "setup:ask_admin" in _failed(await _check(api, headers, ["web_search"]))
+    assert "setup:add_search_key" in _failed(await _check(api, headers, ["web_search"]))
 
     monkeypatch.setattr(get_settings(), "brave_api_key", "k")
     monkeypatch.setattr(get_settings(), "tavily_api_key", None)

@@ -28,7 +28,6 @@ from app.db.models.memory import (
     RunSummary,
 )
 from app.db.models.notification import NotificationSettings
-from app.db.models.setup import SetupProgress
 from app.db.models.policy import (
     Approval,
     ApprovalStatus,
@@ -51,6 +50,7 @@ from app.db.models.provider import (
     ProviderKind,
     SupportedProvider,
 )
+from app.db.models.setup import SetupProgress
 from app.db.models.task import (
     EventType,
     LLMCall,
@@ -99,7 +99,6 @@ __all__ = [
     "PolicyScope",
     "PolicySetting",
     "ProviderConfig",
-    "SetupProgress",
     "ProviderKind",
     "ReembedJob",
     "RefreshToken",
@@ -108,6 +107,7 @@ __all__ = [
     "RunEvent",
     "RunStatus",
     "RunSummary",
+    "SetupProgress",
     "SetupToken",
     "SupportedProvider",
     "Task",

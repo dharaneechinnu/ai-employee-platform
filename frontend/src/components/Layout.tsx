@@ -3,6 +3,7 @@ import { useDock } from "../lib/dock";
 import { CoachHelp, CoachProvider } from "./coach/Coach";
 import CommandPalette from "./CommandPalette";
 import Rail from "./Rail";
+import SetupBar from "./SetupBar";
 import { Outlet } from "react-router-dom";
 
 export { BrandMark } from "./BrandMark";
@@ -26,6 +27,7 @@ export default function Layout() {
   return (
     <CoachProvider>
       <div className="flex min-h-screen flex-col">
+        <SetupBar />
         <main className="flex min-w-0 flex-1 flex-col" style={{ background: "var(--hero)" }}>
           <Outlet />
         </main>

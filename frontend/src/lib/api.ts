@@ -137,6 +137,23 @@ export interface ProviderOption {
   default_model: string | null;
   docs_url: string | null;
   trains_on_data: boolean;
+  kind: "llm" | "embedding" | "search";
+  free_tier: boolean;
+  is_local: boolean;
+  signup_url: string | null;
+  /** 1 = the easiest to start with. */
+  recommended_rank: number | null;
+  /** The setup guide, one action per step. */
+  guide: GuideStep[];
+}
+
+export interface GuideStep {
+  id: string;
+  title: string;
+  detail: string;
+  /** "You should see ..." */
+  expect: string;
+  url?: string;
 }
 
 export interface ConnectedProvider {
