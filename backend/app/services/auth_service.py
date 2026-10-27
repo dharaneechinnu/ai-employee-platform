@@ -1,4 +1,4 @@
-"""Authentication: account setup, login, and refresh-token rotation.
+"""Authentication: sign-up, account setup, login, and refresh-token rotation.
 
 The interesting part is rotation. Every refresh issues a new token and
 revokes the old one, and every token descended from one login shares a
@@ -17,10 +17,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.errors import (
+    ConflictError,
     InvalidCredentialsError,
     TokenReuseError,
     ValidationError,
@@ -34,6 +36,7 @@ from app.core.security import (
     needs_rehash,
     verify_password,
 )
+from app.core.usernames import is_valid_username
 from app.db.models.identity import RefreshToken, User
 from app.db.repositories.identity_repo import (
     RefreshTokenRepository,
@@ -79,6 +82,53 @@ class AuthService:
             expires_in=self.settings.access_token_minutes * 60,
         )
 
+    # ------------------------------------------------------------ sign-up
+
+    async def username_available(self, username: str) -> bool:
+        if not is_valid_username(username.strip()):
+            return False
+        return await self.users.get_by_username(username.strip()) is None
+
+    async def _taken(self, username: str, email: str) -> list[dict[str, str]]:
+        taken = []
+        if await self.users.get_by_username(username) is not None:
+            taken.append({"field": "username", "message": "That username is taken."})
+        if await self.users.get_by_email(email) is not None:
+            taken.append({"field": "email", "message": "That email already has an account."})
+        return taken
+
+    async def register(
+        self, *, username: str, email: str, password: str, full_name: str | None
+    ) -> IssuedTokens:
+        """Create an account for anyone who asks, and sign them in."""
+        email = email.lower().strip()
+        taken = await self._taken(username, email)
+        if taken:
+            raise ConflictError(taken[0]["message"], detail=taken)
+
+        user = User(
+            username=username,
+            email=email,
+            full_name=full_name or None,
+            password_hash=hash_password(password),
+            is_active=True,
+            last_login_at=datetime.now(UTC),
+        )
+        try:
+            # A savepoint, so losing a race for the same name leaves the
+            # session usable to report it.
+            async with self.session.begin_nested():
+                self.session.add(user)
+                await self.session.flush()
+        except IntegrityError:
+            taken = await self._taken(username, email)
+            raise ConflictError(
+                taken[0]["message"] if taken else None, detail=taken or None
+            ) from None
+
+        log.info("account_registered", user_id=str(user.id))
+        return await self._issue(user)
+
     # -------------------------------------------------------- first sign-in
 
     async def complete_setup(
@@ -113,8 +163,12 @@ class AuthService:
 
     # ------------------------------------------------------------- login
 
-    async def login(self, *, email: str, password: str) -> IssuedTokens:
-        user = await self.users.get_by_email(email)
+    async def login(self, *, identifier: str, password: str) -> IssuedTokens:
+        """`identifier` is an email address or a username, in either case."""
+        if "@" in identifier:
+            user = await self.users.get_by_email(identifier)
+        else:
+            user = await self.users.get_by_username(identifier)
 
         if user is None:
             # Hash anyway so a missing account and a wrong password take

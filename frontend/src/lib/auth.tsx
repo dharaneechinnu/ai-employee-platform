@@ -12,7 +12,10 @@ import { api, onSessionExpired, refresh, setAccessToken, type Me } from "./api";
 interface AuthState {
   me: Me | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  /** `identifier` is an email address or a username. */
+  login: (identifier: string, password: string) => Promise<void>;
+  /** Create an account; the person is signed in at once. */
+  register: (input: { username: string; email: string; password: string; full_name?: string }) => Promise<void>;
   /** Set a password from the link that created this account. */
   completeSetup: (token: string, password: string, fullName?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -49,8 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadMe]);
 
   const login = useCallback(
-    async (email: string, password: string) => {
-      const body = await api.post<{ access_token: string }>("/auth/login", { email, password });
+    async (identifier: string, password: string) => {
+      const body = await api.post<{ access_token: string }>("/auth/login", { identifier, password });
+      setAccessToken(body.access_token);
+      await loadMe();
+    },
+    [loadMe],
+  );
+
+  const register = useCallback(
+    async (input: { username: string; email: string; password: string; full_name?: string }) => {
+      const body = await api.post<{ access_token: string }>("/auth/register", {
+        ...input,
+        full_name: input.full_name || undefined,
+      });
       setAccessToken(body.access_token);
       await loadMe();
     },
@@ -80,8 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ me, loading, login, completeSetup, logout }),
-    [me, loading, login, completeSetup, logout],
+    () => ({ me, loading, login, register, completeSetup, logout }),
+    [me, loading, login, register, completeSetup, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

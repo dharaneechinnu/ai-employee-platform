@@ -22,6 +22,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
+    func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,10 +34,14 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
+    # Unique ignoring case (see the index below); stored as typed.
+    username: Mapped[str] = mapped_column(String(30), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("uq_users_username_lower", func.lower(username), unique=True),)
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"

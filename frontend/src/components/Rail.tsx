@@ -216,9 +216,9 @@ export default function Rail({
             onClick={() => setMenuOpen((v) => !v)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            data-rail-label={me?.email ?? "Account"}
+            data-rail-label={me?.username ? `@${me.username}` : (me?.email ?? "Account")}
           >
-            <Avatar name={me?.full_name || me?.email || "?"} size={26} />
+            <Avatar name={me?.full_name || me?.username || me?.email || "?"} size={26} />
             <span className="sr-only">Account and menu position</span>
           </button>
 
@@ -229,12 +229,12 @@ export default function Rail({
                   are signed in as. */}
               {me && (
                 <div className="rail-menu-org">
-                  <Avatar name={me.full_name || me.email} size={28} rounded="rounded-[9px]" />
+                  <Avatar name={me.full_name || me.username || me.email} size={28} rounded="rounded-[9px]" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-medium">
-                      {me.full_name || me.email}
+                      {me.full_name || me.username || me.email}
                     </span>
-                    <span className="text-xs text-muted">{me.email}</span>
+                    <span className="text-xs text-muted">{me.username ? `@${me.username}` : me.email}</span>
                   </span>
                 </div>
               )}

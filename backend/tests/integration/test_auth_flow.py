@@ -8,15 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.integration.conftest import seed_company
 
 
-async def test_there_is_no_public_registration_endpoint(api: AsyncClient) -> None:
-    """Accounts exist only via an invite. A sign-up route would be an
-    entire class of abuse we have chosen not to have."""
-    response = await api.post(
-        "/api/v1/auth/register", json={"email": "x@y.com", "password": "a" * 12}
-    )
-    assert response.status_code == 404
-
-
 async def test_login_with_wrong_password_is_rejected(
     api: AsyncClient, session: AsyncSession
 ) -> None:
@@ -59,7 +50,11 @@ async def _account_with_setup_link(session: AsyncSession, email: str) -> str:
     from app.core.security import hash_password, hash_token
     from app.db.models.identity import SetupToken, User
 
-    user = User(email=email, password_hash=hash_password(secrets.token_urlsafe(32)))
+    user = User(
+        email=email,
+        username=email.split("@")[0],
+        password_hash=hash_password(secrets.token_urlsafe(32)),
+    )
     session.add(user)
     await session.flush()
 

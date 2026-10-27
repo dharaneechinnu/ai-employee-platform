@@ -86,7 +86,7 @@ const STEPS: { icon: IconName; title: string; body: string }[] = [
 
 export default function Product() {
   const { me } = useAuth();
-  const primary = me ? { to: "/chat", label: "Open your chat" } : { to: "/login", label: "Sign in" };
+  const primary = me ? { to: "/chat", label: "Open your chat" } : { to: "/register", label: "Create your account" };
 
   return (
     <div className="min-h-screen bg-bg text-ink">
@@ -104,15 +104,20 @@ export default function Product() {
               ["#how", "How it works"],
               ["#trust", "Trust"],
             ].map(([href, label]) => (
-              <a key={href} href={href} className="rounded-lg px-3 py-2 text-sm text-muted transition hover:bg-raised hover:text-ink">
+              <a key={href} href={href} className="rounded-[9px] px-3 py-2 text-sm text-muted transition hover:bg-raised hover:text-ink">
                 {label}
               </a>
             ))}
           </div>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
+            {!me && (
+              <Link to="/login" className="btn btn-ghost hidden sm:inline-flex">
+                Sign in
+              </Link>
+            )}
             <Link to={primary.to} className="btn btn-primary">
-              {primary.label}
+              {me ? primary.label : "Get started"}
             </Link>
           </div>
         </nav>
@@ -140,6 +145,14 @@ export default function Product() {
               <Icon name="eye" size={16} /> Watch the demo
             </a>
           </div>
+          {!me && (
+            <p className="rise mt-4 text-sm text-dim" style={{ animationDelay: ".3s" }}>
+              Already have an account?{" "}
+              <Link to="/login" className="font-semibold text-accent-text hover:underline">
+                Sign in
+              </Link>
+            </p>
+          )}
 
           {/* The product itself, the way Google and Microsoft open their pages. */}
           <figure className="rise mt-14 w-full" style={{ animationDelay: ".1s" }}>
@@ -255,6 +268,26 @@ export default function Product() {
           ))}
         </div>
       </section>
+
+      {/* ---------------------------------------------------- closing call */}
+      {!me && (
+        <section className="mx-auto max-w-[1200px] px-4 pb-24 sm:px-6">
+          <div className="auth-aside flex flex-col items-center gap-5 rounded-3xl border border-line px-6 py-14 text-center sm:py-16">
+            <h2 className="max-w-[640px] font-display text-[30px] font-semibold leading-[1.1] tracking-[-0.025em] sm:text-[40px]">
+              Hand off your first task today.
+            </h2>
+            <p className="max-w-[520px] text-[16px] leading-relaxed text-muted">Create an account in a minute. Connect only what you want, and approve anything that matters.</p>
+            <div className="flex flex-wrap justify-center gap-3">
+              <Link to="/register" className="btn btn-primary">
+                Create your account <Icon name="arrow" size={16} />
+              </Link>
+              <Link to="/login" className="btn btn-ghost">
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-4 px-4 py-8 text-[13px] text-dim sm:px-6">

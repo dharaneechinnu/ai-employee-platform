@@ -8,6 +8,7 @@ import Approvals from "./pages/Approvals";
 import Connections from "./pages/Connections";
 import FilmStage from "./pages/FilmStage";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import Memory from "./pages/Memory";
 import Notifications from "./pages/Notifications";
 import PlatformAdmin from "./pages/PlatformAdmin";
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/platform" element={<PlatformAdmin />} />
         <Route path="/approve/:token" element={<ApproveLink />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -58,6 +60,7 @@ export default function App() {
       <Route path="/product" element={<Product />} />
       <Route path="/film" element={FILM} />
       <Route path="/login" element={<AfterSignIn />} />
+      <Route path="/register" element={<AfterSignIn />} />
       <Route element={<Layout />}>
         <Route path="/connections" element={<Connections />} />
         <Route path="/chat" element={<Chat />} />

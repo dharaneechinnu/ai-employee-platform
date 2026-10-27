@@ -216,6 +216,8 @@ export function streamAccount(
 export interface Me {
   id: string;
   email: string;
+  /** Added with registration; older sessions may not carry it. */
+  username?: string | null;
   full_name: string | null;
 }
 

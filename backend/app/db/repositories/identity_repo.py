@@ -5,8 +5,9 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
+from app.core.usernames import with_suffix
 from app.db.models.identity import (
     PlatformAdmin,
     PlatformAdminAudit,
@@ -22,6 +23,19 @@ class UserRepository(BaseRepository[User]):
 
     async def get_by_email(self, email: str) -> User | None:
         return await self.session.scalar(select(User).where(User.email == email.lower()))
+
+    async def get_by_username(self, username: str) -> User | None:
+        return await self.session.scalar(
+            select(User).where(func.lower(User.username) == username.lower())
+        )
+
+    async def free_username(self, base: str) -> str:
+        """`base`, or `base` with a number added, whichever is not taken."""
+        candidate, n = base, 1
+        while await self.get_by_username(candidate) is not None:
+            n += 1
+            candidate = with_suffix(base, n)
+        return candidate
 
 
 class RefreshTokenRepository(BaseRepository[RefreshToken]):

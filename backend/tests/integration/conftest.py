@@ -167,6 +167,7 @@ async def seed_person(
     email = email or f"{uuid.uuid4().hex[:10]}@example.com"
     user = User(
         email=email,
+        username=f"u{uuid.uuid4().hex[:12]}",
         full_name=name,
         password_hash=hash_password("correct-horse-battery"),
     )

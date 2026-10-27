@@ -19,7 +19,9 @@ class AppError(Exception):
     error_code: str = "internal_error"
     default_message: str = "Something went wrong."
 
-    def __init__(self, message: str | None = None, *, detail: dict[str, Any] | None = None):
+    def __init__(
+        self, message: str | None = None, *, detail: dict[str, Any] | list[Any] | None = None
+    ):
         self.message = message or self.default_message
         self.detail = detail or {}
         super().__init__(self.message)
@@ -47,7 +49,7 @@ class InvalidCredentialsError(AuthError):
     error_code = "invalid_credentials"
     # Deliberately vague: saying "no such user" lets an attacker
     # enumerate which email addresses have accounts.
-    default_message = "Email or password is incorrect."
+    default_message = "Email, username or password is incorrect."
 
 
 class TokenReuseError(AuthError):

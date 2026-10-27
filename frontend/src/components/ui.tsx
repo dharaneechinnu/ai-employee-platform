@@ -165,7 +165,7 @@ export function PageHeader({
       {/* The menu already shows which section this page is in, so the
           small section label above the title is not repeated here. */}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <h1 className="truncate font-display text-[26px] font-semibold tracking-[-0.02em]">{title}</h1>
+        <h1 className="truncate font-display text-[24px] font-semibold tracking-[-0.022em] sm:text-[26px]">{title}</h1>
       </div>
       {children}
       <ThemeToggle />
@@ -189,6 +189,14 @@ export function Input({
   hideLabel,
   mono,
   autoComplete,
+  name,
+  error,
+  hint,
+  hintTone,
+  autoFocus,
+  spellCheck,
+  inputMode,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -199,19 +207,41 @@ export function Input({
   hideLabel?: boolean;
   mono?: boolean;
   autoComplete?: string;
+  name?: string;
+  /** Shown under the field in red; marks the field invalid. */
+  error?: string | null;
+  /** Quiet help under the field. */
+  hint?: ReactNode;
+  hintTone?: "ok" | "bad";
+  autoFocus?: boolean;
+  spellCheck?: boolean;
+  inputMode?: "text" | "email" | "numeric" | "search";
+  maxLength?: number;
 }) {
+  const note = error || hint;
   return (
-    <label className="flex flex-col gap-2">
+    <label className="flex flex-col gap-1.5">
       <span className={hideLabel ? "sr-only" : "label"}>{label}</span>
       <input
         type={type}
+        name={name}
         value={value}
         required={required}
         placeholder={placeholder}
         autoComplete={autoComplete}
+        autoFocus={autoFocus}
+        spellCheck={spellCheck}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        aria-invalid={error ? true : undefined}
         onChange={(e) => onChange(e.target.value)}
         className={`field ${mono ? "font-mono" : ""}`}
       />
+      {note && (
+        <span className={`field-msg ${error ? "field-msg-bad" : hintTone ? `field-msg-${hintTone}` : ""}`} role={error ? "alert" : undefined}>
+          {note}
+        </span>
+      )}
     </label>
   );
 }
@@ -415,13 +445,14 @@ export function Badge({ children, tone = "mute" }: { children: ReactNode; tone?:
   );
 }
 
-// Stops along the brand spectrum, from blue to the orange spark.
+// Deep, calm tones that all carry white initials at 4.5:1 or better.
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg,#6F8BFF,#B9C6FF)",
-  "linear-gradient(135deg,#9C7BFF,#D3C6FF)",
-  "linear-gradient(135deg,#FF8A4C,#FFC6A3)",
-  "linear-gradient(135deg,#3CC8D8,#A9EAF1)",
-  "linear-gradient(135deg,#F06A9A,#F8BBD2)",
+  "linear-gradient(135deg,#5a3fd8,#7a5fee)",
+  "linear-gradient(135deg,#0369a1,#1c86c4)",
+  "linear-gradient(135deg,#15803d,#2c9a54)",
+  "linear-gradient(135deg,#be123c,#d6335a)",
+  "linear-gradient(135deg,#b45309,#c96a1a)",
+  "linear-gradient(135deg,#475569,#64748b)",
 ];
 
 function hash(text: string): number {
@@ -450,7 +481,7 @@ export function Avatar({
         width: size,
         height: size,
         fontSize: Math.round(size * 0.4),
-        color: "#0F1430",
+        color: "#ffffff",
         background: AVATAR_GRADIENTS[hash(name) % AVATAR_GRADIENTS.length],
         opacity: muted ? 0.55 : 1,
       }}
@@ -473,7 +504,7 @@ export function UsageMeter({ used, limit, label }: { used: number; limit: number
       <div className="h-1.5 overflow-hidden rounded-full bg-raised" role="presentation">
         <div
           className="grow-x h-full rounded-full"
-          style={{ width: `${pct}%`, background: "linear-gradient(90deg,var(--accent),var(--accent2) 65%,var(--spark))" }}
+          style={{ width: `${pct}%`, background: "var(--accent)" }}
         />
       </div>
     </div>
@@ -484,7 +515,7 @@ export function UsageMeter({ used, limit, label }: { used: number; limit: number
 
 export function Empty({ message, hint, children }: { message: string; hint?: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-[18px] border-[1.5px] border-dashed border-line2 p-8 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line2 bg-raised/40 p-8 text-center">
       <p className="font-display text-base font-semibold">{message}</p>
       {hint && <p className="max-w-md text-sm text-muted">{hint}</p>}
       {children}
@@ -495,7 +526,7 @@ export function Empty({ message, hint, children }: { message: string; hint?: str
 export function ErrorNote({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <div role="alert" className="flex items-start gap-2.5 rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm text-bad-text">
+    <div role="alert" className="flex items-start gap-2.5 rounded-[10px] bg-bad-soft px-3.5 py-2.5 text-sm text-bad-text">
       <Icon name="warn" size={18} className="mt-px" />
       <span>{message}</span>
     </div>

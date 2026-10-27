@@ -23,6 +23,7 @@ from app.core.crypto import encrypt
 from app.core.errors import ConflictError, InvalidCredentialsError, NotFoundError
 from app.core.observability import get_logger
 from app.core.security import create_access_token, hash_password, hash_token, verify_password
+from app.core.usernames import username_from_email
 from app.db.models.identity import PlatformAdmin, SetupToken, User
 from app.db.models.policy import ConnectionKind
 from app.db.models.provider import OrgConnectionAccess, PlatformOAuthApp
@@ -145,6 +146,7 @@ class PlatformService:
         raw_token = secrets.token_urlsafe(32)
         user = User(
             email=email,
+            username=await self.users.free_username(username_from_email(email)),
             full_name=full_name,
             # A placeholder nobody can produce: the account is unusable
             # until the setup link sets a real one.
