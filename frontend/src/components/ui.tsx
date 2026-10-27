@@ -325,6 +325,7 @@ export function SearchBox({
       <Icon name="search" size={16} strokeWidth={2} />
       <span className="sr-only">{label}</span>
       <input
+        data-search
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}

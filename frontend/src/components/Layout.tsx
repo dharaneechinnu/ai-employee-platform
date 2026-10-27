@@ -1,6 +1,7 @@
 import { useActivity } from "../lib/activity";
 import { useDock } from "../lib/dock";
 import { CoachHelp, CoachProvider } from "./coach/Coach";
+import CommandPalette from "./CommandPalette";
 import Rail from "./Rail";
 import { Outlet } from "react-router-dom";
 
@@ -31,6 +32,7 @@ export default function Layout() {
 
         <Rail dock={dock} setDock={setDock} running={running} waiting={waiting} />
         <CoachHelp />
+        <CommandPalette />
       </div>
     </CoachProvider>
   );

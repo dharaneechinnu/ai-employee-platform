@@ -28,6 +28,7 @@ from app.db.models.memory import (
     RunSummary,
 )
 from app.db.models.notification import NotificationSettings
+from app.db.models.setup import SetupProgress
 from app.db.models.policy import (
     Approval,
     ApprovalStatus,
@@ -98,6 +99,7 @@ __all__ = [
     "PolicyScope",
     "PolicySetting",
     "ProviderConfig",
+    "SetupProgress",
     "ProviderKind",
     "ReembedJob",
     "RefreshToken",

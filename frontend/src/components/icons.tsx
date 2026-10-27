@@ -41,6 +41,31 @@ const PATHS = {
   mic: "M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6",
   stop: "M8 8h8v8H8z",
   menu: "M4 7h16M4 12h16M4 17h16",
+  play: "M8 5v14l11-7z",
+  pause: "M8 5v14M16 5v14",
+  history: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2",
+  clock: "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM12 7v5l3 2",
+  keyboard: "M3 7h18v10H3zM7 11h.01M11 11h.01M15 11h.01M7 14h10",
+  command:
+    "M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3",
+  key: "M21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3M7.5 10.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11z",
+  globe:
+    "M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zM3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z",
+  cpu: "M7 7h10v10H7zM10 10h4v4h-4zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4",
+  wallet:
+    "M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 7V6a2 2 0 0 1 2-2h10M16 13h.01",
+  trendDown: "M3 7l6 6 4-4 8 8M21 11v6h-6",
+  filter: "M4 5h16l-6 8v6l-4-2v-4z",
+  refresh: "M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4",
+  external: "M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
+  chevron: "M9 6l6 6-6 6",
+  book: "M5 4h10a4 4 0 0 1 4 4v12H9a4 4 0 0 1-4-4zM5 16a4 4 0 0 1 4-4h10",
+  code: "M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14",
+  pen: "M4 20l1-4L16 5a2 2 0 0 1 3 3L8 19zM14 7l3 3",
+  chart: "M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3",
+  scale:
+    "M12 4v16M6 20h12M5 7h14M5 7l-3 7a3.5 3.5 0 0 0 6 0zM19 7l-3 7a3.5 3.5 0 0 0 6 0z",
+  zap: "M13 3L5 14h6l-1 7 8-11h-6z",
 } as const;
 
 export type IconName = keyof typeof PATHS;
