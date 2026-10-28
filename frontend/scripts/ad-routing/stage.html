@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AI Employees: free models, smart routing</title>
+<!--
+  The ad's picture, as one page of timed CSS animations. render.mjs pauses
+  every animation and seeks them to each frame's time, so the film comes
+  out the same on every machine. Scene times are listed in SCENES below
+  and written to the .marks.json that make_ad.py places the voice by.
+-->
+<style>
+  @font-face { font-family: "Outfit"; src: url("../ad/fonts/Outfit.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "DM Sans"; src: url("../ad/fonts/DMSans.ttf"); font-weight: 100 1000; }
+
+  :root {
+    --bg: #f6f5fa;
+    --surface: #ffffff;
+    --ink: #17152a;
+    --muted: #4b4860;
+    --line: #e2e0ec;
+    --accent: #5a3fd8;
+    --accent-soft: #eeebfd;
+    --accent-line: #c4b9f4;
+    --good: #138a52;
+    --good-soft: #e3f5ea;
+    --bad: #c4362c;
+    --bad-soft: #fdeceb;
+    --amber: #b86e00;
+    --amber-soft: #fff3df;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: "DM Sans", sans-serif; }
+  .display { font-family: "Outfit", sans-serif; letter-spacing: -0.03em; }
+
+  /* A soft violet glow that drifts for the whole film. */
+  .glow { position: absolute; border-radius: 50%; filter: blur(120px); opacity: .55; }
+  .glow.a { width: 900px; height: 900px; background: #cfc5ff; left: -200px; top: -300px; animation: drift 46s linear 0s both; }
+  .glow.b { width: 800px; height: 800px; background: #ffd9ef; right: -260px; bottom: -340px; animation: drift2 46s linear 0s both; }
+  @keyframes drift { to { transform: translate(380px, 260px); } }
+  @keyframes drift2 { to { transform: translate(-320px, -200px); } }
+
+  .scene { position: absolute; inset: 0 0 150px 0; display: flex; align-items: center; justify-content: center; flex-direction: column; opacity: 0; }
+  @keyframes sceneIn { from { opacity: 0; transform: scale(1.03); } to { opacity: 1; transform: none; } }
+  @keyframes sceneOut { from { opacity: 1; } to { opacity: 0; transform: scale(.98); } }
+  @keyframes up { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { 0% { opacity: 0; transform: scale(.6); } 70% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: none; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes strike { from { width: 0; } to { width: 104%; } }
+  @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(90,63,216,.45); } 50% { box-shadow: 0 0 0 18px rgba(90,63,216,0); } }
+  @keyframes shake { 0%,100% { transform: none; } 20% { transform: translateX(-10px); } 40% { transform: translateX(10px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }
+  @keyframes dim { to { opacity: .35; filter: grayscale(1); } }
+  @keyframes zoomSlow { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+  .a { opacity: 0; }
+
+  /* ---------- 1. hook ---------- */
+  .hook { font-size: 120px; font-weight: 700; line-height: 1.05; text-align: center; }
+  .hook .w { display: inline-block; opacity: 0; }
+  .hook .hl { color: var(--accent); }
+  .hook .old { position: relative; color: var(--muted); }
+  .hook .old::after { content: ""; position: absolute; left: -2%; top: 52%; height: 10px; border-radius: 5px; background: var(--bad); width: 0; animation: strike .5s ease-out 2.7s both; }
+
+  /* ---------- 2. free keys ---------- */
+  .title { font-size: 76px; font-weight: 700; text-align: center; line-height: 1.08; }
+  .title .hl { color: var(--accent); }
+  .sub { font-size: 32px; color: var(--muted); margin-top: 18px; text-align: center; }
+  .keys { display: flex; gap: 36px; margin-top: 70px; }
+  .key { width: 340px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 34px 32px; box-shadow: 0 30px 60px -30px rgba(40,20,120,.25); display: flex; flex-direction: column; gap: 20px; opacity: 0; }
+  .key .logo { width: 72px; height: 72px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font: 700 34px "Outfit"; color: #fff; }
+  .key .name { font: 600 36px "Outfit"; letter-spacing: -.02em; }
+  .key .row { display: flex; gap: 8px; align-items: center; }
+  .chip { white-space: nowrap; font-size: 20px; font-weight: 700; padding: 8px 16px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; }
+  .chip.free { background: var(--accent-soft); color: var(--accent); }
+  .chip.ok { background: var(--good-soft); color: var(--good); opacity: 0; }
+  .masked { font-family: monospace; font-size: 22px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 10px 14px; }
+
+  /* ---------- 3. routing ---------- */
+  .route { display: grid; grid-template-columns: 820px 160px 640px; align-items: center; margin-top: 54px; }
+  .prompt { background: var(--surface); border: 2px solid var(--accent-line); border-radius: 26px; padding: 26px 30px; font-size: 34px; min-height: 104px; display: flex; align-items: center; gap: 18px; box-shadow: 0 30px 60px -30px rgba(40,20,120,.3); }
+  .prompt .caret { width: 3px; height: 40px; background: var(--accent); }
+  .prompts { position: relative; height: 330px; }
+  .prompts .pr { position: absolute; left: 0; right: 0; opacity: 0; }
+  .prompts .pr .kind { margin-top: 22px; }
+  .kindchip { font-size: 26px; padding: 10px 22px; border-radius: 999px; font-weight: 700; display: inline-flex; gap: 10px; align-items: center; opacity: 0; }
+  .arrow { height: 6px; background: linear-gradient(90deg, var(--accent-line), var(--accent)); border-radius: 3px; transform-origin: left; transform: scaleX(0); position: relative; }
+  .arrow::after { content: ""; position: absolute; right: -6px; top: -11px; border: 14px solid transparent; border-left: 20px solid var(--accent); border-right: 0; }
+  .models { display: flex; flex-direction: column; gap: 20px; }
+  .model { background: var(--surface); border: 2px solid var(--line); border-radius: 22px; padding: 20px 26px; display: flex; align-items: center; gap: 20px; font: 600 32px "Outfit"; position: relative; }
+  .model .dot { width: 50px; height: 50px; border-radius: 14px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .model .tag { margin-left: auto; font: 700 20px "DM Sans"; color: var(--muted); }
+  .model .hi { position: absolute; inset: -2px; border-radius: 22px; border: 4px solid var(--accent); opacity: 0; }
+
+  /* ---------- 4. fallback ---------- */
+  .fall { display: flex; align-items: center; gap: 60px; margin-top: 70px; }
+  .fall .model { width: 520px; padding: 30px 34px; font-size: 40px; }
+  .status { font: 700 24px "DM Sans"; padding: 10px 18px; border-radius: 999px; position: absolute; top: -26px; right: 24px; opacity: 0; }
+  .status.bad { background: var(--bad-soft); color: var(--bad); border: 2px solid #f3b7b2; }
+  .status.go { background: var(--good-soft); color: var(--good); border: 2px solid #a8dcbc; }
+  .bigarrow { width: 160px; height: 8px; background: var(--accent); border-radius: 4px; transform-origin: left; transform: scaleX(0); position: relative; }
+  .bigarrow::after { content: ""; position: absolute; right: -8px; top: -14px; border: 18px solid transparent; border-left: 26px solid var(--accent); border-right: 0; }
+  .progress { width: 1180px; height: 18px; background: var(--line); border-radius: 9px; margin-top: 70px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #9c7bff); transform-origin: left; transform: scaleX(0); border-radius: 9px; }
+
+  /* ---------- 5. agents ---------- */
+  .agents { display: flex; gap: 48px; margin-top: 60px; align-items: flex-start; }
+  .card { background: var(--surface); border: 2px solid var(--line); border-radius: 30px; padding: 36px 40px; width: 640px; box-shadow: 0 30px 60px -30px rgba(40,20,120,.25); opacity: 0; }
+  .card h3 { font: 600 38px "Outfit"; letter-spacing: -.02em; }
+  .card .meta { display: flex; gap: 12px; margin-top: 14px; }
+  .steps { margin-top: 28px; display: flex; flex-direction: column; gap: 18px; }
+  .step { display: flex; gap: 16px; align-items: center; font-size: 28px; opacity: 0; }
+  .tick { width: 40px; height: 40px; border-radius: 50%; background: var(--good-soft); color: var(--good); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 22px; }
+  .step .by { margin-left: auto; font-size: 20px; color: var(--muted); font-weight: 600; }
+  .approve .q { font-size: 28px; color: var(--muted); margin-top: 16px; line-height: 1.4; }
+  .btns { display: flex; gap: 18px; margin-top: 30px; }
+  .btn { font: 700 28px "DM Sans"; padding: 18px 34px; border-radius: 16px; }
+  .btn.yes { background: var(--accent); color: #fff; }
+  .btn.no { background: var(--bg); color: var(--muted); border: 2px solid var(--line); }
+  .cursor { position: absolute; width: 40px; height: 40px; opacity: 0; }
+
+  /* ---------- 6. outro ---------- */
+  .mark { width: 170px; height: 170px; border-radius: 46px; background: var(--accent); position: relative; box-shadow: 0 40px 80px -30px rgba(90,63,216,.7); }
+  .mark::before { content: ""; position: absolute; left: 36px; bottom: 36px; width: 70px; height: 70px; border-radius: 18px; background: #fff; }
+  .mark::after { content: ""; position: absolute; right: 30px; top: 30px; width: 40px; height: 40px; border-radius: 12px; background: #c9bdff; }
+  .brand { font-size: 110px; font-weight: 700; margin-top: 44px; }
+  .tagline { font-size: 42px; color: var(--muted); margin-top: 16px; }
+  .tagline b { color: var(--accent); }
+  .cta { margin-top: 50px; background: var(--accent); color: #fff; font: 700 38px "DM Sans"; padding: 26px 56px; border-radius: 22px; display: inline-flex; gap: 16px; align-items: center; }
+  .foot { margin-top: 30px; font-size: 24px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="glow a"></div>
+<div class="glow b"></div>
+
+<!-- 1. Hook: 0.0 – 5.4 -->
+<section class="scene" style="animation: sceneIn .6s ease-out 0s both, sceneOut .5s ease-in 4.9s forwards">
+  <div class="hook display">
+    <span class="w" style="animation: up .5s ease-out .3s both">An</span>
+    <span class="w" style="animation: up .5s ease-out .45s both">AI</span>
+    <span class="w" style="animation: up .5s ease-out .6s both">assistant</span><br />
+    <span class="w" style="animation: up .5s ease-out 1.1s both">without</span>
+    <span class="w" style="animation: up .5s ease-out 1.25s both">the</span>
+    <span class="w old" style="animation: up .5s ease-out 1.4s both">$20 bill.</span><br />
+    <span class="w hl" style="animation: pop .6s ease-out 3.4s both">Start free.</span>
+  </div>
+</section>
+
+<!-- 2. Free keys: 5.4 – 13.4 -->
+<section class="scene" style="animation: sceneIn .6s ease-out 5.4s both, sceneOut .5s ease-in 12.9s forwards">
+  <div class="title display" style="animation: up .6s ease-out 5.6s both">Bring <span class="hl">free</span> AI keys</div>
+  <div class="sub a" style="animation: up .6s ease-out 5.9s both">Use the free tiers you already have. Add paid ones later, if ever.</div>
+  <div class="keys">
+    <div class="key" style="animation: pop .6s ease-out 6.6s both">
+      <div class="logo" style="background: linear-gradient(135deg,#4f8bff,#a46bff)">G</div>
+      <div class="name">Gemini</div>
+      <div class="masked">AIza••••••••3kQ</div>
+      <div class="row"><span class="chip free">Free tier</span><span class="chip ok" style="animation: pop .4s ease-out 8.6s both">✓ Connected</span></div>
+    </div>
+    <div class="key" style="animation: pop .6s ease-out 7.0s both">
+      <div class="logo" style="background: #f55036">Gq</div>
+      <div class="name">Groq</div>
+      <div class="masked">gsk_••••••••Wd2</div>
+      <div class="row"><span class="chip free">Free tier</span><span class="chip ok" style="animation: pop .4s ease-out 9.0s both">✓ Connected</span></div>
+    </div>
+    <div class="key" style="animation: pop .6s ease-out 7.4s both">
+      <div class="logo" style="background: #3a3f4b">OR</div>
+      <div class="name">OpenRouter</div>
+      <div class="masked">sk-or-••••••7pA</div>
+      <div class="row"><span class="chip free">Free models</span><span class="chip ok" style="animation: pop .4s ease-out 9.4s both">✓ Connected</span></div>
+    </div>
+    <div class="key" style="animation: pop .6s ease-out 7.8s both">
+      <div class="logo" style="background: #ff7000">M</div>
+      <div class="name">Mistral</div>
+      <div class="masked">••••••••••••x9</div>
+      <div class="row"><span class="chip free">Free tier</span><span class="chip ok" style="animation: pop .4s ease-out 9.8s both">✓ Connected</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Routing: 13.4 – 26.4 -->
+<section class="scene" style="animation: sceneIn .6s ease-out 13.4s both, sceneOut .5s ease-in 25.9s forwards">
+  <div class="title display" style="animation: up .6s ease-out 13.6s both">Every prompt goes to the <span class="hl">right model</span></div>
+  <div class="route">
+    <div class="prompts">
+      <div class="pr" style="animation: fadeIn .3s 14.4s both, fadeOut .3s 18.4s forwards">
+        <div class="prompt"><span data-type="Fix the bug in my login function" data-at="14.6" data-dur="1.5"></span><i class="caret"></i></div>
+        <div class="kind"><span class="kindchip" style="background:#e6f0ff;color:#1f5fd6;animation: pop .4s ease-out 16.3s both">‹/› Coding task</span></div>
+      </div>
+      <div class="pr" style="animation: fadeIn .3s 18.7s both, fadeOut .3s 22.2s forwards">
+        <div class="prompt"><span data-type="Write a friendly reply to my client" data-at="18.8" data-dur="1.4"></span><i class="caret"></i></div>
+        <div class="kind"><span class="kindchip" style="background:#fdebf5;color:#b42a78;animation: pop .4s ease-out 20.4s both">✎ Writing task</span></div>
+      </div>
+      <div class="pr" style="animation: fadeIn .3s 22.5s both">
+        <div class="prompt"><span data-type="Compare these three phone plans" data-at="22.6" data-dur="1.3"></span><i class="caret"></i></div>
+        <div class="kind"><span class="kindchip" style="background:#e3f5ea;color:#138a52;animation: pop .4s ease-out 24.1s both">∑ Analysis task</span></div>
+      </div>
+    </div>
+    <div style="padding: 0 20px; margin-top: -200px">
+      <div class="arrow" style="animation: grow .3s ease-out 16.6s both, fadeOut .2s 18.3s forwards"></div>
+      <div class="arrow" style="margin-top:-6px; animation: grow .3s ease-out 20.7s both, fadeOut .2s 22.1s forwards"></div>
+      <div class="arrow" style="margin-top:-6px; animation: grow .3s ease-out 24.4s both"></div>
+    </div>
+    <div class="models a" style="animation: up .6s ease-out 14.0s both">
+      <div class="model"><span class="dot" style="background:#f55036">Gq</span>Groq · Llama<span class="tag">fast · code</span><i class="hi" style="animation: fadeIn .2s 16.9s both, pulse 1s 16.9s 1, fadeOut .2s 18.3s forwards"></i></div>
+      <div class="model"><span class="dot" style="background:linear-gradient(135deg,#4f8bff,#a46bff)">G</span>Gemini Flash<span class="tag">writing · long docs</span><i class="hi" style="animation: fadeIn .2s 21.0s both, pulse 1s 21.0s 1, fadeOut .2s 22.1s forwards"></i></div>
+      <div class="model"><span class="dot" style="background:#3a3f4b">OR</span>DeepSeek R1<span class="tag">reasoning</span><i class="hi" style="animation: fadeIn .2s 24.7s both, pulse 1s 24.7s 1"></i></div>
+      <div class="model"><span class="dot" style="background:#ff7000">M</span>Mistral Small<span class="tag">quick answers</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Fallback: 26.4 – 33.4 -->
+<section class="scene" style="animation: sceneIn .6s ease-out 26.4s both, sceneOut .5s ease-in 32.9s forwards">
+  <div class="title display" style="animation: up .6s ease-out 26.6s both">Hit a limit? <span class="hl">It keeps going.</span></div>
+  <div class="fall">
+    <div class="model a" style="animation: up .5s ease-out 27.0s both">
+      <div style="display:flex;align-items:center;gap:20px;width:100%;animation: shake .5s 28.4s both, dim .4s 28.9s forwards"><span class="dot" style="background:linear-gradient(135deg,#4f8bff,#a46bff)">G</span>Gemini Flash</div>
+      <span class="status bad" style="animation: pop .4s ease-out 28.4s both">Rate limited</span>
+    </div>
+    <div class="bigarrow" style="animation: grow .4s ease-out 29.2s both"></div>
+    <div class="model a" style="animation: up .5s ease-out 27.2s both">
+      <i class="hi" style="animation: fadeIn .2s 29.6s both, pulse 1s 29.6s 2"></i>
+      <span class="dot" style="background:#f55036">Gq</span>Groq · Llama
+      <span class="status go" style="animation: pop .4s ease-out 29.7s both">Taking over</span>
+    </div>
+  </div>
+  <div class="progress"><i style="animation: grow 5.2s linear 27.4s both"></i></div>
+  <div class="sub a" style="animation: up .5s ease-out 30.3s both">Same task, same answer. No error, no waiting.</div>
+</section>
+
+<!-- 5. Agents: 33.4 – 41.4 -->
+<section class="scene" style="animation: sceneIn .6s ease-out 33.4s both, sceneOut .5s ease-in 40.9s forwards">
+  <div class="title display" style="animation: up .6s ease-out 33.6s both">Agents that <span class="hl">work while you don't</span></div>
+  <div class="agents">
+    <div class="card" style="animation: up .6s ease-out 34.1s both">
+      <h3>Morning inbox digest</h3>
+      <div class="meta"><span class="chip free">⏱ Every day, 8:00</span><span class="chip" style="background:var(--good-soft);color:var(--good)">● Running</span></div>
+      <div class="steps">
+        <div class="step" style="animation: up .4s ease-out 35.0s both"><span class="tick">✓</span>Read new mail<span class="by">Groq</span></div>
+        <div class="step" style="animation: up .4s ease-out 35.6s both"><span class="tick">✓</span>Summarise threads<span class="by">Gemini</span></div>
+        <div class="step" style="animation: up .4s ease-out 36.2s both"><span class="tick">✓</span>Draft two replies<span class="by">Gemini</span></div>
+      </div>
+    </div>
+    <div class="card approve" style="animation: up .6s ease-out 37.0s both; position: relative">
+      <span class="chip" style="background:var(--amber-soft);color:var(--amber)">Waiting for you</span>
+      <h3 style="margin-top:18px">Send reply to Priya?</h3>
+      <div class="q">“Thanks for the update. Tuesday 3 pm works for me…”</div>
+      <div class="btns"><span class="btn yes" style="animation: pulse 1s 39.0s 2">Approve</span><span class="btn no">Decline</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Outro: 41.4 – 48.0 -->
+<section class="scene" style="animation: sceneIn .7s ease-out 41.4s both">
+  <div class="mark" style="animation: pop .7s ease-out 41.6s both"></div>
+  <div class="brand display a" style="animation: up .6s ease-out 42.1s both">AI Employees</div>
+  <div class="tagline a" style="animation: up .6s ease-out 42.6s both"><b>Free models.</b> Smart routing. Real work.</div>
+  <div class="cta a" style="animation: pop .6s ease-out 43.6s both">Start free →</div>
+  <div class="foot a" style="animation: fadeIn .6s 44.4s both">Bring your own keys · switch models any time · you stay in control</div>
+</section>
+
+<script>
+  // Chapter starts, for the voiceover. Kept next to the scenes they time.
+  window.SCENES = [
+    { id: "intro", t: 0 },
+    { id: "keys", t: 5.4 },
+    { id: "route", t: 13.4 },
+    { id: "fallback", t: 26.4 },
+    { id: "agents", t: 33.4 },
+    { id: "outro", t: 41.4 },
+  ];
+  window.DURATION = 48;
+
+  const typed = [...document.querySelectorAll("[data-type]")];
+  window.seek = (t) => {
+    for (const a of document.getAnimations()) {
+      a.pause();
+      a.currentTime = t * 1000;
+    }
+    for (const el of typed) {
+      const p = Math.min(1, Math.max(0, (t - Number(el.dataset.at)) / Number(el.dataset.dur)));
+      el.textContent = el.dataset.type.slice(0, Math.round(p * el.dataset.type.length));
+    }
+  };
+  window.seek(0);
+</script>
+</body>
+</html>

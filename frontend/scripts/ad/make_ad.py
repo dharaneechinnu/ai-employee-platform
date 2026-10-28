@@ -42,13 +42,16 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 RATE = 48_000
 CACHE = Path(tempfile.gettempdir()) / "ad-voice-cache"
+# The lines to speak. AD_SCRIPT points at another ad's script, e.g.
+# scripts/ad-routing/script.json.
+SCRIPT = Path(os.environ.get("AD_SCRIPT", HERE / "script.json"))
 
 
 # --------------------------------------------------------------- timing
 
 
 def load_lines(marks_path: Path) -> list[dict]:
-    script = json.loads((HERE / "script.json").read_text())
+    script = json.loads(SCRIPT.read_text())
     marks = {m["id"]: m["t"] for m in json.loads(marks_path.read_text())}
     marks["intro"] = 0.0
     lines = []
@@ -142,7 +145,7 @@ def voice_track(lines: list[dict], duration: float) -> tuple[np.ndarray, str] | 
         windows.append(until - line["start"])
 
     if key:
-        voice = json.loads((HERE / "script.json").read_text())["voice"]
+        voice = json.loads(SCRIPT.read_text())["voice"]
         voice["name"] = os.environ.get("GOOGLE_TTS_VOICE", voice["name"])
         clips = [tidy(synthesize(t, voice, key)) for t in texts]
         label = f"Google {voice['name']}"

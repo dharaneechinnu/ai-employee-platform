@@ -1,0 +1,17 @@
+{
+  "voice": {
+    "languageCode": "en-IN",
+    "name": "en-IN-Neural2-A",
+    "speakingRate": 1.04,
+    "pitch": 0.0
+  },
+  "lines": [
+    { "at": "intro", "offset": 0.4, "text": "Want an AI assistant, *without another monthly bill*? Start free.", "pace": 0.95 },
+    { "at": "keys", "offset": 0.4, "text": "Bring free AI keys from Gemini, Groq, OpenRouter or Mistral. *Connected in seconds.*" },
+    { "at": "route", "offset": 0.3, "text": "Then just type. It reads each prompt, *coding, writing or analysis*," },
+    { "at": "route", "offset": 6.6, "text": "and sends it to the model that's *best at that task*. Automatically." },
+    { "at": "fallback", "offset": 0.4, "text": "If one model hits its free limit, the next one *takes over*. No errors, no waiting." },
+    { "at": "agents", "offset": 0.4, "text": "Build agents just by chatting. They run on a schedule, and anything risky *waits for your yes*." },
+    { "at": "outro", "offset": 0.6, "text": "AI Employees. Free models, smart routing, *real work*. Start free today.", "pace": 0.92 }
+  ]
+}
