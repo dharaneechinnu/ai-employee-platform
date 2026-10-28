@@ -58,8 +58,8 @@ const FLOWS: Record<string, Flow> = {
         helpers: ["researcher", "analyst", "writer", "critic", "developer", "generalist"],
       },
       {
-        title: "Asks before anything risky",
-        detail: "Sending, posting or cancelling waits for your yes, in the app, by email or in Slack.",
+        title: "Never acts without your say",
+        detail: "Sending, posting or cancelling stays blocked until you allow it, or waits for your yes in the app, by email or in Slack.",
         icon: "approvals",
         asks: true,
       },
