@@ -354,14 +354,6 @@ export interface EmbeddingConfig {
   memories_needing_reembedding: number;
 }
 
-export interface Person {
-  id: string;
-  email: string;
-  full_name: string | null;
-  active: boolean;
-  created_at: string;
-}
-
 export interface ConnectionField {
   key: string;
   label: string;
@@ -649,20 +641,6 @@ export interface ServiceInfo {
   note: string | null;
   /** What the current connection holds; null when not connected. */
   granted: { read: boolean; edit: boolean } | null;
-}
-
-/** Platform Admin: one part of an app at one level. */
-export interface ServiceAccessRow {
-  service: string;
-  app: string;
-  name: string;
-  level: "read" | "edit";
-  allowed: boolean;
-}
-
-export interface PersonServiceRow extends ServiceAccessRow {
-  overridden: boolean;
-  note: string | null;
 }
 
 /** One past run in the History list: see `GET /me/history/runs`. */

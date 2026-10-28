@@ -11,9 +11,8 @@
  * what the AI team is doing. No gradients on controls, no glows.
  *
  * Every colour on screen is one of these names; [data-theme="dark"]
- * swaps the values. .staff re-points the accent at teal for the
- * Platform Admin screens, so staff never mistake the control room for a
- * company workspace.
+ * swaps the values. .staff adds the staff console's own strip colours
+ * (see below) and otherwise keeps the same violet.
  */
 :root,
 [data-theme="light"] {
@@ -110,26 +109,32 @@
   --grid: transparent;
 }
 
+/*
+ * The staff console keeps Baton's violet; what marks it out is the
+ * strip at the very top, in ink that is the reverse of the page: dark
+ * on a light page, light on a dark one. --staff-head is the quiet tint
+ * behind table headings.
+ */
 .staff {
-  --accent: #0f7b6c;
-  --accent2: #0f7b6c;
-  --spark: #0f7b6c;
-  --on-accent: #ffffff;
-  --accent-text: #0b6b5d;
-  --accent-soft: #e2f3ef;
-  --accent-line: #9fd3c6;
-  --glow: rgba(15, 123, 108, 0.16);
+  --strip-bg: #17152a;
+  --strip-text: #efeef6;
+  --strip-muted: #bab8cc;
+  --strip-icon: #c4b9f4;
+  --staff-head: #faf9fd;
+  --scrim: rgba(23, 21, 42, 0.42);
+  --logo-spark: #c4b9f4;
 }
 
-[data-theme="dark"] .staff {
-  --accent: #6fd3bf;
-  --accent2: #6fd3bf;
-  --spark: #6fd3bf;
-  --on-accent: #052019;
-  --accent-text: #8fe0cf;
-  --accent-soft: #10302a;
-  --accent-line: #2c6457;
-  --glow: rgba(111, 211, 191, 0.16);
+[data-theme="dark"] .staff,
+.staff [data-theme="dark"],
+.staff[data-theme="dark"] {
+  --strip-bg: #efeef6;
+  --strip-text: #17152a;
+  --strip-muted: #4b4860;
+  --strip-icon: #4a30c0;
+  --staff-head: #1a1925;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --logo-spark: #efeef6;
 }
 
 @property --angle {
@@ -2321,4 +2326,17 @@ html[data-dock='bottom'] .chat-shell {
 .agraph-helpers { display: flex; gap: 3px; margin-top: 3px; color: var(--accent-text); }
 @media (prefers-reduced-motion: reduce) {
   .agraph-dot { display: none; }
+}
+
+/* The staff console's person panel slides in from the right. */
+@keyframes staff-drawer-in {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .staff-drawer {
+    animation: none !important;
+  }
 }
