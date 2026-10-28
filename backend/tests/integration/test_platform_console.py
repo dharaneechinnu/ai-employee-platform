@@ -307,15 +307,19 @@ async def test_providers_say_how_many_people_use_them(
         json={"provider_key": "groq", "api_key": "gsk-test-key-0003"},
         headers={"Authorization": f"Bearer {asha.token}"},
     )
+    # The provider catalog is platform-wide and outlives this test, so
+    # Mistral is switched back on whatever happens.
     await api.patch("/api/v1/platform/providers/mistral", json={"enabled": False}, headers=staff)
-
-    rows = {
-        p["key"]: p for p in (await api.get("/api/v1/platform/providers", headers=staff)).json()
-    }
-    assert rows["groq"]["people_connected"] == 1
-    assert rows["groq"]["free_tier"] is True
-    assert rows["custom"]["is_local"] is True
-    assert rows["mistral"]["paused_by_email"] == "ops@platformco.com"
-    assert rows["mistral"]["paused_at"] is not None
-    assert rows["groq"]["paused_at"] is None
-    assert "gsk-test-key-0003" not in str(rows)
+    try:
+        rows = {
+            p["key"]: p for p in (await api.get("/api/v1/platform/providers", headers=staff)).json()
+        }
+        assert rows["groq"]["people_connected"] == 1
+        assert rows["groq"]["free_tier"] is True
+        assert rows["custom"]["is_local"] is True
+        assert rows["mistral"]["paused_by_email"] == "ops@platformco.com"
+        assert rows["mistral"]["paused_at"] is not None
+        assert rows["groq"]["paused_at"] is None
+        assert "gsk-test-key-0003" not in str(rows)
+    finally:
+        await api.patch("/api/v1/platform/providers/mistral", json={"enabled": True}, headers=staff)
