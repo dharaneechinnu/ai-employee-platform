@@ -204,6 +204,29 @@ class OrgConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
 
+class PlatformConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """A Platform Admin's ruling on one kind of app, for everyone.
+
+    "Nobody may connect PostgreSQL for now" is one row here, rather than
+    a row per person in `org_connection_access`. A person's own ruling
+    there still beats this one, in either direction, the same way a
+    person's service ruling beats the platform's.
+
+    No row means allowed, so adding this table changed nothing for
+    anyone already connected.
+    """
+
+    __tablename__ = "platform_connection_access"
+
+    kind: Mapped[ConnectionKind] = mapped_column(
+        StrEnumType(ConnectionKind, 30), nullable=False, unique=True
+    )
+    allowed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("platform_admins.id", ondelete="SET NULL")
+    )
+
+
 class PlatformServiceAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """Level 1 of service permissions: what the platform allows at all.
 

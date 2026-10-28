@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Baton feature tour</title>
+<!--
+  The feature tour's picture: real app screenshots (shots/, made by
+  capture.mjs) inside a window, with a camera that pans and zooms,
+  highlight rings and callouts, and a feature list on the left.
+
+  Everything is generated from CHAPTERS below as CSS animations, so
+  render.mjs (../ad-routing/render.mjs, given this file) can pause and
+  seek them frame by frame. Chapter start times go to window.SCENES and
+  from there to the .marks.json that make_ad.py places the voice by.
+  Times inside a chapter are seconds from the chapter's start; ring and
+  camera positions are CSS pixels of the 1440 x 900 screenshot.
+
+  The only things drawn here rather than captured are the frame, the
+  left-hand list, the callout labels and one card listing the AI
+  picker's options (a native <select> list does not show up in a
+  screenshot; its labels come from the real page, shots/picker-options.json).
+-->
+<style>
+  @font-face { font-family: "Outfit"; src: url("../ad/fonts/Outfit.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "DM Sans"; src: url("../ad/fonts/DMSans.ttf"); font-weight: 100 1000; }
+  :root {
+    --bg: #f6f5fa; --surface: #fff; --ink: #17152a; --muted: #4b4860; --dim: #8a87a0; --line: #e2e0ec;
+    --accent: #5a3fd8; --accent-soft: #eeebfd; --accent-line: #c4b9f4; --pink: #ff5fa8; --good: #138a52;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: "DM Sans", sans-serif; }
+  .display { font-family: "Outfit", sans-serif; letter-spacing: -0.03em; }
+  .grad { background: linear-gradient(90deg, var(--accent), var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  .glow { position: absolute; border-radius: 50%; filter: blur(120px); opacity: .5; }
+  .glow.a { width: 900px; height: 900px; background: #d4cbff; left: -260px; top: -320px; }
+  .glow.b { width: 820px; height: 820px; background: #ffdcef; right: -280px; bottom: -380px; }
+  @keyframes drift { to { transform: translate(300px, 220px); } }
+  @keyframes drift2 { to { transform: translate(-260px, -180px); } }
+
+  @keyframes show { from { opacity: 1; } to { opacity: 1; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes up { from { opacity: 0; transform: translateY(40px); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
+  @keyframes upOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-30px); filter: blur(6px); } }
+  @keyframes pop { 0% { opacity: 0; transform: scale(.5); } 65% { opacity: 1; transform: scale(1.08); } 100% { opacity: 1; transform: none; } }
+  @keyframes slam { 0% { opacity: 0; transform: scale(2.6); filter: blur(14px); } 60% { opacity: 1; transform: scale(.94); filter: blur(0); } 100% { opacity: 1; transform: none; } }
+  @keyframes spin3d { 0% { transform: rotateY(-180deg) scale(.3); opacity: 0; } 60% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+
+  /* ---------- intro ---------- */
+  .intro { position: absolute; inset: 0 0 120px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; }
+  .mark { width: 120px; height: 120px; border-radius: 34px; background: linear-gradient(135deg, #6f55f0, var(--accent)); position: relative; box-shadow: 0 30px 60px -24px rgba(90,63,216,.8); }
+  .mark::before { content: ""; position: absolute; left: 26px; bottom: 26px; width: 50px; height: 50px; border-radius: 13px; background: #fff; }
+  .mark::after { content: ""; position: absolute; right: 21px; top: 21px; width: 29px; height: 29px; border-radius: 9px; background: #c9bdff; }
+  .intro h1 { font-size: 132px; font-weight: 800; margin-top: 30px; }
+  .intro .kicker { font-size: 38px; color: var(--muted); margin-top: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; width: 1500px; margin-top: 46px; }
+  .chip { font: 600 26px "DM Sans"; padding: 12px 22px; border-radius: 999px; background: var(--surface); border: 2px solid var(--line); color: var(--ink); opacity: 0; box-shadow: 0 12px 24px -18px rgba(40,20,120,.35); }
+  .chip b { color: var(--accent); margin-right: 8px; font-family: "Outfit"; }
+
+  /* ---------- main layout ---------- */
+  .main { position: absolute; inset: 0; opacity: 0; }
+  .brand { position: absolute; left: 64px; top: 58px; display: flex; align-items: center; gap: 14px; }
+  .brand .mark { width: 46px; height: 46px; border-radius: 13px; box-shadow: none; }
+  .brand .mark::before { left: 10px; bottom: 10px; width: 19px; height: 19px; border-radius: 5px; }
+  .brand .mark::after { right: 8px; top: 8px; width: 11px; height: 11px; border-radius: 4px; }
+  .brand b { font: 700 32px "Outfit"; letter-spacing: -.02em; }
+  .brand span { font: 600 18px "DM Sans"; color: var(--accent); background: var(--accent-soft); padding: 6px 12px; border-radius: 999px; }
+
+  .heads { position: absolute; left: 64px; top: 150px; width: 452px; height: 330px; }
+  .head { position: absolute; inset: 0; opacity: 0; }
+  .head .num { display: inline-block; font: 700 22px "Outfit"; color: #fff; background: var(--accent); padding: 6px 14px; border-radius: 999px; letter-spacing: .02em; }
+  .head h2 { font-size: 56px; line-height: 1.02; font-weight: 700; margin-top: 18px; }
+  .head p { font-size: 24px; line-height: 1.38; color: var(--muted); margin-top: 18px; }
+
+  .list { position: absolute; left: 64px; top: 486px; width: 452px; }
+  .row { position: relative; height: 35px; display: flex; align-items: center; gap: 12px; font: 600 20px "DM Sans"; color: var(--dim); padding-left: 12px; }
+  .row .n { font: 700 16px "Outfit"; width: 26px; color: var(--accent-line); }
+  .row .t { flex: 1; }
+  .row .tick { width: 22px; height: 22px; border-radius: 50%; background: #e3f5ea; color: var(--good); font-size: 13px; display: flex; align-items: center; justify-content: center; opacity: 0; font-weight: 800; }
+  .row .on { position: absolute; inset: 0; color: var(--ink); display: flex; align-items: center; gap: 12px; padding-left: 12px; opacity: 0; }
+  .row .on .n { color: var(--accent); }
+  .cursorbar { position: absolute; left: 0; top: 0; width: 452px; height: 35px; border-radius: 10px; background: var(--surface); border: 2px solid var(--accent-line); box-shadow: 0 10px 24px -14px rgba(90,63,216,.6); opacity: 0; }
+  .cursorbar::before { content: ""; position: absolute; left: -2px; top: 6px; bottom: 6px; width: 4px; border-radius: 2px; background: var(--accent); }
+
+  /* The app window: 1440 x 900 screenshots at 0.9, under a thin title bar. */
+  .win { position: absolute; left: 560px; top: 52px; width: 1296px; height: 852px; border-radius: 22px; background: var(--surface); border: 1.5px solid var(--line);
+         box-shadow: 0 50px 90px -40px rgba(40,20,120,.45), 0 8px 24px -16px rgba(40,20,120,.25); overflow: hidden; }
+  .bar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 18px; border-bottom: 1px solid var(--line); background: #fbfafd; position: relative; z-index: 3; }
+  .bar i { width: 12px; height: 12px; border-radius: 50%; background: #e0dde9; }
+  .bar .where { position: absolute; left: 50%; transform: translateX(-50%); width: 420px; height: 26px; border-radius: 8px; background: #f0eef6; }
+  .bar .where span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 600 15px "DM Sans"; color: var(--muted); opacity: 0; }
+  .view { position: absolute; left: 0; top: 42px; width: 1296px; height: 810px; overflow: hidden; background: var(--bg); }
+  .shot { position: absolute; inset: 0; opacity: 0; }
+  .cam { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; transform-origin: 0 0; }
+  .cam img { width: 1440px; height: 900px; display: block; }
+  .sweep { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,.75) 50%, transparent 70%); transform: translateX(-120%); z-index: 2; pointer-events: none; }
+  @keyframes sweep { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
+
+  /* Rings live inside the camera, so they move with the picture. */
+  .ring { position: absolute; border-radius: 12px; border: 3px solid var(--accent); opacity: 0; box-shadow: 0 0 0 4px rgba(90,63,216,.18), 0 0 0 3000px rgba(23,21,42,0); }
+  @keyframes ringIn { 0% { opacity: 0; transform: scale(1.18); } 60% { opacity: 1; transform: scale(.98); } 100% { opacity: 1; transform: none; } }
+  @keyframes dimIn { from { box-shadow: 0 0 0 4px rgba(90,63,216,.18), 0 0 0 3000px rgba(23,21,42,0); } to { box-shadow: 0 0 0 4px rgba(90,63,216,.18), 0 0 0 3000px rgba(23,21,42,.30); } }
+  @keyframes ringPulse { 0%,100% { outline: 0 solid rgba(90,63,216,.45); outline-offset: 0; } 50% { outline: 10px solid rgba(90,63,216,0); outline-offset: 6px; } }
+  .label { position: absolute; white-space: nowrap; }
+  .label span { display: inline-block; font: 700 22px "DM Sans"; color: #fff; background: var(--accent); padding: 10px 18px; border-radius: 12px; box-shadow: 0 14px 28px -12px rgba(60,30,180,.7); }
+
+  .overlay { position: absolute; opacity: 0; z-index: 4; }
+  .card { background: var(--surface); border: 2px solid var(--accent-line); border-radius: 22px; padding: 24px 28px; box-shadow: 0 40px 70px -30px rgba(40,20,120,.5); width: 470px; }
+  .card h4 { font: 700 18px "DM Sans"; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+  .card .opt { font: 600 25px "DM Sans"; padding: 11px 14px; border-radius: 12px; margin-top: 8px; display: flex; gap: 12px; align-items: center; opacity: 0; }
+  .card .opt.sel { background: var(--accent-soft); color: var(--accent); }
+  .card .opt i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent-line); }
+  .card .opt.sel i { background: var(--accent); }
+  .card .foot { font: 500 20px "DM Sans"; color: var(--muted); margin-top: 16px; line-height: 1.4; opacity: 0; }
+  .card .foot b { color: var(--ink); }
+
+  /* ---------- outro ---------- */
+  .outro { position: absolute; inset: 0 0 120px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; }
+  .outro .markwrap { perspective: 900px; }
+  .outro .mark { width: 170px; height: 170px; border-radius: 46px; }
+  .outro .mark::before { left: 36px; bottom: 36px; width: 70px; height: 70px; border-radius: 18px; }
+  .outro .mark::after { right: 30px; top: 30px; width: 40px; height: 40px; border-radius: 12px; }
+  .outro h1 { font-size: 170px; font-weight: 800; margin-top: 40px; line-height: 1; }
+  .outro .tag { font-size: 46px; color: var(--muted); margin-top: 26px; }
+  .outro .tag b { color: var(--accent); }
+  .outro .foot { margin-top: 40px; font-size: 26px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="glow a" style="animation: drift 140s linear 0s both"></div>
+<div class="glow b" style="animation: drift2 140s linear 0s both"></div>
+<div id="root"></div>
+<script src="shots/boxes.js"></script>
+<script>
+  // ------------------------------------------------------------ the tour
+  // Each chapter: its start comes from the running total of durations.
+  // shots: [image, from, to, camera keys [t, x, y, zoom], rings]
+  // rings: [box name or [x, y, w, h], from, to, label, side, dim], times from the shot's start
+  // overlays: [kind, from, to, x, y], times from the chapter's start, stage pixels
+  const INTRO = 6.0;
+  const OUTRO = 6.5;
+  const CHAPTERS = [
+    { id: "keys", list: "Free AI keys", title: "Free AI keys, many models", sub: "Each key is labelled free or paid. Automatic picks the AI for every task.", dur: 12.8,
+      shots: [
+        ["keys", "AI keys", 0, 7.4, [[0, 720, 450, 1], [0.6, 720, 450, 1], [1.8, 600, 420, 1.45], [5.0, 600, 420, 1.45], [5.9, 760, 260, 1.08]], [
+          ["gemini", 1.7, 3.4, "Free tier, labelled", "bottom", true],
+          ["local", 3.3, 5.4, "Or your own server", "bottom", true],
+          ["note", 5.9, 7.3, "Automatic picks one per task", "bottom", false],
+        ]],
+        ["picker", "Chat", 7.4, 12.8, [[0, 760, 700, 1.25], [1.0, 820, 820, 1.9], [5.4, 820, 820, 1.9]], [
+          ["model", 1.0, 5.4, null, null, true],
+        ]],
+      ],
+      overlays: [["picker", 8.4, 12.7, 1280, 300]] },
+    { id: "chat", list: "Modes and Team", title: "Chat modes and Team", sub: "Five modes that answer the way you need. Six helpers that work at once.", dur: 11.0,
+      shots: [
+        ["modes", "Chat", 0, 5.0, [[0, 720, 450, 1], [0.8, 893, 300, 1.55], [5, 893, 300, 1.6]], [
+          ["modes", 1.0, 4.8, "General · Study · Work · Research · Code", "bottom", true],
+        ]],
+        ["team", "Chat · team", 5.0, 11.0, [[0, 893, 700, 1.45], [1.5, 893, 700, 1.45], [2.4, 893, 330, 1.55], [6, 893, 300, 1.6]], [
+          [[811, 833, 76, 32], 0.3, 2.0, "Team on", "top", true],
+          ["team", 2.5, 5.8, "Analyst and Critic, at the same time", "bottom", true],
+        ]],
+      ] },
+    { id: "tools", list: "58 real tools", title: "58 real tools", sub: "Google Workspace, Microsoft 365 with Excel, mail, GitHub, databases, the web and PDFs, Slack and Teams.", dur: 13.5,
+      shots: [
+        ["tools", "Permissions · all tools", 0, 13.5, [[0, 720, 450, 1], [0.7, 380, 230, 1.75], [3.8, 380, 230, 1.75], [6.6, 760, 230, 1.75], [9.4, 1080, 230, 1.75], [11.6, 520, 230, 1.75], [13.5, 520, 240, 1.7]], [
+          ["tab:All", 0.9, 3.7, "58 tools", "bottom", true],
+          ["tab:Google Workspace", 3.9, 5.2, null, null, false],
+          ["tab:Google Sheets", 4.2, 5.2, null, null, false],
+          ["tab:Microsoft 365", 4.8, 6.4, null, null, false],
+          ["tab:Excel (OneDrive)", 5.6, 7.0, null, null, false],
+          ["tab:Mailbox (IMAP)", 6.6, 7.8, null, null, false],
+          ["tab:GitHub", 7.4, 8.6, null, null, false],
+          ["tab:Database", 8.1, 9.4, null, null, false],
+          ["tab:Web", 9.0, 10.6, "Web pages and PDFs", "bottom", false],
+          ["tab:Team chat", 10.9, 13.3, "Slack and Teams", "bottom", false],
+        ]],
+      ] },
+    { id: "connect", list: "Connections", title: "Connections", sub: "One click for Google and Microsoft. Slack and Teams by webhook. Secrets never reach the AI.", dur: 10.0,
+      shots: [
+        ["connections", "Connections", 0, 10.0, [[0, 720, 450, 1], [0.7, 450, 300, 1.4], [5.6, 450, 300, 1.4], [6.4, 560, 460, 1.45], [10, 560, 460, 1.5]], [
+          ["oneclick", 1.0, 2.9, "One click", "bottom", false],
+          [[461, 243, 66, 21], 1.3, 2.9, null, null, false],
+          ["slack", 3.0, 5.6, "By webhook", "bottom", true],
+          ["teams", 3.3, 5.6, null, null, false],
+          ["secret", 6.2, 9.8, "Encrypted, never shown again", "top", true],
+        ]],
+      ] },
+    { id: "agents", list: "Agents by chat", title: "Agents built by chatting", sub: "Say what it should do and when. It runs on a schedule, with a readiness check.", dur: 11.5,
+      shots: [
+        ["draft", "Chat · draft agent", 0, 5.6, [[0, 893, 330, 1.15], [0.8, 893, 330, 1.25], [5.6, 893, 360, 1.35]], [
+          ["schedule", 1.2, 3.4, "Weekdays at 8:00", "left", true],
+          ["ready", 3.3, 5.5, "Can it really do this?", "left", true],
+        ]],
+        ["agents", "AI Agents", 5.6, 11.5, [[0, 740, 330, 1.1], [5.9, 740, 330, 1.18]], [
+          ["schedule", 0.2, 1.8, "On a schedule", "bottom", true],
+          ["readyLine", 1.6, 3.2, "Ready", "bottom", true],
+          ["redLine", 3.1, 5.8, "What's missing", "bottom", true],
+        ]],
+      ] },
+    { id: "tree", list: "Agent Tree", title: "The Agent Tree", sub: "What starts it, its stages, the tools it uses, and what you get.", dur: 8.5,
+      shots: [
+        ["tree", "AI Agents · Tree", 0, 8.5, [[0, 760, 520, 1], [0.6, 760, 650, 1.08], [1.4, 420, 660, 1.55], [2.9, 720, 660, 1.5], [4.3, 980, 660, 1.5], [5.7, 1150, 660, 1.5], [7.2, 760, 650, 1.08]], [
+          ["trigger", 1.5, 3.0, "What starts it", "bottom", true],
+          ["stages", 2.9, 4.4, "Its stages", "right", true],
+          [[874, 500, 232, 340], 4.3, 5.8, "Tools, with app logos", "top", true],
+          ["result", 5.7, 7.4, "What you get", "bottom", true],
+        ]],
+      ] },
+    { id: "perms", list: "Permissions", title: "Permissions", sub: "Always allow, Ask me first or Blocked, for every tool.", dur: 11.8,
+      shots: [
+        ["perms", "Permissions", 0, 5.3, [[0, 720, 450, 1], [0.8, 1000, 470, 1.4], [5.3, 1000, 470, 1.45]], [
+          ["maths", 1.0, 5.1, "One setting per tool", "top", true],
+        ]],
+        ["perms2", "Permissions · search “send”", 5.3, 9.2, [[0, 900, 700, 1.25], [3.9, 900, 720, 1.3]], [
+          ["search_gmail", 0.3, 1.9, "Reading runs on its own", "top", true],
+          ["gmail", 1.8, 3.8, "Sending asks first", "top", true],
+        ]],
+        ["perms", "Permissions", 9.2, 11.8, [[0, 950, 580, 1.4], [2.6, 950, 580, 1.45]], [
+          ["slack", 0.1, 2.6, "Can't be undone: starts Blocked", "top", true],
+        ]],
+      ] },
+    { id: "approvals", list: "Approvals", title: "Approvals", sub: "The run waits for your yes: in the app, from an email link, or in Slack.", dur: 11.0,
+      shots: [
+        ["approvals", "Approvals", 0, 5.0, [[0, 720, 450, 1], [0.7, 610, 280, 1.4], [5, 610, 290, 1.45]], [
+          ["code", 0.9, 2.8, "Exactly what it will do", "top", true],
+          ["buttons", 2.7, 4.9, "Waits for your yes", "bottom", true],
+        ]],
+        ["link", "Approval link from an email", 5.0, 8.0, [[0, 720, 400, 1.15], [3, 720, 400, 1.3]], [
+          ["buttons", 0.5, 2.9, "From the email link", "bottom", true],
+        ]],
+        ["notify", "Notifications", 8.0, 11.0, [[0, 1080, 320, 1.3], [3, 1080, 320, 1.4]], [
+          ["slack", 0.3, 2.9, "Approve from Slack", "bottom", true],
+        ]],
+      ] },
+    { id: "memory", list: "Memory", title: "Memory", sub: "One memory for chat and every agent. Read or forget anything.", dur: 6.5,
+      shots: [
+        ["memory", "Memory", 0, 6.5, [[0, 720, 450, 1], [0.7, 600, 330, 1.3], [6.5, 600, 330, 1.35]], [
+          [[122, 171, 938, 290], 0.8, 3.4, "What it remembers about you", "top", true],
+          ["forget", 3.3, 6.3, "Forget anything", "left", true],
+        ]],
+      ] },
+    { id: "history", list: "History and cost", title: "History, models and cost", sub: "Every run on record. See what the free tiers saved you.", dur: 10.5,
+      shots: [
+        ["history", "AI Agents · History", 0, 3.8, [[0, 720, 450, 1], [0.8, 1100, 420, 1.4], [3.8, 1100, 420, 1.45]], [
+          ["who", 1.0, 3.7, "Who did what, step by step", "left", true],
+        ]],
+        ["cost", "AI Agents · Models and cost", 3.8, 10.5, [[0, 720, 450, 1], [0.6, 600, 330, 1.35], [3.6, 600, 330, 1.35], [4.4, 720, 700, 1.25], [6.7, 720, 700, 1.3]], [
+          ["saved", 0.8, 2.6, "What free tiers saved", "bottom", true],
+          ["free", 2.4, 3.8, "Free models: most calls", "bottom", true],
+          ["table", 4.6, 6.6, "Every model, its runs and cost", "top", true],
+        ]],
+      ] },
+    { id: "extras", list: "Voice and tour", title: "Voice and a welcome tour", sub: "Speak instead of typing. New people get a short tour.", dur: 7.5,
+      shots: [
+        ["voice", "Chat", 0, 3.6, [[0, 893, 700, 1.3], [0.8, 1060, 830, 2.1], [3.6, 1060, 830, 2.2]], [
+          ["micNow", 1.0, 3.5, "Listening", "top", false],
+        ]],
+        ["welcome", "First sign-in", 3.6, 7.5, [[0, 720, 450, 1], [3.9, 720, 450, 1.2]], [
+          ["dialog", 0.6, 3.8, "Welcome tour", "right", false],
+        ]],
+      ] },
+    { id: "platform", list: "Staff console", title: "The staff console", sub: "For the people who run Baton. Counts only, never anyone's content.", dur: 7.0,
+      shots: [
+        ["platform", "Staff console · /platform", 0, 7.0, [[0, 720, 450, 1], [0.7, 560, 330, 1.25], [3.2, 560, 330, 1.25], [4.0, 850, 330, 1.18], [7, 850, 330, 1.22]], [
+          ["privacy", 0.9, 3.8, "Private by design", "right", true],
+          ["counts", 3.6, 6.8, "Counts only", "bottom", true],
+        ]],
+      ] },
+  ];
+
+  // ------------------------------------------------------------ timing
+  let t0 = INTRO;
+  for (const c of CHAPTERS) { c.t = t0; t0 += c.dur; }
+  const OUTRO_AT = t0;
+  window.DURATION = Math.round((OUTRO_AT + OUTRO) * 100) / 100;
+  window.SCENES = [{ id: "intro", t: 0 }, ...CHAPTERS.map((c) => ({ id: c.id, t: c.t })), { id: "outro", t: OUTRO_AT }];
+
+  // ------------------------------------------------------------ helpers
+  const root = document.getElementById("root");
+  const sheet = document.createElement("style");
+  document.head.appendChild(sheet);
+  let kf = 0;
+  const keyframes = (body) => { const name = `k${kf++}`; sheet.textContent += `@keyframes ${name} { ${body} }\n`; return name; };
+  const el = (tag, cls, html, parent) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; (parent ?? root).appendChild(e); return e; };
+  const anim = (e, ...parts) => { e.style.animation = parts.join(", "); };
+  const f = (n) => n.toFixed(3);
+
+  // Window geometry: the view is 1296 x 810, the shot 1440 x 900 at 0.9.
+  const VW = 1296, VH = 810, BASE = 0.9;
+  function camAt(x, y, z) {
+    const s = BASE * z;
+    let tx = VW / 2 - x * s, ty = VH / 2 - y * s;
+    tx = Math.min(0, Math.max(VW - 1440 * s, tx));
+    ty = Math.min(0, Math.max(VH - 900 * s, ty));
+    return { s, tx, ty };
+  }
+  function zoomAt(keys, t) {
+    let z = keys[0][3];
+    for (let i = 0; i < keys.length; i++) {
+      if (keys[i][0] <= t) z = keys[i][3];
+      if (keys[i][0] > t) { const [a, b] = [keys[i - 1], keys[i]]; z = a[3] + (b[3] - a[3]) * ((t - a[0]) / (b[0] - a[0])); break; }
+    }
+    return z;
+  }
+
+  // ------------------------------------------------------------ intro
+  const intro = el("section", "intro");
+  anim(intro, `show ${INTRO}s 0s`, `fadeOut .5s ease-in ${INTRO - 0.5}s`);
+  const imark = el("div", "mark", "", el("div", "markwrap", "", intro));
+  anim(imark, "spin3d 1s cubic-bezier(.2,.8,.2,1) .15s both");
+  const ih = el("h1", "display", 'Baton<span class="grad">.</span>', intro);
+  anim(ih, "slam .7s ease-out .5s both");
+  const ik = el("div", "kicker", "Everything it does, one feature at a time", intro);
+  anim(ik, "up .6s ease-out 1.1s both");
+  const chips = el("div", "chips", "", intro);
+  CHAPTERS.forEach((c, i) => {
+    const ch = el("span", "chip", `<b>${String(i + 1).padStart(2, "0")}</b>${c.list}`, chips);
+    anim(ch, `pop .45s ease-out ${f(1.7 + i * 0.16)}s both`);
+  });
+
+  // ------------------------------------------------------------ main
+  const main = el("section", "main");
+  anim(main, `fadeIn .6s ease-out ${INTRO - 0.2}s both`, `fadeOut .6s ease-in ${f(OUTRO_AT - 0.1)}s forwards`);
+  el("div", "brand", '<div class="mark"></div><b>Baton</b><span>Feature tour</span>', main);
+
+  const heads = el("div", "heads", "", main);
+  const list = el("div", "list", "", main);
+  const bar = el("div", "cursorbar", "", list);
+  const ROW = 35;
+  // The bar slides from row to row at each chapter start.
+  const barKeys = [];
+  CHAPTERS.forEach((c, i) => {
+    const head = el("div", "head", `<span class="num">${String(i + 1).padStart(2, "0")} / ${CHAPTERS.length}</span><h2 class="display">${c.title}</h2><p>${c.sub}</p>`, heads);
+    anim(head, `up .55s cubic-bezier(.2,.8,.2,1) ${f(c.t + 0.05)}s both`, `upOut .35s ease-in ${f(c.t + c.dur - 0.35)}s forwards`);
+    const row = el("div", "row", `<span class="n">${String(i + 1).padStart(2, "0")}</span><span class="t">${c.list}</span><span class="tick">✓</span>`, list);
+    const on = el("div", "on", `<span class="n">${String(i + 1).padStart(2, "0")}</span><span class="t">${c.list}</span>`, row);
+    anim(on, `fadeIn .3s ${f(c.t + 0.1)}s both`, `fadeOut .3s ${f(c.t + c.dur - 0.1)}s forwards`);
+    anim(row.querySelector(".tick"), `pop .4s ease-out ${f(c.t + c.dur - 0.2)}s both`);
+    barKeys.push([c.t, i * ROW]);
+  });
+  {
+    const total = OUTRO_AT;
+    const frames = [`0% { transform: translateY(0); opacity: 0; }`, `${f((INTRO + 0.05) / total * 100)}% { transform: translateY(0); opacity: 0; }`, `${f((INTRO + 0.4) / total * 100)}% { transform: translateY(0); opacity: 1; }`];
+    for (let i = 1; i < barKeys.length; i++) {
+      const [t, y] = barKeys[i];
+      frames.push(`${f((t - 0.05) / total * 100)}% { transform: translateY(${barKeys[i - 1][1]}px); opacity: 1; animation-timing-function: cubic-bezier(.5,0,.2,1); }`);
+      frames.push(`${f((t + 0.45) / total * 100)}% { transform: translateY(${y}px); opacity: 1; }`);
+    }
+    frames.push(`100% { transform: translateY(${barKeys.at(-1)[1]}px); opacity: 1; }`);
+    anim(bar, `${keyframes(frames.join(" "))} ${total}s linear 0s both`);
+  }
+
+  const win = el("div", "win", "", main);
+  anim(win, `up .8s cubic-bezier(.2,.8,.2,1) ${INTRO - 0.15}s both`);
+  const tbar = el("div", "bar", "<i></i><i></i><i></i>", win);
+  const where = el("div", "where", "", tbar);
+  const view = el("div", "view", "", win);
+  const sweep = el("div", "sweep", "", view);
+  anim(sweep, ...CHAPTERS.map((c) => `sweep .7s ease-in-out ${f(c.t)}s both`));
+
+  for (const c of CHAPTERS) {
+    c.shots.forEach(([img, label, from, to, cam, rings], k) => {
+      const start = c.t + from, dur = to - from;
+      const first = k === 0;
+      const shot = el("div", "shot", "", view);
+      // In: a soft zoom-and-fade (a little stronger on a new chapter). Out: fade.
+      const inK = keyframes(`from { opacity: 0; transform: scale(${first ? 1.06 : 1.03}); filter: blur(${first ? 8 : 4}px); } to { opacity: 1; transform: none; filter: blur(0); }`);
+      anim(shot, `show ${f(dur)}s ${f(start)}s`, `${inK} ${first ? ".55" : ".4"}s cubic-bezier(.2,.8,.2,1) ${f(start)}s backwards`);
+      const camEl = el("div", "cam", `<img src="shots/${img}.png" alt="">`, shot);
+      const frames = cam.map(([t, x, y, z]) => {
+        const { s, tx, ty } = camAt(x, y, z);
+        return `${f((t / dur) * 100)}% { transform: translate(${f(tx)}px, ${f(ty)}px) scale(${f(s)}); animation-timing-function: cubic-bezier(.45,0,.2,1); }`;
+      });
+      if (cam[0][0] > 0) frames.unshift(`0% { transform: ${frames[0].match(/transform: ([^;]+);/)[1]}; }`);
+      anim(camEl, `${keyframes(frames.join(" "))} ${f(dur)}s linear ${f(start)}s both`);
+
+      const pathLabel = el("span", "", label, where);
+      anim(pathLabel, `fadeIn .25s ${f(start)}s both`, `fadeOut .2s ${f(start + dur - 0.2)}s forwards`);
+
+      for (const [ref, a, b, text, side, dim] of rings) {
+        const r = Array.isArray(ref) ? { x: ref[0], y: ref[1], w: ref[2], h: ref[3] } : window.BOXES?.[img]?.[ref];
+        if (!r) { console.warn("no box", img, ref); continue; }
+        const pad = 8;
+        const scale = BASE * zoomAt(cam, a + 0.6);
+        const ring = el("div", "ring", "", camEl);
+        Object.assign(ring.style, { left: `${r.x - pad}px`, top: `${r.y - pad}px`, width: `${r.w + pad * 2}px`, height: `${r.h + pad * 2}px`, borderWidth: `${f(3.2 / scale)}px`, borderRadius: `${f(12 / scale + 4)}px` });
+        const ra = start + a, rb = start + b;
+        const parts = [`ringIn .45s cubic-bezier(.2,.8,.2,1) ${f(ra)}s both`, `ringPulse 1.1s ease-out ${f(ra + 0.4)}s 2`, `fadeOut .3s ease-in ${f(rb - 0.3)}s forwards`];
+        if (dim) parts.push(`dimIn .5s ease-out ${f(ra)}s both`);
+        anim(ring, ...parts);
+        if (text) {
+          const lab = el("div", "label", `<span>${text}</span>`, ring);
+          const inv = 1 / scale;
+          const gap = 14 / scale;
+          const at = {
+            bottom: { left: "50%", top: `calc(100% + ${f(gap)}px)`, origin: "0 0", shift: "translateX(-50%)" },
+            top: { left: "50%", bottom: `calc(100% + ${f(gap)}px)`, origin: "0 100%", shift: "translateX(-50%)" },
+            right: { left: `calc(100% + ${f(gap)}px)`, top: "50%", origin: "0 0", shift: "translateY(-50%)" },
+            left: { right: `calc(100% + ${f(gap)}px)`, top: "50%", origin: "100% 0", shift: "translateY(-50%)" },
+          }[side];
+          Object.assign(lab.style, { left: at.left ?? "", top: at.top ?? "", right: at.right ?? "", bottom: at.bottom ?? "", transformOrigin: at.origin, transform: `scale(${f(inv)}) ${at.shift}` });
+          anim(lab.firstChild, `pop .45s ease-out ${f(ra + 0.2)}s both`);
+        }
+      }
+    });
+  }
+
+  // The AI picker's options: the <select>'s real labels, as a card beside it.
+  const options = window.BOXES?.picker?.options ?? ["Automatic · Balanced", "Automatic · Best quality", "Automatic · Lowest cost", "Automatic · Private only"];
+  for (const c of CHAPTERS) for (const [kind, a, b, x, y] of c.overlays ?? []) {
+    if (kind !== "picker") continue;
+    const box = el("div", "overlay", "", main);
+    Object.assign(box.style, { left: `${x}px`, top: `${y}px` });
+    const card = el("div", "card", "<h4>Pick the AI</h4>", box);
+    const autos = options.filter((o) => o.startsWith("Automatic"));
+    autos.forEach((o, i) => {
+      const opt = el("div", `opt${i === 0 ? " sel" : ""}`, `<i></i>${o}`, card);
+      anim(opt, `up .4s ease-out ${f(c.t + a + 0.35 + i * 0.22)}s both`);
+    });
+    const foot = el("div", "foot", "<b>Busy or out of free calls?</b> The next connected AI takes over. Or pin one AI for a chat.", card);
+    anim(foot, `up .5s ease-out ${f(c.t + a + 1.5)}s both`);
+    anim(box, `pop .5s cubic-bezier(.2,.8,.2,1) ${f(c.t + a)}s both`, `fadeOut .3s ${f(c.t + b - 0.3)}s forwards`);
+  }
+
+  // ------------------------------------------------------------ outro
+  const outro = el("section", "outro");
+  anim(outro, `fadeIn .5s ${f(OUTRO_AT + 0.2)}s both`);
+  const omark = el("div", "mark", "", el("div", "markwrap", "", outro));
+  anim(omark, `spin3d 1.1s cubic-bezier(.2,.8,.2,1) ${f(OUTRO_AT + 0.3)}s both`);
+  const oh = el("h1", "display", "Baton", outro);
+  anim(oh, `slam .7s ease-out ${f(OUTRO_AT + 0.8)}s both`);
+  const ot = el("div", "tag", "<b>Pass every task</b> to the right AI.", outro);
+  anim(ot, `up .6s ease-out ${f(OUTRO_AT + 1.4)}s both`);
+  const of = el("div", "foot", "Free AI keys · real tools · agents · you stay in control", outro);
+  anim(of, `fadeIn .6s ${f(OUTRO_AT + 2.2)}s both`);
+
+  // ------------------------------------------------------------ seeking
+  window.seek = (t) => {
+    for (const a of document.getAnimations()) {
+      a.pause();
+      a.currentTime = t * 1000;
+    }
+  };
+  window.seek(0);
+</script>
+</body>
+</html>

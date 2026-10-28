@@ -37,7 +37,7 @@ from app.core.errors import NotFoundError, PermissionDeniedError, ValidationErro
 from app.core.observability import get_logger
 from app.core.signed import InvalidSignedTokenError, sign_for, verify
 from app.db.models.policy import Connection, ConnectionKind
-from app.db.models.provider import OrgConnectionAccess, OrgOAuthApp
+from app.db.models.provider import OrgConnectionAccess, OrgOAuthApp, PlatformConnectionAccess
 from app.services.oauth_providers import OAuthProvider, get_oauth_provider, resolve_client
 
 log = get_logger(__name__)
@@ -223,6 +223,49 @@ def tools_for(kind: str) -> list[str]:
     return [t.name for t in registry.all() if t.requires_connection == kind]
 
 
+@dataclass(frozen=True, slots=True)
+class ConnectionRuling:
+    """Whether one kind of app is open to one person, and who said so.
+
+    `source` is "person" when a Platform Admin set it for this person,
+    or "platform" when it was set for everyone. No ruling at all means
+    open, and is not represented here.
+    """
+
+    allowed: bool
+    source: str
+    note: str | None = None
+
+
+async def connection_rulings(
+    session: AsyncSession, owner_id: uuid.UUID
+) -> dict[ConnectionKind, ConnectionRuling]:
+    """The rulings that apply to this person, one per kind of app.
+
+    A person's own ruling beats the everyone-level one, in either
+    direction, the same way it does for the parts of an app. A kind with
+    no ruling at either level is open and is left out of the result.
+    """
+    out: dict[ConnectionKind, ConnectionRuling] = {
+        row.kind: ConnectionRuling(
+            row.allowed,
+            "platform",
+            None
+            if row.allowed
+            else f"{CATALOGUE.get(row.kind, {}).get('display_name', row.kind.value)} "
+            "is switched off for everyone on this platform for now.",
+        )
+        for row in (await session.scalars(select(PlatformConnectionAccess))).all()
+    }
+    for row in (
+        await session.scalars(
+            select(OrgConnectionAccess).where(OrgConnectionAccess.owner_id == owner_id)
+        )
+    ).all():
+        out[row.kind] = ConnectionRuling(row.allowed, "person", row.note)
+    return out
+
+
 # ------------------------------------------------------------------ service
 
 
@@ -233,12 +276,10 @@ class ConnectionService:
 
     # --- reading -------------------------------------------------------
 
-    async def _access(self) -> dict[ConnectionKind, OrgConnectionAccess]:
-        """This person's rulings, keyed by kind. Absent means inherit."""
-        rows = await self.session.scalars(
-            select(OrgConnectionAccess).where(OrgConnectionAccess.owner_id == self.owner_id)
-        )
-        return {row.kind: row for row in rows.all()}
+    async def _access(self) -> dict[ConnectionKind, ConnectionRuling]:
+        """The rulings that apply to this person, keyed by kind: their own,
+        or else the everyone-level one. Absent means open."""
+        return await connection_rulings(self.session, self.owner_id)
 
     async def available(self) -> list[AvailableConnection]:
         access = await self._access()

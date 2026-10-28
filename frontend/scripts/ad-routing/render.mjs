@@ -2,11 +2,13 @@
 /**
  * Render stage.html to a silent MP4, frame by frame.
  *
- *   node scripts/ad-routing/render.mjs OUT.mp4 [--from 0 --to 48 --fps 30]
+ *   node scripts/ad-routing/render.mjs OUT.mp4 [--from 0 --to 48 --fps 30] [--stage other/stage.html]
  *
  * Each frame seeks every animation on the page to its time and takes a
  * screenshot, so the result does not depend on how fast this machine is.
  * Also writes OUT.marks.json (scene start times) for make_ad.py.
+ * --stage renders another stage page with the same contract (window.seek,
+ * window.SCENES, window.DURATION), e.g. scripts/feature-tour/stage.html.
  */
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -29,10 +31,12 @@ const opt = (name, fallback) => {
   return i < 0 ? fallback : Number(args[i + 1]);
 };
 const fps = opt("fps", 30);
+const stageAt = args.indexOf("--stage");
+const stage = stageAt < 0 ? path.join(here, "stage.html") : path.resolve(args[stageAt + 1]);
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-await page.goto(pathToFileURL(path.join(here, "stage.html")).href);
+await page.goto(pathToFileURL(stage).href);
 await page.evaluate(() => document.fonts.ready);
 const { scenes, duration } = await page.evaluate(() => ({ scenes: window.SCENES, duration: window.DURATION }));
 const from = opt("from", 0);

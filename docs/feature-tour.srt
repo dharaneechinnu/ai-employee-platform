@@ -1,0 +1,91 @@
+1
+00:00:00,600 --> 00:00:04,712
+This is Baton. Here's everything it can do, one feature at a time.
+
+2
+00:00:06,500 --> 00:00:11,042
+Bring free AI keys from Gemini, Groq or OpenRouter, or your own server.
+
+3
+00:00:11,600 --> 00:00:17,395
+On Automatic, every task goes to the model that suits it, and if one hits its limit, the next takes over.
+
+4
+00:00:19,300 --> 00:00:23,444
+Chat has five modes: general, study, work, research and code.
+
+5
+00:00:24,000 --> 00:00:28,509
+Switch on Team, and six helpers split a big question and work at the same time.
+
+6
+00:00:30,300 --> 00:00:33,203
+It doesn't just talk. It has 58 real tools:
+
+7
+00:00:33,600 --> 00:00:42,114
+Google and Microsoft 365 with Excel, any mailbox, GitHub, databases, the web and PDFs, and Slack or Teams.
+
+8
+00:00:43,800 --> 00:00:48,667
+Connect Google or Microsoft in one click, and Slack or Teams channels with a webhook.
+
+9
+00:00:49,300 --> 00:00:52,040
+Your keys are encrypted, and never reach the AI.
+
+10
+00:00:53,800 --> 00:00:57,531
+Build an agent just by chatting: say what it should do, and when.
+
+11
+00:00:58,900 --> 00:01:03,375
+It runs on a schedule, and a readiness check shows what's missing before it ever runs.
+
+12
+00:01:05,300 --> 00:01:11,567
+The Agent Tree shows each agent at a glance: what starts it, its stages, the tools it uses, and what you get.
+
+13
+00:01:13,800 --> 00:01:17,930
+Every tool has one setting: always allow, ask me first, or blocked.
+
+14
+00:01:18,700 --> 00:01:23,751
+Reading runs on its own, sending asks first, and posting to a channel starts blocked.
+
+15
+00:01:25,600 --> 00:01:28,600
+When a step needs your yes, the run pauses and waits.
+
+16
+00:01:29,500 --> 00:01:32,229
+Approve it in the app, from your email, or from Slack.
+
+17
+00:01:36,600 --> 00:01:40,214
+Baton remembers what you tell it, and you can read or forget anything.
+
+18
+00:01:43,100 --> 00:01:45,542
+History keeps every run, step by step.
+
+19
+00:01:46,600 --> 00:01:51,265
+And Models and cost shows what each model did, and what the free tiers saved you.
+
+20
+00:01:53,600 --> 00:01:55,825
+Press the mic to speak instead of typing.
+
+21
+00:01:56,900 --> 00:01:59,028
+And new people get a short welcome tour.
+
+22
+00:02:01,100 --> 00:02:05,753
+For the team that runs Baton, a staff console shows counts, never your chats.
+
+23
+00:02:08,400 --> 00:02:11,726
+Baton. Pass every task to the right AI.

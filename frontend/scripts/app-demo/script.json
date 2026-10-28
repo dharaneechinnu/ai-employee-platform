@@ -1,0 +1,72 @@
+{
+  "voice": {
+    "languageCode": "en-IN",
+    "name": "en-IN-Neural2-A",
+    "speakingRate": 1.0,
+    "pitch": 0.0
+  },
+  "lines": [
+    {
+      "at": "intro",
+      "offset": 0.2,
+      "text": "This is Baton, recorded live: *one assistant*, on free AI keys.",
+      "pace": 1.0
+    },
+    {
+      "at": "signup",
+      "offset": 0.3,
+      "text": "Sign up with a username. It checks the name is free *as you type*."
+    },
+    {
+      "at": "keys",
+      "offset": 0.3,
+      "text": "Then add an AI. Free tiers are labelled, and *Automatic* picks the best one for each task."
+    },
+    {
+      "at": "keys",
+      "offset": 8.0,
+      "text": "Here we connect *our own server*. One click tests it."
+    },
+    {
+      "at": "chat",
+      "offset": 2.5,
+      "text": "Now just ask. The lead assistant brings in *an Analyst and a Critic*, and every step shows live."
+    },
+    {
+      "at": "chat",
+      "offset": 12.6,
+      "text": "The answer says *which AI replied, and why*."
+    },
+    {
+      "at": "agent",
+      "offset": 0.3,
+      "text": "Want something done every day? *Describe an agent in chat.*"
+    },
+    {
+      "at": "agent",
+      "offset": 12.4,
+      "text": "Press Create, and it's ready, *on a schedule*."
+    },
+    {
+      "at": "tree",
+      "offset": 0.3,
+      "text": "The Agent Tree shows *how each agent works*: what starts it, its steps, its tools, and what you get."
+    },
+    {
+      "at": "safety",
+      "offset": 0.3,
+      "text": "And you stay in control. Actions that can't be undone are *blocked*, and Python asks first."
+    },
+    {
+      "at": "safety",
+      "offset": 14.0,
+      "text": "The run *waits for your yes*, then finishes."
+    },
+    {
+      "at": "outro",
+      "offset": 0.5,
+      "text": "Baton. *Pass every task to the right AI.*",
+      "pace": 0.92
+    }
+  ]
+}

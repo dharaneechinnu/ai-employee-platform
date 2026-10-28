@@ -1,0 +1,46 @@
+{
+  "voice": {
+    "languageCode": "en-IN",
+    "name": "en-IN-Neural2-A",
+    "speakingRate": 1.04,
+    "pitch": 0.0
+  },
+  "lines": [
+    { "at": "intro", "offset": 0.6, "text": "This is Baton. Here's *everything it can do*, one feature at a time.", "pace": 0.95 },
+
+    { "at": "keys", "offset": 0.5, "text": "Bring free AI keys from Gemini, Groq or OpenRouter, or *your own server*." },
+    { "at": "keys", "offset": 5.6, "text": "On *Automatic*, every task goes to the model that suits it, and if one hits its limit, the next takes over." },
+
+    { "at": "chat", "offset": 0.5, "text": "Chat has five modes: *general, study, work, research and code*." },
+    { "at": "chat", "offset": 5.2, "text": "Switch on *Team*, and six helpers split a big question and work at the same time." },
+
+    { "at": "tools", "offset": 0.5, "text": "It doesn't just talk. It has *58 real tools*:" },
+    { "at": "tools", "offset": 3.8, "text": "Google and Microsoft 365 with Excel, any mailbox, GitHub, databases, the web and PDFs, and *Slack or Teams*." },
+
+    { "at": "connect", "offset": 0.5, "text": "Connect Google or Microsoft in one click, and Slack or Teams channels with a webhook." },
+    { "at": "connect", "offset": 6.0, "text": "Your keys are encrypted, and *never reach the AI*." },
+
+    { "at": "agents", "offset": 0.5, "text": "Build an agent *just by chatting*: say what it should do, and when." },
+    { "at": "agents", "offset": 5.6, "text": "It runs on a schedule, and a readiness check shows *what's missing* before it ever runs." },
+
+    { "at": "tree", "offset": 0.5, "text": "The Agent Tree shows each agent at a glance: *what starts it*, its stages, the tools it uses, and what you get." },
+
+    { "at": "perms", "offset": 0.5, "text": "Every tool has one setting: *always allow, ask me first, or blocked*." },
+    { "at": "perms", "offset": 5.4, "text": "Reading runs on its own, sending asks first, and posting to a channel *starts blocked*." },
+
+    { "at": "approvals", "offset": 0.5, "text": "When a step needs your yes, the run *pauses and waits*." },
+    { "at": "approvals", "offset": 4.4, "text": "Approve it in the app, *from your email*, or from Slack." },
+
+    { "at": "memory", "offset": 0.5, "text": "Baton *remembers* what you tell it, and you can read or forget anything." },
+
+    { "at": "history", "offset": 0.5, "text": "History keeps *every run*, step by step." },
+    { "at": "history", "offset": 4.0, "text": "And Models and cost shows what each model did, and *what the free tiers saved you*." },
+
+    { "at": "extras", "offset": 0.5, "text": "Press the mic to *speak instead of typing*." },
+    { "at": "extras", "offset": 3.8, "text": "And new people get a short *welcome tour*." },
+
+    { "at": "platform", "offset": 0.5, "text": "For the team that runs Baton, a staff console shows *counts, never your chats*." },
+
+    { "at": "outro", "offset": 0.8, "text": "Baton. *Pass every task to the right AI.*", "pace": 0.92 }
+  ]
+}

@@ -34,6 +34,10 @@ GLOBAL_TABLES: dict[str, str] = {
         "which parts of an app (Gmail, Drive, Sheets; read or edit) the platform allows "
         "at all; the per-company half is org_service_access, which is scoped"
     ),
+    "platform_connection_access": (
+        "whether each kind of app (GitHub, PostgreSQL, Slack...) is open to everyone; "
+        "the per-person half is org_connection_access, which is scoped"
+    ),
 }
 
 

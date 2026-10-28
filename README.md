@@ -23,7 +23,7 @@ Baton is a **personal AI assistant** that does real work. One person signs in an
 
 > **Status:** the backend, worker and React frontend are built and run with one command. Chat is the home screen. Agents can be designed in chat and run on a schedule. Anyone can create an account at `/register` and sign in with their email or username; a Platform Admin can also create an account and send a one-time setup link.
 >
-> 🎬 **Videos:** the Baton launch ad, plus a narrated ad, a live demo and an animated overview, are [at the bottom of this page](#-product-videos). All but the launch ad were recorded from the earlier company version, so some screens look different now.
+> 🎬 **Videos:** the Baton launch ad, a narrated feature tour and a live demo show the app as it is now; a narrated ad and an animated overview from the earlier company version are there too. All are [at the bottom of this page](#-product-videos).
 
 ## What problem this solves
 
@@ -375,14 +375,17 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 ▶️ **Watch on Google Drive:** [Product videos, earlier version](https://drive.google.com/file/d/1L8DQJJeDJeSN5XoC2bQ4jBIS5LagYWRL/view?usp=sharing)
 
-The same files are in this repository under `docs/`. The first one shows the product as it is now; the others show the earlier company version.
+The same files are in this repository under `docs/`. The launch ad, the feature tour and the live demo show the product as it is now; the others show the earlier company version. (The Google Drive link above still has the earlier version of the live demo.)
 
 To rebuild the new one: `node scripts/ad-routing/render.mjs out.mp4` (in `frontend/`), then `AD_SCRIPT=scripts/ad-routing/script.json python3 scripts/ad/make_ad.py out.mp4 docs/routing-ad.mp4`.
+
+To rebuild the feature tour (in `frontend/`, with the app running): `node scripts/feature-tour/seed.mjs && node scripts/feature-tour/capture.mjs && node scripts/ad-routing/render.mjs /tmp/tour.mp4 --stage scripts/feature-tour/stage.html`, then `AD_SCRIPT=scripts/feature-tour/script.json AD_CRF=30 python3 scripts/ad/make_ad.py /tmp/tour.mp4 ../docs/feature-tour.mp4`.
 
 | Video | What it shows |
 |---|---|
 | 🆕 **[Baton launch ad](docs/routing-ad.mp4)** (0:48) | The current product: free AI keys, each prompt sent to the model that suits it, automatic fallback when one hits a limit, and scheduled agents. Zoom punches, shakes and a different transition at every cut, an open-source Kokoro voice and subtitles |
 | 🎬 **[Narrated ad](docs/product-ad.mp4)** (1:08) | Six features with title cards, zooms and spotlights, a voiceover in sync with subtitles, and music |
-| 🖥️ **[Live demo](docs/product-demo.mp4)** (0:58) | The app recorded in use, start to finish |
+| 🆕 **[Feature tour](docs/feature-tour.mp4)** (2:14) | Twelve features one after another, each on the real app screen with zooms, highlight rings and callouts, narrated with subtitles ([SRT](docs/feature-tour.srt)): free AI keys and Automatic, chat modes and Team, the 58 tools, connections, agents built by chatting, the Agent Tree, Permissions, approvals in the app, by email link or Slack, memory, history and cost, voice input and the welcome tour, and the staff console. The screens are screenshots of a demo account; its week of past runs (behind History and Models and cost) is seeded data, and the chat answers come from the same scripted local test model as the live demo. Made with `frontend/scripts/feature-tour/` |
+| 🆕 **[Live demo](docs/product-demo.mp4)** (1:40) | The current app recorded in real use, narrated with subtitles ([SRT](docs/product-demo.srt)): sign up, connect an AI, a chat where the Analyst and Critic help, an agent built by chatting and put on a schedule, the Agent Tree, Permissions and an approval. The AI's replies come from a scripted local test model connected as "Your own server"; everything else is the real app. Re-record with `frontend/scripts/app-demo/record-app-demo.mjs` |
 | ✨ **[Animated overview](docs/product-film.mp4)** (1:05) | An illustrated tour of the features |
 | 🧭 **[Welcome and tips](docs/coachmarks-demo.mp4)** (0:48) | The first-sign-in welcome, then the spotlight tour |

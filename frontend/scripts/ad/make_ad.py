@@ -442,7 +442,9 @@ def main() -> None:
         ["ffmpeg", "-y", "-loglevel", "error", *inputs,
          "-filter_complex", f"{video_filter};{audio}",
          "-map", "[v]", "-map", "[a]",
-         "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-pix_fmt", "yuv420p",
+         # AD_CRF trades size for detail: a long film of app screens
+         # stays under ~15 MB at 30.
+         "-c:v", "libx264", "-preset", "slow", "-crf", os.environ.get("AD_CRF", "18"), "-pix_fmt", "yuv420p",
          "-c:a", "aac", "-b:a", "192k", "-ar", str(RATE),
          "-movflags", "+faststart", "-shortest", str(out)],
         check=True,

@@ -98,29 +98,84 @@ export async function refresh(): Promise<boolean> {
   return true;
 }
 
-/** Subscribe to a run's live events. Resumes from the last seq seen. */
+/**
+ * Subscribe to a run's live events. Resumes from the last seq seen.
+ *
+ * Read with fetch, not EventSource: EventSource cannot send our sign-in
+ * header (so the server refused it), and it hands named events (every
+ * run event is named after its type) only to listeners for that name.
+ * Stops by itself when the server says the run is done.
+ */
 export function streamRun(
   runId: string,
   onEvent: (event: RunEvent) => void,
   lastSeq = 0,
 ): () => void {
-  // EventSource cannot set an Authorization header, so the token goes
-  // in the query string. Acceptable only because it is short-lived;
-  // a long-lived credential must never travel in a URL.
-  const url = `${BASE}/me/runs/${runId}/events?last_event_id=${lastSeq}`;
-  const source = new EventSource(url, { withCredentials: true });
+  const stop = new AbortController();
+  let seq = lastSeq;
+  let finished = false;
 
-  source.onmessage = (message) => {
-    try {
-      onEvent(JSON.parse(message.data) as RunEvent);
-    } catch {
-      /* a malformed frame should not kill the stream */
+  async function once(): Promise<void> {
+    const headers = new Headers({ Accept: "text/event-stream" });
+    if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+    const response = await fetch(`${BASE}/me/runs/${runId}/events?last_event_id=${seq}`, {
+      headers,
+      credentials: "include",
+      signal: stop.signal,
+    });
+    if (response.status === 401) {
+      if (!(await refresh())) throw new Error("signed out");
+      return;
     }
-  };
-  source.addEventListener("done", () => source.close());
-  source.onerror = () => source.close();
+    if (!response.ok || !response.body) throw new Error(String(response.status));
 
-  return () => source.close();
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      buffer += value;
+      let end: number;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const frame = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        let name = "message";
+        let data = "";
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event: ")) name = line.slice(7);
+          else if (line.startsWith("data: ")) data += line.slice(6);
+        }
+        if (name === "done") {
+          finished = true;
+          return;
+        }
+        if (!data) continue;
+        try {
+          const event = JSON.parse(data) as RunEvent;
+          if (typeof event.seq === "number") seq = Math.max(seq, event.seq);
+          onEvent(event);
+        } catch {
+          /* a malformed frame should not kill the stream */
+        }
+      }
+    }
+  }
+
+  void (async () => {
+    let wait = 1000;
+    while (!stop.signal.aborted && !finished) {
+      try {
+        await once();
+        wait = 1000;
+      } catch {
+        if (stop.signal.aborted) return;
+        wait = Math.min(wait * 2, 15000);
+      }
+      if (!finished) await new Promise((resolve) => window.setTimeout(resolve, wait));
+    }
+  })();
+
+  return () => stop.abort();
 }
 
 /** One thing that happened to one of your agents or runs. */
@@ -352,14 +407,6 @@ export interface EmbeddingConfig {
   model: string;
   dim: number;
   memories_needing_reembedding: number;
-}
-
-export interface Person {
-  id: string;
-  email: string;
-  full_name: string | null;
-  active: boolean;
-  created_at: string;
 }
 
 export interface ConnectionField {
@@ -649,20 +696,6 @@ export interface ServiceInfo {
   note: string | null;
   /** What the current connection holds; null when not connected. */
   granted: { read: boolean; edit: boolean } | null;
-}
-
-/** Platform Admin: one part of an app at one level. */
-export interface ServiceAccessRow {
-  service: string;
-  app: string;
-  name: string;
-  level: "read" | "edit";
-  allowed: boolean;
-}
-
-export interface PersonServiceRow extends ServiceAccessRow {
-  overridden: boolean;
-  note: string | null;
 }
 
 /** One past run in the History list: see `GET /me/history/runs`. */

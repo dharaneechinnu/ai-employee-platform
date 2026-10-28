@@ -31,8 +31,12 @@ from app.agent.tools.base import SideEffect, Tool
 from app.agent.tools.packs.search import search_configured
 from app.agent.tools.packs.sheets import sheet_ids_in, spreadsheet_id
 from app.db.models.policy import Connection, ConnectionKind, PolicySetting
-from app.db.models.provider import OrgConnectionAccess
-from app.services.connection_service import CATALOGUE, STATUS_RECONNECT
+from app.services.connection_service import (
+    CATALOGUE,
+    STATUS_RECONNECT,
+    ConnectionRuling,
+    connection_rulings,
+)
 from app.services.policy_service import PolicyService
 from app.services.service_access_service import ServiceAccessService
 
@@ -96,13 +100,9 @@ class ReadinessService:
         resolver = await PolicyService(self.session, self.owner_id).resolver()
         access = await ServiceAccessService(self.session, self.owner_id).snapshot()
         closed_for_you = {
-            r.kind.value: r
-            for r in (
-                await self.session.scalars(
-                    select(OrgConnectionAccess).where(OrgConnectionAccess.owner_id == self.owner_id)
-                )
-            ).all()
-            if not r.allowed
+            kind.value: ruling
+            for kind, ruling in (await connection_rulings(self.session, self.owner_id)).items()
+            if not ruling.allowed
         }
         connections = await self._connections()
 
@@ -253,7 +253,7 @@ class ReadinessService:
         app: str,
         tools: list[type[Tool]],
         conn: Connection | None,
-        closed: OrgConnectionAccess | None,
+        closed: ConnectionRuling | None,
         access: object,
     ) -> list[Check]:
         name = _app_name(app)
@@ -265,7 +265,8 @@ class ReadinessService:
                 Check(
                     False,
                     "platform",
-                    f"{name} is switched off for you",
+                    f"{name} is switched off for "
+                    + ("everyone" if closed.source == "platform" else "you"),
                     closed.note or "Whoever runs this platform has closed it for your account.",
                     fix="ask_admin",
                 )
