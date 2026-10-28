@@ -4,6 +4,10 @@
 
 Bring free AI keys (Gemini, Groq, OpenRouter, Mistral and more). For every prompt, Baton picks the connected model that is best at that kind of task, and hands the work to the next one if a model hits its limit, the way a relay runner passes the baton.
 
+[![Watch the Baton launch ad (48 seconds, with sound)](docs/screenshots/00-baton-ad.jpg)](docs/routing-ad.mp4)
+
+▶️ **[Watch the 48-second launch ad](docs/routing-ad.mp4)**: free keys, the right model for each prompt, and the hand-off when one hits its limit.
+
 Baton is a **personal AI assistant** that does real work. One person signs in and gets:
 
 - a chat assistant that can use real tools, not just talk;
@@ -17,9 +21,9 @@ Baton is a **personal AI assistant** that does real work. One person signs in an
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
-> **Status:** the backend, worker and React frontend are built and run with one command. Chat is the home screen. Agents can be designed in chat and run on a schedule. There is no self sign-up yet: a Platform Admin creates each account and sends a one-time setup link.
+> **Status:** the backend, worker and React frontend are built and run with one command. Chat is the home screen. Agents can be designed in chat and run on a schedule. Anyone can create an account at `/register` and sign in with their email or username; a Platform Admin can also create an account and send a one-time setup link.
 >
-> 🎬 **Videos:** a narrated ad, a live demo and an animated overview are [at the bottom of this page](#-product-videos). They were recorded from the earlier company version, so some screens look different now.
+> 🎬 **Videos:** the Baton launch ad, plus a narrated ad, a live demo and an animated overview, are [at the bottom of this page](#-product-videos). All but the launch ad were recorded from the earlier company version, so some screens look different now.
 
 ## What problem this solves
 
@@ -34,9 +38,10 @@ This assistant fixes all three. It remembers what you tell it, uses your connect
 ## How it works
 
 ```
-Platform Admin →  creates your account and gives you a one-time setup link
-You            →  open the link, choose your password, add an AI key
+You            →  create an account at /register (or open a setup link from an admin)
+You            →  add one or more AI keys; free tiers like Gemini and Groq are enough
 You, in Chat   →  "Find last week's invoices in Gmail and list them in a sheet."
+Baton          →  picks the connected model that suits the task, passes it on if one is busy
 The assistant  →  plans, uses tools, streams every step live, logs everything
 Anything risky →  pauses and asks you (in the app, by email or in Slack)
 Result         →  the work done, with a full record of each step and its cost
@@ -248,7 +253,7 @@ There are two kinds of account, and they are kept fully apart.
 |---|---|---|
 | Signs in at | `/login` | `/platform`, with a different kind of token |
 | Uses Chat, agents, memory, connections, keys, permissions, approvals | ✅ your own only | ❌ |
-| Creates accounts and their setup links | ❌ | ✅ |
+| Creates an account | ✅ your own, at `/register` | ✅ for anyone, with a setup link |
 | Suspends or restores an account | ❌ | ✅ (nothing is read or deleted) |
 | Sets up the shared Google and Microsoft sign-in apps | ❌ (you may add your own app instead) | ✅ |
 | Opens or closes parts of an app (for example Sheets edit) for everyone or one account | ❌ | ✅ |
@@ -299,10 +304,11 @@ What the Platform Admin can see about an account: email, name, active or not, wh
 | 0–7 | Foundation, sign-in, AI providers and tools, background runs with live streaming, permissions and approvals, memory, parallel steps and a team of helpers | ✅ Built |
 | + | One-click Google / Microsoft, notifications, approve from email or Slack, GitHub | ✅ Built |
 | + | Personal accounts: one person per account, created by a Platform Admin with a setup link | ✅ Built |
+| + | Self sign-up with usernames; sign in with email or username | ✅ Built |
+| + | Renamed to Baton; sign-in and launch ad lead with free keys and per-task routing | ✅ Built |
 | + | Agents designed in chat, schedules, readiness checks, per-service read/edit permissions | ✅ Built |
 | + | The run inside a LangGraph graph | ✅ Built |
 | Trial | LangGraph-saved approval pauses (`AGENT_CHECKPOINTER`) and a team supervisor graph (`AGENT_SUPERVISOR`) | 🧪 Built, off by default |
-| Planned | Self sign-up | 🗒️ Not built |
 | Planned | Excel through Microsoft 365; effort-based model choice | 🗒️ Not built |
 | 8–10 | Reliability · security and cost · production readiness | 🗒️ Outlined, not built |
 
@@ -319,7 +325,9 @@ the containers do not clash with a database already installed on your machine.
 
 ### Your first account
 
-There is no sign-up page yet. Make an account like this:
+The quickest way: open <http://localhost:5173/register>, pick a username, enter your email and a password, and you land in **Chat**. Add a key under **AI Providers** to start; a free Gemini or Groq key is enough.
+
+To create an account for someone else, use a Platform Admin:
 
 1. Create a Platform Admin:
 
@@ -371,7 +379,7 @@ To rebuild the new one: `node scripts/ad-routing/render.mjs out.mp4` (in `fronte
 
 | Video | What it shows |
 |---|---|
-| 🆕 **[Free models, smart routing](docs/routing-ad.mp4)** (0:48) | The current product: free AI keys, each prompt sent to the model that suits it, automatic fallback when one hits a limit, and scheduled agents. Open-source Kokoro voice and subtitles |
+| 🆕 **[Baton launch ad](docs/routing-ad.mp4)** (0:48) | The current product: free AI keys, each prompt sent to the model that suits it, automatic fallback when one hits a limit, and scheduled agents. Zoom punches, shakes and a different transition at every cut, an open-source Kokoro voice and subtitles |
 | 🎬 **[Narrated ad](docs/product-ad.mp4)** (1:08) | Six features with title cards, zooms and spotlights, a voiceover in sync with subtitles, and music |
 | 🖥️ **[Live demo](docs/product-demo.mp4)** (0:58) | The app recorded in use, start to finish |
 | ✨ **[Animated overview](docs/product-film.mp4)** (1:05) | An illustrated tour of the features |
