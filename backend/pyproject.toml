@@ -1,5 +1,5 @@
 [project]
-name = "ai-employee-platform"
+name = "baton-api"
 version = "0.1.0"
 description = "Personal multi-agent assistant platform: people connect their own AI models and apps, and build agents"
 requires-python = ">=3.12"

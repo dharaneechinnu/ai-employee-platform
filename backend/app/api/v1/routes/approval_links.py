@@ -1,7 +1,7 @@
 """Approval links: decide from an email or a Slack message.
 
-The token in the link names one approval and its owner (the `org`
-claim, kept under that name so links already sent keep working), and
+The token in the link names one approval and its owner (the `owner`
+claim; links sent earlier used the name `org`, still accepted), and
 expires when the approval does. Two kinds:
 
 - **Personal** (emailed to the owner): carries their user id, so the
@@ -64,7 +64,7 @@ def _claims(token: str) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID | None]:
     try:
         claims = verify(token, "approval_link")
         approval_id = uuid.UUID(claims["apr"])
-        owner_id = uuid.UUID(claims["org"])
+        owner_id = uuid.UUID(claims.get("owner") or claims["org"])
         user_id = uuid.UUID(claims["sub"]) if claims.get("sub") else None
     except InvalidSignedTokenError as exc:
         raise NotFoundError(str(exc)) from exc

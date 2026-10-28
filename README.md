@@ -523,7 +523,6 @@ The launch ad and the feature tour have their own scripts in `frontend/scripts/a
 | **[Baton launch ad](docs/routing-ad.mp4)** (0:48) | Free AI keys, each prompt sent to the model that suits it, automatic fallback when one hits a limit, and scheduled agents | Current |
 | **[Feature tour](docs/feature-tour.mp4)** (2:14, [subtitles](docs/feature-tour.srt)) | Twelve features on the real app screen with narration: free AI keys and Automatic, chat modes and Team, the 58 tools, connections, agents built by chatting, the Agent Tree, Permissions, approvals, memory, history and cost, voice input and the welcome tour, and the staff console. The screens are screenshots of a demo account; its past runs are seeded data, and the chat answers come from a scripted local test model | Current |
 | **[Live demo](docs/product-demo.mp4)** (1:40, [subtitles](docs/product-demo.srt)) | The app in real use: sign up, connect an AI, a chat where the Analyst and Critic help, an agent built by chatting and put on a schedule, the Agent Tree, Permissions and an approval. The replies come from a scripted local test model connected as "Your own server" | Current |
-| **[Narrated ad](docs/product-ad.mp4)** (1:08, [subtitles](docs/product-ad.srt)) | Six features with a voiceover and music | Earlier version |
 | **[Animated overview](docs/product-film.mp4)** (1:05) | An illustrated tour of the features | Earlier version |
 | **[Welcome and tips](docs/coachmarks-demo.mp4)** (0:48) | The first-sign-in welcome, then the spotlight tour | Earlier version |
 

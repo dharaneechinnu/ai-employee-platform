@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
+import { readCompat } from "../../lib/storage";
 import { Icon, type IconName } from "../icons";
 import { TOURS, type CoachStep, type Tour } from "./tours";
 import Welcome from "./Welcome";
@@ -30,7 +31,7 @@ const EMPTY: Store = { intro: false, seen: [], off: false };
 
 function load(key: string): Store {
   try {
-    const raw = window.localStorage.getItem(key);
+    const raw = readCompat(key, key.replace("baton.", "ai-employees."));
     return raw ? { ...EMPTY, ...(JSON.parse(raw) as Partial<Store>) } : EMPTY;
   } catch {
     return EMPTY;
@@ -90,7 +91,7 @@ function usable(steps: CoachStep[]): CoachStep[] {
 export function CoachProvider({ children }: { children: ReactNode }) {
   const { me } = useAuth();
   const location = useLocation();
-  const key = `ai-employees.coach.v1.${me?.id ?? "anon"}`;
+  const key = `baton.coach.v1.${me?.id ?? "anon"}`;
   const [store, setStore] = useState<Store>(() => load(key));
   const [active, setActive] = useState<{ tour: Tour; steps: CoachStep[] } | null>(null);
   const [showIntro, setShowIntro] = useState(false);

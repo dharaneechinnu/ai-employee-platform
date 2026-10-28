@@ -124,8 +124,8 @@ class ProviderConfig(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     plan: Mapped[str | None] = mapped_column(String(10))
 
     __table_args__ = (
-        UniqueConstraint("owner_id", "provider_key", name="uq_provider_config_org_provider"),
-        Index("ix_provider_configs_org_id", "owner_id"),
+        UniqueConstraint("owner_id", "provider_key", name="uq_provider_config_owner_provider"),
+        Index("ix_provider_configs_owner_id", "owner_id"),
     )
 
 

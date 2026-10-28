@@ -541,7 +541,7 @@ class ConnectionService:
         # started this without a table of pending sign-ins.
         state = sign_for(
             "oauth_state",
-            {"org": str(self.owner_id), "sub": str(user_id), "kind": provider.kind.value},
+            {"owner": str(self.owner_id), "sub": str(user_id), "kind": provider.kind.value},
             minutes=STATE_MINUTES,
         )
         return provider.authorize(client_id=client_id, state=state)
@@ -553,7 +553,7 @@ class ConnectionService:
             claims = verify(state, "oauth_state")
             if claims.get("kind") != kind:
                 raise InvalidSignedTokenError("This sign-in was started for another provider.")
-            return uuid.UUID(claims["org"]), uuid.UUID(claims["sub"])
+            return uuid.UUID(claims.get("owner") or claims["org"]), uuid.UUID(claims["sub"])
         except (KeyError, ValueError) as exc:
             raise InvalidSignedTokenError("This sign-in link is not valid.") from exc
 

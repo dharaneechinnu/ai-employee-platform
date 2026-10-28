@@ -42,9 +42,11 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 RATE = 48_000
 CACHE = Path(tempfile.gettempdir()) / "ad-voice-cache"
-# The lines to speak. AD_SCRIPT points at another ad's script, e.g.
-# scripts/ad-routing/script.json.
-SCRIPT = Path(os.environ.get("AD_SCRIPT", HERE / "script.json"))
+# The lines to speak. AD_SCRIPT must point at the ad's script, e.g.
+# scripts/ad-routing/script.json or scripts/app-demo/script.json.
+if "AD_SCRIPT" not in os.environ:
+    sys.exit("Set AD_SCRIPT to the ad's script.json, e.g. scripts/ad-routing/script.json")
+SCRIPT = Path(os.environ["AD_SCRIPT"])
 
 
 # --------------------------------------------------------------- timing

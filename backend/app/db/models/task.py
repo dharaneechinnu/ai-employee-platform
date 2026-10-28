@@ -101,7 +101,7 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="chat")
 
     __table_args__ = (
-        Index("ix_tasks_org_status_created", "owner_id", "status", "created_at"),
+        Index("ix_tasks_owner_status_created", "owner_id", "status", "created_at"),
         Index("ix_tasks_conversation", "conversation_id"),
     )
 
@@ -148,7 +148,7 @@ class Run(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     __table_args__ = (
         Index("ix_runs_task", "task_id"),
-        Index("ix_runs_org_status", "owner_id", "status"),
+        Index("ix_runs_owner_status", "owner_id", "status"),
         # The history list: one person's runs, newest first, optionally
         # for one agent.
         Index("ix_runs_owner_created", "owner_id", "created_at"),
@@ -229,7 +229,7 @@ class LLMCall(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    __table_args__ = (Index("ix_llm_calls_org_created", "owner_id", "created_at"),)
+    __table_args__ = (Index("ix_llm_calls_owner_created", "owner_id", "created_at"),)
 
 
 class ToolInvocation(Base):

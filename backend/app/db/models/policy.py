@@ -123,7 +123,7 @@ class Approval(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
-        Index("ix_approvals_org_status", "owner_id", "status"),
+        Index("ix_approvals_owner_status", "owner_id", "status"),
         Index("ix_approvals_expiry", "status", "expires_at"),
     )
 
@@ -190,6 +190,6 @@ class Connection(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     __table_args__ = (
-        UniqueConstraint("owner_id", "kind", "label", name="uq_connection_org_kind_label"),
+        UniqueConstraint("owner_id", "kind", "label", name="uq_connection_owner_kind_label"),
         Index("ix_connections_owner", "owner_id"),
     )

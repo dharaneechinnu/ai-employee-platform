@@ -168,13 +168,13 @@ export default function Product() {
       <section id="film" className="scroll-mt-20 border-t border-line">
         <div className="mx-auto flex max-w-[1000px] flex-col items-center gap-6 px-4 py-20 text-center sm:px-6">
           <h2 className="font-display text-[32px] font-semibold tracking-[-0.02em] sm:text-[40px]">See it in a minute</h2>
-          <p className="max-w-[560px] text-muted">The real product, recorded live: connect Google, ask for help, watch it work, approve from email.</p>
+          <p className="max-w-[560px] text-muted">The real product, recorded live: sign up, connect a free AI, ask for help, and put an agent on a schedule.</p>
           <div className="w-full overflow-hidden rounded-2xl border border-line bg-[#070915] shadow-lift">
             <AutoVideo
               sound
-              src="/media/product-ad.mp4"
-              poster="/media/product-ad.jpg"
-              label="A one-minute live demo: connecting Google, asking for help, watching it run and bring in specialists, approving from email, and the finished result."
+              src="/media/product-demo.mp4"
+              poster="/media/product-demo.jpg"
+              label="A live demo: signing up, connecting an AI, asking for help and watching helper agents work, building an agent that runs on a schedule, and the agent tree."
             />
           </div>
         </div>

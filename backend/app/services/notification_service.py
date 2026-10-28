@@ -170,7 +170,7 @@ def approval_link_token(approval: Approval, user_id: uuid.UUID | None) -> str:
     With a user id (email), opening it is enough to decide as that
     person. Without one (Slack), the page asks the clicker to sign in.
     """
-    claims: dict[str, Any] = {"apr": str(approval.id), "org": str(approval.owner_id)}
+    claims: dict[str, Any] = {"apr": str(approval.id), "owner": str(approval.owner_id)}
     if user_id is not None:
         claims["sub"] = str(user_id)
     return sign("approval_link", claims, expires_at=approval.expires_at)

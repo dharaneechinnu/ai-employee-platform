@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { readCompat } from "./storage";
 
 /**
  * Where the menu rail sits. The user drags it there and it stays.
@@ -18,7 +19,8 @@ export const DOCK_LABEL: Record<Dock, string> = {
   bottom: "Bottom edge",
 };
 
-const KEY = "ai-employees.dock";
+const KEY = "baton.dock";
+const OLD_KEY = "ai-employees.dock";
 
 /** Phones get the rail along the bottom, where a thumb reaches it. */
 function defaultDock(): Dock {
@@ -28,7 +30,7 @@ function defaultDock(): Dock {
 
 function read(): Dock {
   try {
-    const saved = window.localStorage.getItem(KEY);
+    const saved = readCompat(KEY, OLD_KEY);
     if (saved === "left" || saved === "right" || saved === "bottom") return saved;
   } catch {
     // Private windows and blocked site data both throw here. A menu

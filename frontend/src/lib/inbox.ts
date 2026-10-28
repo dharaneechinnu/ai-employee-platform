@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Approval, type TaskListItem } from "./api";
+import { readCompat } from "./storage";
 
 /**
  * What happened while you were looking somewhere else.
@@ -25,13 +26,14 @@ export interface InboxItem {
   unread: boolean;
 }
 
-const SEEN_KEY = "ai-employees.inbox.seen";
+const SEEN_KEY = "baton.inbox.seen";
+const OLD_SEEN_KEY = "ai-employees.inbox.seen";
 const POLL_MS = 15_000;
 const EVENT = "activity-changed";
 
 function readSeen(key: string): Record<string, string> {
   try {
-    const raw = window.localStorage.getItem(`${SEEN_KEY}.${key}`);
+    const raw = readCompat(`${SEEN_KEY}.${key}`, `${OLD_SEEN_KEY}.${key}`);
     return raw ? (JSON.parse(raw) as Record<string, string>) : {};
   } catch {
     return {};
