@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Baton: free models, smart routing</title>
+<!--
+  The ad's picture, as one page of timed CSS animations. render.mjs pauses
+  every animation and seeks them to each frame's time, so the film comes
+  out the same on every machine. Scene times are listed in SCENES below
+  and written to the .marks.json that make_ad.py places the voice by.
+
+  Everything that moves is a CSS animation, including the particles,
+  swipes and shockwaves the script at the bottom adds, because only
+  animations can be seeked frame by frame.
+-->
+<style>
+  @font-face { font-family: "Outfit"; src: url("../ad/fonts/Outfit.ttf"); font-weight: 100 900; }
+  @font-face { font-family: "DM Sans"; src: url("../ad/fonts/DMSans.ttf"); font-weight: 100 1000; }
+
+  :root {
+    --bg: #f6f5fa;
+    --surface: #ffffff;
+    --ink: #17152a;
+    --muted: #4b4860;
+    --line: #e2e0ec;
+    --accent: #5a3fd8;
+    --accent-soft: #eeebfd;
+    --accent-line: #c4b9f4;
+    --pink: #ff5fa8;
+    --good: #138a52;
+    --good-soft: #e3f5ea;
+    --bad: #c4362c;
+    --bad-soft: #fdeceb;
+    --amber: #b86e00;
+    --amber-soft: #fff3df;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: "DM Sans", sans-serif; }
+  .display { font-family: "Outfit", sans-serif; letter-spacing: -0.03em; }
+
+  /* ---------- background: drifting glow and a moving perspective grid ---------- */
+  .glow { position: absolute; border-radius: 50%; filter: blur(120px); opacity: .55; }
+  .glow.a { width: 900px; height: 900px; background: #cfc5ff; left: -200px; top: -300px; animation: drift 48s linear 0s both; }
+  .glow.b { width: 800px; height: 800px; background: #ffd9ef; right: -260px; bottom: -340px; animation: drift2 48s linear 0s both; }
+  @keyframes drift { to { transform: translate(380px, 260px); } }
+  @keyframes drift2 { to { transform: translate(-320px, -200px); } }
+  .floor { position: absolute; left: -50%; right: -50%; bottom: -380px; height: 900px; transform: perspective(700px) rotateX(64deg);
+    background-image: linear-gradient(rgba(90,63,216,.16) 2px, transparent 2px), linear-gradient(90deg, rgba(90,63,216,.16) 2px, transparent 2px);
+    background-size: 90px 90px; animation: floor 48s linear 0s both;
+    mask-image: linear-gradient(to top, #000 10%, transparent 75%); }
+  @keyframes floor { from { background-position: 0 0; } to { background-position: 0 4320px; } }
+
+  /* A scene is visible only while its "show" animation runs (no fill). */
+  .scene { position: absolute; inset: 0 0 150px 0; opacity: 0; perspective: 1600px; }
+  .cam { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; transform-style: preserve-3d; }
+  @keyframes show { from { opacity: 1; } to { opacity: 1; } }
+
+  /* ---------- the moves ---------- */
+  @keyframes slam { 0% { opacity: 0; transform: scale(3.2); filter: blur(18px); } 55% { opacity: 1; transform: scale(.9); filter: blur(0); } 75% { transform: scale(1.04); } 100% { opacity: 1; transform: none; filter: blur(0); } }
+  @keyframes up { from { opacity: 0; transform: translateY(60px); filter: blur(8px); } to { opacity: 1; transform: none; filter: blur(0); } }
+  @keyframes pop { 0% { opacity: 0; transform: scale(.4) rotate(-8deg); } 65% { opacity: 1; transform: scale(1.12) rotate(2deg); } 100% { opacity: 1; transform: none; } }
+  @keyframes flipIn { 0% { opacity: 0; transform: rotateY(-110deg) translateZ(-400px) translateY(80px); } 70% { opacity: 1; transform: rotateY(12deg); } 100% { opacity: 1; transform: none; } }
+  @keyframes slideR { 0% { opacity: 0; transform: translateX(500px) rotateY(-40deg); } 70% { opacity: 1; transform: translateX(-16px); } 100% { opacity: 1; transform: none; } }
+  @keyframes dropIn { 0% { opacity: 0; transform: translateY(-260px) rotate(-14deg); } 60% { opacity: 1; transform: translateY(18px) rotate(3deg); } 80% { transform: translateY(-6px); } 100% { opacity: 1; transform: none; } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes strike { from { width: 0; } to { width: 104%; } }
+  @keyframes fallAway { 0% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(380px) rotate(26deg) scale(.7); } }
+  @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(90,63,216,.55); } 50% { box-shadow: 0 0 0 26px rgba(90,63,216,0); } }
+  @keyframes kick { 0% { transform: none; } 20% { transform: translate(-14px, 10px) rotate(-.6deg); } 45% { transform: translate(12px, -8px) rotate(.5deg); } 70% { transform: translate(-6px, 4px); } 100% { transform: none; } }
+  @keyframes glitch {
+    0%   { transform: none; text-shadow: none; clip-path: inset(0); }
+    10%  { transform: translate(-18px, 4px) skewX(-12deg); text-shadow: 6px 0 #ff2d55, -6px 0 #00e1ff; clip-path: inset(10% 0 40% 0); }
+    20%  { transform: translate(14px, -6px); text-shadow: -8px 0 #ff2d55, 8px 0 #00e1ff; clip-path: inset(50% 0 5% 0); }
+    30%  { transform: translate(-6px, 0) skewX(10deg); clip-path: inset(0 0 70% 0); }
+    40%  { transform: translate(20px, 3px); text-shadow: 10px 0 #ff2d55, -10px 0 #00e1ff; clip-path: inset(30% 0 20% 0); }
+    55%  { transform: translate(-10px, -2px); clip-path: inset(0); }
+    70%  { transform: translate(6px, 0) skewX(-6deg); text-shadow: 4px 0 #ff2d55, -4px 0 #00e1ff; }
+    100% { transform: none; text-shadow: none; clip-path: inset(0); }
+  }
+  @keyframes dim { to { opacity: .3; filter: grayscale(1) blur(1px); transform: scale(.94); } }
+  @keyframes draw { from { stroke-dashoffset: 420; } to { stroke-dashoffset: 0; } }
+  @keyframes travel { from { offset-distance: 0%; opacity: 1; } 90% { opacity: 1; } to { offset-distance: 100%; opacity: 0; } }
+  @keyframes shine { from { transform: translateX(-160%) skewX(-20deg); } to { transform: translateX(260%) skewX(-20deg); } }
+  @keyframes spin3d { 0% { opacity: 0; transform: rotateY(-720deg) rotateX(40deg) scale(.1); } 70% { opacity: 1; transform: rotateY(20deg) scale(1.15); } 100% { opacity: 1; transform: none; } }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+  @keyframes press { 0%,100% { transform: none; } 40% { transform: scale(.9); } }
+  @keyframes cursorMove { 0% { opacity: 0; transform: translate(560px, 300px); } 15% { opacity: 1; } 100% { opacity: 1; transform: translate(0, 0); } }
+  @keyframes cursorClick { 0%,100% { transform: scale(1); } 50% { transform: scale(.75); } }
+
+  /* Camera moves, one per scene. */
+  @keyframes camKeys { 0% { transform: scale(1.35) rotateX(28deg) translateY(120px); } 30% { transform: scale(1.02) rotateX(4deg); } 100% { transform: scale(1) rotateX(0); } }
+  @keyframes camRoute { 0% { transform: scale(1.2) rotateY(-16deg); } 25% { transform: scale(1) rotateY(-3deg); } 100% { transform: scale(1.03) rotateY(2deg); } }
+  @keyframes camFall { 0% { transform: scale(.75) rotateZ(-6deg); } 30% { transform: scale(1); } 100% { transform: scale(1.08); } }
+  @keyframes camAgents { 0% { transform: rotateX(30deg) scale(1.2) translateY(160px); } 30% { transform: rotateX(0) scale(1); } 100% { transform: scale(1.04) translateX(-20px); } }
+  @keyframes camOutro { 0% { transform: scale(1.5); filter: blur(20px); } 25% { transform: scale(1); filter: blur(0); } 100% { transform: scale(1.04); } }
+
+  .a { opacity: 0; }
+  .w { display: inline-block; opacity: 0; }
+  .hl { color: var(--accent); }
+  .grad { background: linear-gradient(90deg, var(--accent), var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+
+  /* ---------- zooms, shakes and transitions (added to scenes by the script) ---------- */
+  #world { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+  @keyframes punchIn { 0% { transform: scale(1); } 30% { transform: scale(1.16); } 100% { transform: scale(1); } }
+  @keyframes punchOut { 0% { transform: scale(1); } 30% { transform: scale(.86); } 100% { transform: scale(1); } }
+  @keyframes zoomDrift { from { transform: scale(1.12); } to { transform: scale(.94); } }
+  @keyframes zoomTo { 0% { transform: scale(1); } 36% { transform: scale(1.32); } 68% { transform: scale(1.32); } 100% { transform: scale(1); } }
+  /* Moves the wrapper by position, not transform: a transformed ancestor
+     makes Chrome drop the 3D layers of the scenes inside it. */
+  @keyframes shakeHard { 0% { left: 0px; top: 0px; } 10% { left: -26px; top: 14px; } 20% { left: 22px; top: -18px; } 30% { left: -18px; top: -10px; } 40% { left: 16px; top: 12px; } 55% { left: -10px; top: 6px; } 70% { left: 6px; top: -4px; } 85% { left: -3px; top: 2px; } 100% { left: 0px; top: 0px; } }
+  @keyframes zoomThroughOut { from { transform: scale(1); filter: blur(0); } to { transform: scale(4); filter: blur(30px); } }
+  @keyframes zoomThroughIn { from { transform: scale(.25); filter: blur(30px); } to { transform: none; filter: blur(0); } }
+  @keyframes whipOut { from { transform: none; filter: blur(0); } to { transform: translateX(-2100px) skewX(14deg); filter: blur(24px); } }
+  @keyframes whipIn { from { transform: translateX(2100px) skewX(14deg); filter: blur(24px); } to { transform: none; filter: blur(0); } }
+  @keyframes spinOut { from { transform: none; filter: blur(0); } to { transform: rotate(-35deg) scale(2.6); filter: blur(26px); } }
+  @keyframes spinIn { from { transform: rotate(35deg) scale(.3); filter: blur(26px); } to { transform: none; filter: blur(0); } }
+  @keyframes shrinkOut { from { transform: none; filter: blur(0); } to { transform: scale(.4); filter: blur(12px); } }
+  @keyframes irisIn { from { clip-path: circle(0% at 50% 50%); transform: scale(1.3); } to { clip-path: circle(120% at 50% 50%); transform: none; } }
+
+  /* ---------- overlay effects ---------- */
+  .fx { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+  .swipe { position: absolute; top: -20%; height: 140%; width: 70%; left: 0; transform: translateX(260%) skewX(-18deg); }
+  @keyframes swipe { from { transform: translateX(260%) skewX(-18deg); } to { transform: translateX(-260%) skewX(-18deg); } }
+  .flash { position: absolute; inset: 0; opacity: 0; }
+  @keyframes flash { 0% { opacity: .85; } 100% { opacity: 0; } }
+  .bit { position: absolute; width: 16px; height: 16px; border-radius: 4px; opacity: 0; }
+  @keyframes burst { 0% { opacity: 0; transform: translate(0,0) scale(0) rotate(0); } 6% { opacity: 1; transform: scale(1.2); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.5) rotate(var(--r)); } }
+  .ring { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 6px solid; opacity: 0; }
+  @keyframes ring { 0% { opacity: 0; transform: scale(.2); } 10% { opacity: .9; } 100% { opacity: 0; transform: scale(7); border-width: 1px; } }
+  .speed { position: absolute; height: 4px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--accent-line)); opacity: 0; }
+  @keyframes speed { 0% { opacity: 0; transform: translateX(1200px); } 20% { opacity: .9; } 100% { opacity: 0; transform: translateX(-1400px); } }
+
+  /* ---------- 1. hook ---------- */
+  .hook { font-size: 124px; font-weight: 800; line-height: 1.1; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .hook .old { position: relative; color: var(--muted); }
+  .hook .old::after { content: ""; position: absolute; left: -2%; top: 52%; height: 12px; border-radius: 6px; background: var(--bad); width: 0; animation: strike .35s ease-out 2.55s both; }
+  .hook .free { font-size: 170px; padding: 0 .06em .08em; }
+
+  /* ---------- 2. free keys ---------- */
+  .title { font-size: 80px; font-weight: 800; text-align: center; line-height: 1.08; }
+  .sub { font-size: 32px; color: var(--muted); margin-top: 18px; text-align: center; }
+  .keys { display: flex; gap: 36px; margin-top: 64px; transform-style: preserve-3d; }
+  .key { width: 340px; background: var(--surface); border: 2px solid var(--line); border-radius: 28px; padding: 34px 32px; box-shadow: 0 40px 70px -30px rgba(40,20,120,.35); display: flex; flex-direction: column; gap: 20px; opacity: 0; position: relative; overflow: hidden; }
+  .key::after, .cta::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent); transform: translateX(-160%) skewX(-20deg); }
+  .key .logo { width: 72px; height: 72px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font: 700 34px "Outfit"; color: #fff; }
+  .key .name { font: 600 36px "Outfit"; letter-spacing: -.02em; }
+  .key .row { display: flex; gap: 8px; align-items: center; }
+  .chip { white-space: nowrap; font-size: 20px; font-weight: 700; padding: 8px 16px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; }
+  .chip.free { background: var(--accent-soft); color: var(--accent); }
+  .chip.ok { background: var(--good-soft); color: var(--good); opacity: 0; }
+  .masked { font-family: monospace; font-size: 22px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 10px 14px; }
+
+  /* ---------- 3. routing ---------- */
+  .route { display: grid; grid-template-columns: 820px 160px 640px; align-items: center; margin-top: 54px; }
+  .prompt { background: var(--surface); border: 2px solid var(--accent-line); border-radius: 26px; padding: 26px 30px; font-size: 34px; min-height: 104px; display: flex; align-items: center; gap: 18px; box-shadow: 0 30px 60px -30px rgba(40,20,120,.3); }
+  .prompt .caret { width: 3px; height: 40px; background: var(--accent); }
+  .prompts { position: relative; height: 330px; }
+  .prompts .pr { position: absolute; left: 0; right: 0; opacity: 0; }
+  .prompts .pr .kind { margin-top: 22px; }
+  .kindchip { font-size: 26px; padding: 10px 22px; border-radius: 999px; font-weight: 700; display: inline-flex; gap: 10px; align-items: center; opacity: 0; }
+  .models { display: flex; flex-direction: column; gap: 20px; }
+  .model { background: var(--surface); border: 2px solid var(--line); border-radius: 22px; padding: 20px 26px; display: flex; align-items: center; gap: 20px; font: 600 32px "Outfit"; position: relative; }
+  .model .dot { width: 50px; height: 50px; border-radius: 14px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; flex: none; }
+  .model .tag { margin-left: auto; font: 700 20px "DM Sans"; color: var(--muted); }
+  .model .hi { position: absolute; inset: -2px; border-radius: 22px; border: 4px solid var(--accent); opacity: 0; }
+  .wires { position: absolute; left: 0; top: 0; overflow: visible; }
+  .wires path { fill: none; stroke: url(#wire); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 420; stroke-dashoffset: 420; }
+  .spark { position: absolute; left: 0; top: 0; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 6px var(--accent), 0 0 34px 12px rgba(90,63,216,.8); opacity: 0; offset-rotate: 0deg; }
+
+  /* ---------- 4. fallback ---------- */
+  .fall { display: flex; align-items: center; gap: 60px; margin-top: 70px; }
+  .fall .model { width: 520px; padding: 30px 34px; font-size: 40px; }
+  .status { font: 700 24px "DM Sans"; padding: 10px 18px; border-radius: 999px; position: absolute; top: -26px; right: 24px; opacity: 0; }
+  .status.bad { background: var(--bad-soft); color: var(--bad); border: 2px solid #f3b7b2; }
+  .status.go { background: var(--good-soft); color: var(--good); border: 2px solid #a8dcbc; }
+  .beam { width: 160px; height: 10px; border-radius: 5px; background: linear-gradient(90deg, #ff9ccf, var(--accent)); box-shadow: 0 0 30px rgba(90,63,216,.7); transform-origin: left; transform: scaleX(0); position: relative; }
+  .beam::after { content: ""; position: absolute; right: -8px; top: -14px; border: 19px solid transparent; border-left: 28px solid var(--accent); border-right: 0; }
+  .progress { width: 1180px; height: 18px; background: var(--line); border-radius: 9px; margin-top: 70px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--pink)); transform-origin: left; transform: scaleX(0); border-radius: 9px; }
+
+  /* ---------- 5. agents ---------- */
+  .agents { display: flex; gap: 48px; margin-top: 60px; align-items: flex-start; transform-style: preserve-3d; }
+  .card { background: var(--surface); border: 2px solid var(--line); border-radius: 30px; padding: 36px 40px; width: 640px; box-shadow: 0 40px 70px -30px rgba(40,20,120,.35); opacity: 0; position: relative; }
+  .card h3 { font: 600 38px "Outfit"; letter-spacing: -.02em; }
+  .card .meta { display: flex; gap: 12px; margin-top: 14px; }
+  .steps { margin-top: 28px; display: flex; flex-direction: column; gap: 18px; }
+  .step { display: flex; gap: 16px; align-items: center; font-size: 28px; opacity: 0; }
+  .tick { width: 40px; height: 40px; border-radius: 50%; background: var(--good-soft); color: var(--good); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 22px; }
+  .step .by { margin-left: auto; font-size: 20px; color: var(--muted); font-weight: 600; }
+  .approve .q { font-size: 28px; color: var(--muted); margin-top: 16px; line-height: 1.4; }
+  .btns { display: flex; gap: 18px; margin-top: 30px; }
+  .btn { font: 700 28px "DM Sans"; padding: 18px 34px; border-radius: 16px; display: inline-block; }
+  .btn.yes { background: var(--accent); color: #fff; }
+  .btn.no { background: var(--bg); color: var(--muted); border: 2px solid var(--line); }
+  .badges { position: relative; height: 40px; }
+  .badges .chip { position: absolute; left: 0; top: 0; }
+  .cursor { position: absolute; left: 1100px; top: 640px; width: 54px; height: 54px; opacity: 0; z-index: 5; }
+  .cursor svg { width: 100%; height: 100%; filter: drop-shadow(0 6px 10px rgba(0,0,0,.3)); }
+
+  /* ---------- 6. outro ---------- */
+  .markwrap { perspective: 900px; }
+  .mark { width: 170px; height: 170px; border-radius: 46px; background: linear-gradient(135deg, #6f55f0, var(--accent)); position: relative; box-shadow: 0 40px 80px -30px rgba(90,63,216,.8); }
+  .mark::before { content: ""; position: absolute; left: 36px; bottom: 36px; width: 70px; height: 70px; border-radius: 18px; background: #fff; }
+  .mark::after { content: ""; position: absolute; right: 30px; top: 30px; width: 40px; height: 40px; border-radius: 12px; background: #c9bdff; }
+  .brand { font-size: 170px; font-weight: 800; margin-top: 44px; }
+  .brand .l { display: inline-block; opacity: 0; }
+  .tagline { font-size: 42px; color: var(--muted); margin-top: 16px; }
+  .tagline b { color: var(--accent); }
+  .cta { margin-top: 50px; background: var(--accent); color: #fff; font: 700 38px "DM Sans"; padding: 26px 56px; border-radius: 22px; display: inline-flex; gap: 16px; align-items: center; position: relative; overflow: hidden; box-shadow: 0 30px 60px -24px rgba(90,63,216,.8); }
+  .foot { margin-top: 30px; font-size: 24px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="glow a"></div>
+<div class="glow b"></div>
+<div class="floor"></div>
+
+<div id="world">
+
+<!-- 1. Hook: 0.0 – 5.4 -->
+<section class="scene" style="animation: show 5.4s 0s">
+  <div class="cam" style="animation: kick .3s 0.35s, kick .3s 1.15s, kick .45s 3.45s">
+    <div class="hook display">
+      <div><span class="w" style="animation: slam .55s ease-out .2s both">An</span>
+      <span class="w" style="animation: slam .55s ease-out .35s both">AI</span>
+      <span class="w" style="animation: slam .55s ease-out .5s both">assistant</span></div>
+      <div><span class="w" style="animation: slam .55s ease-out 1.0s both">without</span>
+      <span class="w" style="animation: slam .55s ease-out 1.15s both">the</span>
+      <span class="w old" style="animation: slam .55s ease-out 1.3s both, fallAway .6s ease-in 3.05s forwards">$20 bill.</span></div>
+      <div><span class="w free grad" style="animation: slam .7s ease-out 3.35s both">Start free.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. Free keys: 5.4 – 13.4 -->
+<section class="scene" style="animation: show 8s 5.4s">
+  <div class="cam" style="animation: camKeys 8s cubic-bezier(.2,.8,.2,1) 5.4s both">
+    <div class="title display slamwords" data-at="5.55">Bring <span class="grad">free</span> AI keys</div>
+    <div class="sub a" style="animation: up .6s ease-out 6.1s both">Use the free tiers you already have. Add paid ones later, if ever.</div>
+    <div class="keys">
+      <div class="key" style="animation: flipIn .8s cubic-bezier(.2,.8,.2,1) 6.5s both">
+        <div class="logo" style="background: linear-gradient(135deg,#4f8bff,#a46bff)">G</div>
+        <div class="name">Gemini</div>
+        <div class="masked">AIza••••••••3kQ</div>
+        <div class="row"><span class="chip free">Free tier</span><span class="chip ok" style="animation: pop .4s ease-out 8.6s both">✓ Connected</span></div>
+      </div>
+      <div class="key" style="animation: flipIn .8s cubic-bezier(.2,.8,.2,1) 6.85s both">
+        <div class="logo" style="background: #f55036">Gq</div>
+        <div class="name">Groq</div>
+        <div class="masked">gsk_••••••••Wd2</div>
+        <div class="row"><span class="chip free">Free tier</span><span class="chip ok" style="animation: pop .4s ease-out 9.0s both">✓ Connected</span></div>
+      </div>
+      <div class="key" style="animation: flipIn .8s cubic-bezier(.2,.8,.2,1) 7.2s both">
+        <div class="logo" style="background: #3a3f4b">OR</div>
+        <div class="name">OpenRouter</div>
+        <div class="masked">sk-or-••••••7pA</div>
+        <div class="row"><span class="chip free">Free models</span><span class="chip ok" style="animation: pop .4s ease-out 9.4s both">✓ Connected</span></div>
+      </div>
+      <div class="key" style="animation: flipIn .8s cubic-bezier(.2,.8,.2,1) 7.55s both">
+        <div class="logo" style="background: #ff7000">M</div>
+        <div class="name">Mistral</div>
+        <div class="masked">••••••••••••x9</div>
+        <div class="row"><span class="chip free">Free tier</span><span class="chip ok" style="animation: pop .4s ease-out 9.8s both">✓ Connected</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Routing: 13.4 – 26.4 -->
+<section class="scene" style="animation: show 13s 13.4s">
+  <div class="cam" style="animation: camRoute 13s cubic-bezier(.2,.8,.2,1) 13.4s both">
+    <svg class="wires" width="1920" height="930" viewBox="0 0 1920 930">
+      <defs><linearGradient id="wire" x1="0" x2="1"><stop offset="0" stop-color="#ff5fa8" /><stop offset="1" stop-color="#5a3fd8" /></linearGradient></defs>
+      <path d="M975 420 C1060 420 1050 362 1128 362" style="animation: draw .35s ease-out 16.5s both, fadeOut .2s 18.3s forwards" />
+      <path d="M975 420 C1060 420 1050 476 1128 476" style="animation: draw .35s ease-out 20.6s both, fadeOut .2s 22.1s forwards" />
+      <path d="M975 420 C1060 420 1050 590 1128 590" style="animation: draw .35s ease-out 24.3s both" />
+    </svg>
+    <i class="spark" style="offset-path: path('M975 420 C1060 420 1050 362 1128 362'); animation: travel .45s ease-in 16.5s both"></i>
+    <i class="spark" style="offset-path: path('M975 420 C1060 420 1050 476 1128 476'); animation: travel .45s ease-in 20.6s both"></i>
+    <i class="spark" style="offset-path: path('M975 420 C1060 420 1050 590 1128 590'); animation: travel .45s ease-in 24.3s both"></i>
+
+    <div class="title display slamwords" data-at="13.55" style="font-size: 76px">Every prompt goes to the <span class="grad">right model</span></div>
+    <div class="route">
+      <div class="prompts">
+        <div class="pr" style="animation: fadeIn .2s 14.4s both, fadeOut .25s 18.4s forwards">
+          <div class="prompt"><span data-type="Fix the bug in my login function" data-at="14.6" data-dur="1.5"></span><i class="caret"></i></div>
+          <div class="kind"><span class="kindchip" style="background:#e6f0ff;color:#1f5fd6;animation: pop .4s ease-out 16.2s both">‹/› Coding task</span></div>
+        </div>
+        <div class="pr" style="animation: fadeIn .2s 18.7s both, fadeOut .25s 22.2s forwards">
+          <div class="prompt"><span data-type="Write a friendly reply to my client" data-at="18.8" data-dur="1.4"></span><i class="caret"></i></div>
+          <div class="kind"><span class="kindchip" style="background:#fdebf5;color:#b42a78;animation: pop .4s ease-out 20.3s both">✎ Writing task</span></div>
+        </div>
+        <div class="pr" style="animation: fadeIn .2s 22.5s both">
+          <div class="prompt"><span data-type="Compare these three phone plans" data-at="22.6" data-dur="1.3"></span><i class="caret"></i></div>
+          <div class="kind"><span class="kindchip" style="background:#e3f5ea;color:#138a52;animation: pop .4s ease-out 24.0s both">∑ Analysis task</span></div>
+        </div>
+      </div>
+      <div></div>
+      <div class="models">
+        <div class="model a" style="animation: slideR .6s cubic-bezier(.2,.8,.2,1) 14.0s both, kick .3s 16.9s"><span class="dot" style="background:#f55036">Gq</span>Groq · Llama<span class="tag">fast · code</span><i class="hi" style="animation: fadeIn .1s 16.9s both, pulse .9s 16.9s 1, fadeOut .2s 18.3s forwards"></i></div>
+        <div class="model a" style="animation: slideR .6s cubic-bezier(.2,.8,.2,1) 14.12s both, kick .3s 21.0s"><span class="dot" style="background:linear-gradient(135deg,#4f8bff,#a46bff)">G</span>Gemini Flash<span class="tag">writing · long docs</span><i class="hi" style="animation: fadeIn .1s 21.0s both, pulse .9s 21.0s 1, fadeOut .2s 22.1s forwards"></i></div>
+        <div class="model a" style="animation: slideR .6s cubic-bezier(.2,.8,.2,1) 14.24s both, kick .3s 24.7s"><span class="dot" style="background:#3a3f4b">OR</span>DeepSeek R1<span class="tag">reasoning</span><i class="hi" style="animation: fadeIn .1s 24.7s both, pulse .9s 24.7s 1"></i></div>
+        <div class="model a" style="animation: slideR .6s cubic-bezier(.2,.8,.2,1) 14.36s both"><span class="dot" style="background:#ff7000">M</span>Mistral Small<span class="tag">quick answers</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Fallback: 26.4 – 33.4 -->
+<section class="scene" style="animation: show 7s 26.4s">
+  <div class="cam" style="animation: camFall 7s cubic-bezier(.2,.8,.2,1) 26.4s both, kick .4s 28.4s">
+    <div class="title display slamwords" data-at="26.55">Hit a limit? <span class="grad">It keeps going.</span></div>
+    <div class="fall">
+      <div class="model a" style="animation: slideR .5s ease-out 27.0s both">
+        <div style="display:flex;align-items:center;gap:20px;width:100%;animation: glitch .55s steps(8) 28.4s both, dim .4s 28.95s forwards"><span class="dot" style="background:linear-gradient(135deg,#4f8bff,#a46bff)">G</span>Gemini Flash</div>
+        <span class="status bad" style="animation: pop .35s ease-out 28.4s both">Rate limited</span>
+      </div>
+      <div class="beam" style="animation: grow .35s cubic-bezier(.5,0,.2,1) 29.2s both"></div>
+      <div class="model a" style="animation: slideR .5s ease-out 27.15s both, kick .35s 29.6s">
+        <i class="hi" style="animation: fadeIn .1s 29.6s both, pulse .9s 29.6s 2"></i>
+        <span class="dot" style="background:#f55036">Gq</span>Groq · Llama
+        <span class="status go" style="animation: pop .4s ease-out 29.7s both">Baton passed</span>
+      </div>
+    </div>
+    <div class="progress"><i style="animation: grow 5.2s linear 27.4s both"></i></div>
+    <div class="sub a" style="animation: up .5s ease-out 30.3s both">Same task, same answer. No error, no waiting.</div>
+  </div>
+</section>
+
+<!-- 5. Agents: 33.4 – 41.4 -->
+<section class="scene" style="animation: show 8s 33.4s">
+  <div class="cam" style="animation: camAgents 8s cubic-bezier(.2,.8,.2,1) 33.4s both">
+    <div class="title display slamwords" data-at="33.55">Agents that <span class="grad">work while you don't</span></div>
+    <div class="agents">
+      <div class="card" style="animation: flipIn .8s cubic-bezier(.2,.8,.2,1) 34.0s both">
+        <h3>Morning inbox digest</h3>
+        <div class="meta"><span class="chip free">⏱ Every day, 8:00</span><span class="chip" style="background:var(--good-soft);color:var(--good)">● Running</span></div>
+        <div class="steps">
+          <div class="step" style="animation: slideR .45s ease-out 35.0s both"><span class="tick">✓</span>Read new mail<span class="by">Groq</span></div>
+          <div class="step" style="animation: slideR .45s ease-out 35.6s both"><span class="tick">✓</span>Summarise threads<span class="by">Gemini</span></div>
+          <div class="step" style="animation: slideR .45s ease-out 36.2s both"><span class="tick">✓</span>Draft two replies<span class="by">Gemini</span></div>
+        </div>
+      </div>
+      <div class="card approve" style="animation: flipIn .8s cubic-bezier(.2,.8,.2,1) 36.9s both">
+        <div class="badges">
+          <span class="chip" style="background:var(--amber-soft);color:var(--amber);animation: fadeOut .15s 39.3s forwards">Waiting for you</span>
+          <span class="chip a" style="background:var(--good-soft);color:var(--good);animation: pop .4s ease-out 39.35s both">✓ Approved and sent</span>
+        </div>
+        <h3 style="margin-top:18px">Send reply to Priya?</h3>
+        <div class="q">“Thanks for the update. Tuesday 3 pm works for me…”</div>
+        <div class="btns"><span class="btn yes" style="animation: press .25s 39.15s">Approve</span><span class="btn no">Decline</span></div>
+      </div>
+    </div>
+    <div class="cursor" style="animation: cursorMove .9s cubic-bezier(.3,.7,.2,1) 38.25s both, fadeOut .3s 40.2s forwards">
+      <svg viewBox="0 0 24 24" style="animation: cursorClick .25s 39.15s"><path d="M4 2l16 9-7 2-3 7z" fill="#17152a" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" /></svg>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Outro: 41.4 – 48.0 -->
+<section class="scene" style="animation: show 6.6s 41.4s">
+  <div class="cam" style="animation: camOutro 6.6s cubic-bezier(.2,.8,.2,1) 41.4s both">
+    <div class="markwrap"><div class="mark" style="animation: spin3d 1.1s cubic-bezier(.2,.8,.2,1) 41.5s both, float 2.4s ease-in-out 42.6s 2"></div></div>
+    <div class="brand display" data-letters="Baton" data-at="42.1"></div>
+    <div class="tagline a" style="animation: up .6s ease-out 42.9s both"><b>Pass every task</b> to the right AI.</div>
+    <div class="cta a" style="animation: pop .6s ease-out 43.6s both">Start free →</div>
+    <div class="foot a" style="animation: fadeIn .6s 44.4s both">Free models · smart routing · you stay in control</div>
+  </div>
+</section>
+
+</div>
+
+<div class="fx" id="fx"></div>
+
+<script>
+  // Chapter starts, for the voiceover. Kept next to the scenes they time.
+  window.SCENES = [
+    { id: "intro", t: 0 },
+    { id: "keys", t: 5.4 },
+    { id: "route", t: 13.4 },
+    { id: "fallback", t: 26.4 },
+    { id: "agents", t: 33.4 },
+    { id: "outro", t: 41.4 },
+  ];
+  window.DURATION = 48;
+
+  const fx = document.getElementById("fx");
+  const add = (cls, css) => {
+    const el = document.createElement("i");
+    el.className = cls;
+    el.style.cssText = css;
+    fx.appendChild(el);
+  };
+
+  // Titles: each word slams in, one after another.
+  for (const title of document.querySelectorAll(".slamwords")) {
+    const at = Number(title.dataset.at);
+    let i = 0;
+    const wrap = (text, cls) =>
+      text.split(/(\s+)/).filter(Boolean).map((part) => {
+        if (!part.trim()) return document.createTextNode(part);
+        const w = document.createElement("span");
+        w.className = `w ${cls}`;
+        w.textContent = part;
+        w.style.animation = `slam .5s ease-out ${(at + i++ * 0.09).toFixed(2)}s both`;
+        return w;
+      });
+    for (const node of [...title.childNodes]) {
+      node.replaceWith(...wrap(node.textContent, node.nodeType === 3 ? "" : node.className));
+    }
+  }
+
+  // The brand name: letters drop in one by one.
+  for (const el of document.querySelectorAll("[data-letters]")) {
+    const at = Number(el.dataset.at);
+    [...el.dataset.letters].forEach((ch, i) => {
+      const l = document.createElement("span");
+      l.className = "l";
+      l.textContent = ch === " " ? " " : ch;
+      l.style.animation = `dropIn .6s cubic-bezier(.2,.8,.2,1) ${(at + i * 0.09).toFixed(3)}s both`;
+      el.appendChild(l);
+    });
+  }
+
+  // Swipe transitions: three slanted bars cross the screen, covering the cut.
+  for (const cut of [41.4]) {
+    ["#5a3fd8", "#ff5fa8", "#17152a"].forEach((c, i) => {
+      add("swipe", `background:${c};animation: swipe .8s cubic-bezier(.7,0,.3,1) ${(cut - 0.42 + i * 0.05).toFixed(2)}s both`);
+    });
+  }
+
+  // Flashes on the big beats.
+  const flash = (t, bg = "#fff") => add("flash", `background:${bg};animation: flash .35s ease-out ${t}s`);
+  flash(3.35);
+  flash(28.4, "radial-gradient(circle, transparent 35%, rgba(196,54,44,.55))");
+  flash(41.6);
+
+  // Particle bursts, shockwave rings and speed lines, from a fixed seed so
+  // every render matches.
+  let seed = 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const COLORS = ["#5a3fd8", "#ff5fa8", "#ffb020", "#22c08a", "#4f8bff", "#a594ff"];
+  const burst = (x, y, t, n, spread) => {
+    for (let k = 0; k < n; k++) {
+      const ang = rand() * Math.PI * 2;
+      const dist = spread * (0.35 + rand() * 0.75);
+      const size = 10 + rand() * 14;
+      add("bit", `left:${x}px;top:${y}px;width:${size}px;height:${size * (rand() > 0.5 ? 1 : 0.45)}px;background:${COLORS[k % COLORS.length]};` +
+        `--dx:${(Math.cos(ang) * dist).toFixed(0)}px;--dy:${(Math.sin(ang) * dist + 120).toFixed(0)}px;--r:${(rand() * 720 - 360).toFixed(0)}deg;` +
+        `border-radius:${rand() > 0.5 ? "50%" : "4px"};animation: burst ${(0.9 + rand() * 0.6).toFixed(2)}s cubic-bezier(.1,.7,.3,1) ${t}s both`);
+    }
+  };
+  const ring = (x, y, t, color = "#5a3fd8") => add("ring", `left:${x}px;top:${y}px;border-color:${color};animation: ring .9s ease-out ${t}s both`);
+  const speed = (t) => {
+    for (let k = 0; k < 10; k++) {
+      add("speed", `top:${(80 + rand() * 780).toFixed(0)}px;left:${(rand() * 600).toFixed(0)}px;width:${(200 + rand() * 400).toFixed(0)}px;animation: speed .7s linear ${(t + rand() * 0.25).toFixed(2)}s both`);
+    }
+  };
+
+  burst(960, 600, 3.45, 46, 700); ring(960, 600, 3.4, "#ff5fa8"); ring(960, 600, 3.55);
+  [[440, 680, 8.65], [816, 680, 9.05], [1192, 680, 9.45], [1568, 680, 9.85]].forEach(([x, y, t]) => { burst(x, y, t, 16, 220); ring(x, y, t, "#22c08a"); });
+  speed(13.5); speed(26.5); speed(33.5);
+  [[1450, 362, 16.9], [1450, 476, 21.0], [1450, 590, 24.7]].forEach(([x, y, t]) => { burst(x, y, t, 14, 240); ring(x, y, t); });
+  ring(1360, 467, 29.65, "#22c08a"); ring(1360, 467, 29.8); burst(1360, 467, 29.7, 22, 320);
+  burst(1115, 650, 39.25, 50, 600); ring(1115, 650, 39.2, "#22c08a");
+  burst(960, 230, 42.4, 40, 620); ring(960, 230, 42.3); ring(960, 230, 42.5, "#ff5fa8");
+  burst(960, 680, 43.9, 30, 500);
+
+
+  // Zoom punches and in/out transitions, added to each scene's own
+  // animation list. A different transition at every cut.
+  const MOVES = [
+    // hook
+    ["punchIn .3s .35s", "punchIn .3s 1.15s", "punchIn .5s 3.35s", "zoomDrift 1.1s ease-out 3.85s", "zoomThroughOut .45s ease-in 4.95s"],
+    // free keys
+    ["zoomThroughIn .5s cubic-bezier(.2,.8,.2,1) 5.4s", "punchOut .45s 6.5s", "punchIn .3s 8.6s", "punchIn .3s 9.0s", "punchIn .3s 9.4s", "punchIn .4s 9.8s", "zoomDrift 2.6s ease-out 10.3s", "whipOut .45s ease-in 12.95s"],
+    // routing
+    ["whipIn .45s cubic-bezier(.2,.8,.2,1) 13.4s", "punchIn .35s 16.9s", "punchOut .4s 18.4s", "punchIn .35s 21.0s", "punchOut .4s 22.3s", "punchIn .4s 24.7s", "spinOut .45s ease-in 25.95s"],
+    // fallback
+    ["spinIn .5s cubic-bezier(.2,.8,.2,1) 26.4s", "punchIn .4s 28.4s", "punchIn .5s 29.6s", "zoomDrift 2.4s ease-out 30.4s", "shrinkOut .45s ease-in 32.95s"],
+    // agents
+    ["irisIn .6s cubic-bezier(.6,0,.2,1) 33.4s", "punchIn .35s 35.0s", "punchIn .35s 36.2s", "zoomTo 2.2s cubic-bezier(.4,0,.2,1) 38.2s", "zoomThroughOut .45s ease-in 40.95s"],
+    // end card
+    ["punchOut .5s 41.9s", "punchIn .45s 43.6s"],
+  ];
+  document.querySelectorAll(".scene").forEach((scene, i) => {
+    scene.style.animation += ", " + MOVES[i].join(", ");
+  });
+  // Zoom on the Approve button keeps the button where the confetti is.
+  document.querySelectorAll(".scene")[4].style.transformOrigin = "1115px 650px";
+
+  // Screen shakes on the big beats.
+  document.getElementById("world").style.animation = [3.4, 9.85, 16.95, 24.75, 28.4, 29.65, 39.2, 41.65, 43.65]
+    .map((t, k) => `shakeHard ${[5, 7].includes(k) ? ".6" : ".45"}s ${t}s`).join(", ");
+
+  flash(5.4); flash(13.4, "#ff5fa8"); flash(26.4, "#5a3fd8"); flash(33.4);
+
+  // A shine sweeps across each key card as it connects, and across the button.
+  const shine = document.createElement("style");
+  shine.textContent = [8.7, 9.1, 9.5, 9.9].map((t, i) => `.key:nth-child(${i + 1})::after { animation: shine .8s ease-in-out ${t}s both; }`).join("\n") +
+    "\n.cta::after { animation: shine 1s ease-in-out 44.2s 3; }";
+  document.head.appendChild(shine);
+
+  const typed = [...document.querySelectorAll("[data-type]")];
+  window.seek = (t) => {
+    for (const a of document.getAnimations()) {
+      a.pause();
+      a.currentTime = t * 1000;
+    }
+    for (const el of typed) {
+      const p = Math.min(1, Math.max(0, (t - Number(el.dataset.at)) / Number(el.dataset.dur)));
+      el.textContent = el.dataset.type.slice(0, Math.round(p * el.dataset.type.length));
+    }
+  };
+  window.seek(0);
+</script>
+</body>
+</html>

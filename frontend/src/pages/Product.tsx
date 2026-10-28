@@ -6,7 +6,7 @@ import { ThemeToggle } from "../components/ui";
 import { useAuth } from "../lib/auth";
 
 /**
- * The public product overview: what AI Employees is, in one film and
+ * The public product overview: what Baton is, in one film and
  * four features. Each feature is shown by its own scene from the film,
  * looping beside the words, so the page and the video never disagree.
  */
@@ -95,7 +95,7 @@ export default function Product() {
         <nav className="mx-auto flex max-w-[1200px] items-center gap-3 px-4 py-3 sm:px-6">
           <Link to="/" className="flex items-center gap-2.5">
             <BrandMark size={32} />
-            <span className="font-display text-[17px] font-semibold">AI Employees</span>
+            <span className="font-display text-[17px] font-semibold">Baton</span>
           </Link>
           <div className="ml-6 hidden items-center gap-1 md:flex">
             {[
@@ -292,7 +292,7 @@ export default function Product() {
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-4 px-4 py-8 text-[13px] text-dim sm:px-6">
           <BrandMark size={24} />
-          <span>AI Employees</span>
+          <span>Baton</span>
           <span className="ml-auto">For students, professionals and developers.</span>
         </div>
       </footer>

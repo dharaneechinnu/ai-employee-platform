@@ -55,8 +55,8 @@ export default function Login() {
 
   return (
     <AuthShell
-      headline="Your assistant, already at work."
-      ticker="A personal assistant that does real work in your email, calendar, files and data, while you stay in control."
+      headline="Free AI keys. Many models. One assistant."
+      ticker="Build agents on free model keys. For every task, your prompt goes to the model best at it, and agents do real work in your mail, calendar and files."
     >
       <form onSubmit={submit} className="auth-card flex flex-col gap-5" noValidate={false}>
         <div className="flex flex-col gap-1.5">
@@ -100,7 +100,7 @@ export default function Login() {
             <AuthSwitch question="New here?" to={registerTo} action="Create an account" />
             <p className="border-t border-line pt-4 text-center text-[13px] text-dim">
               <Link to="/" className="hover:text-ink hover:underline">
-                What is AI Employees?
+                What is Baton?
               </Link>
             </p>
           </>

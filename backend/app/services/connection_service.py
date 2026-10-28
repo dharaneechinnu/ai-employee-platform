@@ -368,7 +368,7 @@ class ConnectionService:
             raise PermissionDeniedError(
                 ruling.note
                 or f"{CATALOGUE[kind]['display_name']} is not available on your plan. "
-                "Ask whoever runs AI Employees to open it for you."
+                "Ask whoever runs Baton to open it for you."
             )
 
     async def _allowed_grant(self, kind: str, services: dict[str, str]) -> dict[str, str]:
@@ -451,7 +451,7 @@ class ConnectionService:
             raise ValidationError(
                 f"{provider.display_name} sign-in is not set up yet. Add your own "
                 f"{provider.display_name} app under Connections, or ask whoever runs "
-                "AI Employees to register one for everybody."
+                "Baton to register one for everybody."
             )
         return provider, client
 

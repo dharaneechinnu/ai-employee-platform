@@ -9,9 +9,10 @@
  * Prints one JSON line per item: { "out": ..., "seconds": ... }.
  *
  * Install the engine and model once (kept out of git, ~200 MB):
- *   npm install --no-save --no-package-lock --prefix scripts/ad/.voice n8n-nodes-ttsbro@0.1.6 sherpa-onnx-node
+ *   npm install --no-save --no-package-lock --prefix scripts/ad/.voice n8n-nodes-ttsbro@0.1.6 sherpa-onnx-node@1.13.8
  * That package ships the official sherpa-onnx build of Kokoro-82M
- * (kokoro-int8-en-v0_19, Apache-2.0).
+ * (kokoro-int8-en-v0_19, Apache-2.0). Keep sherpa-onnx-node on 1.x: 2.x
+ * dropped the espeak-ng data this model needs and crashes on every line.
  */
 
 const fs = require("node:fs");

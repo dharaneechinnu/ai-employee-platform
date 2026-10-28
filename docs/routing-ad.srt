@@ -1,0 +1,27 @@
+1
+00:00:00,400 --> 00:00:04,558
+Want an AI assistant, without another monthly bill? Start free.
+
+2
+00:00:05,800 --> 00:00:11,249
+Bring free AI keys from Gemini, Groq, OpenRouter or Mistral. Connected in seconds.
+
+3
+00:00:13,700 --> 00:00:17,889
+Then just type. It reads each prompt, coding, writing or analysis,
+
+4
+00:00:20,000 --> 00:00:23,684
+and sends it to the model that's best at that task. Automatically.
+
+5
+00:00:26,800 --> 00:00:31,828
+If one model hits its free limit, the next one takes over. No errors, no waiting.
+
+6
+00:00:33,800 --> 00:00:39,130
+Build agents just by chatting. They run on a schedule, and anything risky waits for your yes.
+
+7
+00:00:42,000 --> 00:00:46,641
+Baton. Pass every task to the right AI. Start free today.
