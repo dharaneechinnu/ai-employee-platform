@@ -6,6 +6,8 @@ import { toolLabel } from "../../lib/labels";
 import type { NodeLive, StoryItem } from "../../lib/liveTree";
 import { Icon, type IconName } from "../icons";
 import { Button, StatusChip, relativeTime } from "../ui";
+import AgentAvatar from "./AgentAvatar";
+import AgentFlow from "./AgentFlow";
 
 export interface PanelNode {
   id: string;
@@ -13,6 +15,8 @@ export interface PanelNode {
   icon: IconName;
   tone: string;
   kind: "scheduler" | "you" | "lead" | "agent" | "helper";
+  /** Which picture and which way of working: a helper's key, or the kind. */
+  role: string;
   agent: Agent | null;
 }
 
@@ -67,7 +71,13 @@ export default function RunPanel({
   return (
     <aside className="side-panel flex flex-col gap-4 rounded-2xl border p-5" aria-label="Run details" key={node.id}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <span
+          className="flex h-12 w-12 flex-none items-center justify-center rounded-2xl"
+          style={{ color: node.tone, background: `color-mix(in srgb, ${node.tone} 12%, transparent)` }}
+        >
+          <AgentAvatar role={node.role} size={30} />
+        </span>
+        <div className="min-w-0 flex-1">
           <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-accent-text">
             {running ? "Live run" : hasStory ? "Last run" : STATE_WORDS[live.state]}
           </div>
@@ -107,6 +117,8 @@ export default function RunPanel({
                 : "Nothing running right now. When it starts, each step appears here."}
             </p>
           )}
+
+          <AgentFlow kind={node.kind} flowKey={node.role} agent={node.agent} name={node.name} />
 
           {live.problem && (
             <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-[13.5px] text-bad-text">

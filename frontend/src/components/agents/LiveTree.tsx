@@ -3,8 +3,9 @@ import { agentLook } from "../../lib/agentIcons";
 import { api, ApiError, type Agent, type AgentsOverview, type Approval, type RunNowResult } from "../../lib/api";
 import { LEAD, useLiveTree, type NodeLive } from "../../lib/liveTree";
 import { toolLabel } from "../../lib/labels";
-import { Icon, type IconName } from "../icons";
+import { Icon } from "../icons";
 import { Button, Spinner, relativeTime, useToast } from "../ui";
+import AgentAvatar from "./AgentAvatar";
 import RunPanel, { type PanelNode } from "./RunPanel";
 
 const W = 220;
@@ -298,6 +299,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
     id: "scheduler",
     name: "Scheduler",
     kind: "scheduler",
+    role: "scheduler",
     icon: "clock",
     tone: "var(--run)",
     agent: null,
@@ -309,6 +311,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
     id: "you",
     name: "You",
     kind: "you",
+    role: "you",
     icon: "members",
     tone: "var(--accent)",
     agent: null,
@@ -321,6 +324,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
     id: LEAD,
     name: lead.label,
     kind: "lead",
+    role: "lead",
     icon: lead.icon,
     tone: lead.tone,
     agent: null,
@@ -337,6 +341,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
       id: a.id,
       name: a.name,
       kind: "agent",
+      role: "agent",
       icon: look.icon,
       tone: look.tone,
       agent: a,
@@ -360,6 +365,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
       id: h.key,
       name: h.label,
       kind: "helper",
+      role: h.key,
       icon: look.icon,
       tone: look.tone,
       agent: null,
@@ -439,7 +445,7 @@ function Node({
         <span className="tn-ic" style={{ ["--tone" as string]: slot.tone }}>
           {(state === "working" || state === "waiting") && <span className="tn-ring" aria-hidden="true" />}
           {scheduler && <Countdown at={scheduler.at} />}
-          <Icon name={slot.icon as IconName} size={19} />
+          <AgentAvatar role={slot.role} size={22} />
         </span>
         <span className="min-w-0 flex-1">
           <b>{slot.name}</b>
