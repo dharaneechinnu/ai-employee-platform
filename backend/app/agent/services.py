@@ -106,9 +106,10 @@ SERVICES: dict[str, Service] = {
         Service(
             "microsoft.files",
             "microsoft",
-            "OneDrive",
+            "OneDrive and Excel",
             read_scopes=("Files.Read.All",),
-            has_edit=False,
+            # Adding rows to and changing cells in Excel workbooks.
+            edit_scopes=("Files.ReadWrite.All",),
         ),
     )
 }
@@ -120,8 +121,11 @@ TOOL_SERVICE: dict[str, str] = {
     "gmail_read": "google.gmail",
     "gmail_create_draft": "google.gmail",
     "gmail_send": "google.gmail",
+    "gmail_organize": "google.gmail",
     "google_calendar_list": "google.calendar",
     "google_calendar_create": "google.calendar",
+    "google_calendar_update": "google.calendar",
+    "google_calendar_cancel": "google.calendar",
     "google_drive_search": "google.drive",
     "google_drive_read": "google.drive",
     "sheets_read": "google.sheets",
@@ -132,10 +136,16 @@ TOOL_SERVICE: dict[str, str] = {
     "outlook_read": "microsoft.mail",
     "outlook_create_draft": "microsoft.mail",
     "outlook_send": "microsoft.mail",
+    "outlook_organize": "microsoft.mail",
     "outlook_calendar_list": "microsoft.calendar",
     "outlook_calendar_create": "microsoft.calendar",
+    "outlook_calendar_update": "microsoft.calendar",
+    "outlook_calendar_cancel": "microsoft.calendar",
     "onedrive_search": "microsoft.files",
     "onedrive_read": "microsoft.files",
+    "excel_read": "microsoft.files",
+    "excel_append_rows": "microsoft.files",
+    "excel_update_cells": "microsoft.files",
 }
 
 # What a connection asks the provider for when the person makes no

@@ -48,6 +48,8 @@ const MARKS: Record<string, ServiceKey[]> = {
 const PLAIN_ICON: Record<string, IconName> = {
   email: "mail",
   github: "code",
+  slack: "chat",
+  teams: "chat",
 };
 
 function KindMark({ kind, size = 40 }: { kind: string; size?: number }) {

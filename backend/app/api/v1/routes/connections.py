@@ -76,7 +76,8 @@ class OAuthStartResponse(BaseModel):
 class ManualConnectionRequest(BaseModel):
     kind: str = Field(min_length=1, max_length=30)
     label: str = Field(min_length=1, max_length=100)
-    secret: str = Field(min_length=1, max_length=1000)
+    # Long enough for a Teams workflow webhook URL, which can run to 600 characters.
+    secret: str = Field(min_length=1, max_length=2000)
     config: dict[str, Any] = Field(default_factory=dict)
 
 

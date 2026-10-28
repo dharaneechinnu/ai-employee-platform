@@ -46,6 +46,15 @@ def test_each_agent_has_its_own_tools() -> None:
     assert "gmail_search" not in offered("critic")
 
 
+def test_the_analyst_reads_data_wherever_the_person_keeps_it() -> None:
+    assert {"sheets_read", "google_drive_read", "onedrive_read"} <= offered("analyst")
+    assert {"list_tables", "describe_table", "run_query"} <= offered("analyst")
+
+
+def test_the_developer_can_look_up_an_error_on_the_web() -> None:
+    assert {"web_search", "get_webpage"} <= offered("developer")
+
+
 def test_the_developer_reads_github_and_the_researcher_does_not_have_to() -> None:
     github = {
         t.name for t in registry.all() if t.pack == "github" and t.side_effect is SideEffect.READ

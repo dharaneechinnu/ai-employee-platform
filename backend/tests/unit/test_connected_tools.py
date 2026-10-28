@@ -58,9 +58,10 @@ async def _run(name: str, ctx: ToolContext, args: dict[str, Any]) -> Any:
 def test_every_connected_tool_is_registered_with_a_side_effect() -> None:
     google = [t for t in registry.all() if t.requires_connection == "google"]
     microsoft = [t for t in registry.all() if t.requires_connection == "microsoft"]
-    # Eight for mail, calendar and Drive, and four for Sheets.
-    assert len(google) == 12
-    assert len(microsoft) == 8
+    # Google: eleven for mail, calendar and Drive, and four for Sheets.
+    # Microsoft: eleven for mail, calendar and OneDrive, and three for Excel.
+    assert len(google) == 15
+    assert len(microsoft) == 14
     sends = {t.name: t.side_effect.value for t in google + microsoft if "send" in t.name}
     assert sends == {"gmail_send": "destructive", "outlook_send": "destructive"}
 
@@ -181,3 +182,25 @@ async def test_onedrive_reads_a_word_document(fake_api: Any) -> None:
     result = await _run("onedrive_read", _ctx("microsoft"), {"file_id": "abc"})
     assert result.ok, result.message
     assert "Hello plan" in result.data["text"]
+
+
+@pytest.mark.parametrize(
+    ("tool", "kind", "start_param"),
+    [
+        ("google_calendar_list", "google", "timeMin"),
+        ("outlook_calendar_list", "microsoft", "startDateTime"),
+    ],
+)
+async def test_a_calendar_can_look_back_at_past_events(
+    fake_api: Any, tool: str, kind: str, start_param: str
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    seen = fake_api(lambda request: httpx.Response(200, json={"items": [], "value": []}))
+    result = await _run(tool, _ctx(kind), {"days_back": 7, "days_ahead": 0})
+
+    assert result.ok, result.message
+    start = datetime.fromisoformat(seen[0].url.params[start_param].replace("Z", "+00:00"))
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=UTC)
+    assert datetime.now(UTC) - start > timedelta(days=6)

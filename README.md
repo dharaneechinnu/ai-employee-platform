@@ -78,12 +78,13 @@ The assistant plans a step, calls a tool, reads the result, and decides what to 
 
 | Pack | What the assistant can do |
 |---|---|
-| **Google Workspace** | Search, read, draft and send Gmail; list and create Calendar events; search and read Drive files; create, read and write Google Sheets |
-| **Microsoft 365** | The same for Outlook mail, Outlook calendar and OneDrive |
+| **Google Workspace** | Search, read, draft and send Gmail, replying in the same thread; archive, label and mark emails; list, create, move and cancel Calendar events (past ones too); search and read Drive files, PDFs included; create, read and write Google Sheets |
+| **Microsoft 365** | The same for Outlook mail (archive, flag, categories), Outlook calendar and OneDrive; read, add rows to and update **Excel** workbooks in OneDrive |
+| **Slack and Teams** | Post a summary or an alert to one channel, through the incoming webhook you paste in (asks you first) |
 | **Any mailbox (IMAP)** | List, read, draft and send email with an app password |
 | **GitHub** | Read code, issues, pull requests and CI; comment, open issues, propose changes as pull requests. See feature 14 |
 | **Database** | List tables, describe them, and run **read-only** SQL |
-| **Web** | Read a public web page; search the web (when the server has a search key set) |
+| **Web** | Read a public web page or PDF; search the web (when the server has a search key set). Every redirect is checked, so a page cannot send the request into the private network |
 | **Memory** | Remember facts and recall them later |
 | **Everyday helpers** | Calculator, current time, text tools, assemble a report, run a short Python program (asks you first) |
 
@@ -309,7 +310,8 @@ What the Platform Admin can see about an account: email, name, active or not, wh
 | + | Agents designed in chat, schedules, readiness checks, per-service read/edit permissions | ✅ Built |
 | + | The run inside a LangGraph graph | ✅ Built |
 | Trial | LangGraph-saved approval pauses (`AGENT_CHECKPOINTER`) and a team supervisor graph (`AGENT_SUPERVISOR`) | 🧪 Built, off by default |
-| Planned | Excel through Microsoft 365; effort-based model choice | 🗒️ Not built |
+| + | Excel in OneDrive, Slack and Teams posting, PDF reading, moving and cancelling events, threaded replies and inbox tidying | ✅ Built |
+| Planned | Effort-based model choice | 🗒️ Not built |
 | 8–10 | Reliability · security and cost · production readiness | 🗒️ Outlined, not built |
 
 ## Running it
