@@ -361,10 +361,13 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 ▶️ **Watch on Google Drive:** [AI Employees – Product Videos](https://drive.google.com/file/d/1L8DQJJeDJeSN5XoC2bQ4jBIS5LagYWRL/view?usp=sharing)
 
-The same files are in this repository under `docs/`. They show the earlier company version of the product.
+The same files are in this repository under `docs/`. The first one shows the product as it is now; the others show the earlier company version.
+
+To rebuild the new one: `node scripts/ad-routing/render.mjs out.mp4` (in `frontend/`), then `AD_SCRIPT=scripts/ad-routing/script.json python3 scripts/ad/make_ad.py out.mp4 docs/routing-ad.mp4`.
 
 | Video | What it shows |
 |---|---|
+| 🆕 **[Free models, smart routing](docs/routing-ad.mp4)** (0:48) | The current product: free AI keys, each prompt sent to the model that suits it, automatic fallback when one hits a limit, and scheduled agents. Open-source Kokoro voice and subtitles |
 | 🎬 **[Narrated ad](docs/product-ad.mp4)** (1:08) | Six features with title cards, zooms and spotlights, a voiceover in sync with subtitles, and music |
 | 🖥️ **[Live demo](docs/product-demo.mp4)** (0:58) | The app recorded in use, start to finish |
 | ✨ **[Animated overview](docs/product-film.mp4)** (1:05) | An illustrated tour of the features |
