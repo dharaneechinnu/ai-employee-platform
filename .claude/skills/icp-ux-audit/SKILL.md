@@ -1,6 +1,6 @@
 ---
 name: icp-ux-audit
-description: Audit the AI Employees web app's UI and UX through the eyes of its ideal customer (ICP) personas, then write a short plain-English report with prioritised fixes. Use when asked to audit, review or improve the UI/UX, check a screen "from the user's side", or before a release or demo.
+description: Audit the Baton web app's UI and UX through the eyes of its ideal customer (ICP) personas, then write a short plain-English report with prioritised fixes. Use when asked to audit, review or improve the UI/UX, check a screen "from the user's side", or before a release or demo.
 ---
 
 # ICP UX audit

@@ -207,7 +207,7 @@ export default function Register() {
         <AuthSwitch question="Already have an account?" to={loginTo} action="Sign in" />
         <p className="border-t border-line pt-4 text-center text-[13px] text-dim">
           <Link to="/" className="hover:text-ink hover:underline">
-            What is AI Employees?
+            What is Baton?
           </Link>
         </p>
       </form>

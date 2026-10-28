@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>AI Employees: free models, smart routing</title>
+<title>Baton: free models, smart routing</title>
 <!--
   The ad's picture, as one page of timed CSS animations. render.mjs pauses
   every animation and seeks them to each frame's time, so the film comes
@@ -205,7 +205,7 @@
   .mark { width: 170px; height: 170px; border-radius: 46px; background: linear-gradient(135deg, #6f55f0, var(--accent)); position: relative; box-shadow: 0 40px 80px -30px rgba(90,63,216,.8); }
   .mark::before { content: ""; position: absolute; left: 36px; bottom: 36px; width: 70px; height: 70px; border-radius: 18px; background: #fff; }
   .mark::after { content: ""; position: absolute; right: 30px; top: 30px; width: 40px; height: 40px; border-radius: 12px; background: #c9bdff; }
-  .brand { font-size: 120px; font-weight: 800; margin-top: 44px; }
+  .brand { font-size: 170px; font-weight: 800; margin-top: 44px; }
   .brand .l { display: inline-block; opacity: 0; }
   .tagline { font-size: 42px; color: var(--muted); margin-top: 16px; }
   .tagline b { color: var(--accent); }
@@ -322,7 +322,7 @@
       <div class="model a" style="animation: slideR .5s ease-out 27.15s both, kick .35s 29.6s">
         <i class="hi" style="animation: fadeIn .1s 29.6s both, pulse .9s 29.6s 2"></i>
         <span class="dot" style="background:#f55036">Gq</span>Groq · Llama
-        <span class="status go" style="animation: pop .4s ease-out 29.7s both">Taking over</span>
+        <span class="status go" style="animation: pop .4s ease-out 29.7s both">Baton passed</span>
       </div>
     </div>
     <div class="progress"><i style="animation: grow 5.2s linear 27.4s both"></i></div>
@@ -364,10 +364,10 @@
 <section class="scene" style="animation: show 6.6s 41.4s">
   <div class="cam" style="animation: camOutro 6.6s cubic-bezier(.2,.8,.2,1) 41.4s both">
     <div class="markwrap"><div class="mark" style="animation: spin3d 1.1s cubic-bezier(.2,.8,.2,1) 41.5s both, float 2.4s ease-in-out 42.6s 2"></div></div>
-    <div class="brand display" data-letters="AI Employees" data-at="42.1"></div>
-    <div class="tagline a" style="animation: up .6s ease-out 42.9s both"><b>Free models.</b> Smart routing. Real work.</div>
+    <div class="brand display" data-letters="Baton" data-at="42.1"></div>
+    <div class="tagline a" style="animation: up .6s ease-out 42.9s both"><b>Pass every task</b> to the right AI.</div>
     <div class="cta a" style="animation: pop .6s ease-out 43.6s both">Start free →</div>
-    <div class="foot a" style="animation: fadeIn .6s 44.4s both">Bring your own keys · switch models any time · you stay in control</div>
+    <div class="foot a" style="animation: fadeIn .6s 44.4s both">Free models · smart routing · you stay in control</div>
   </div>
 </section>
 
@@ -420,7 +420,7 @@
       const l = document.createElement("span");
       l.className = "l";
       l.textContent = ch === " " ? " " : ch;
-      l.style.animation = `dropIn .6s cubic-bezier(.2,.8,.2,1) ${(at + i * 0.045).toFixed(3)}s both`;
+      l.style.animation = `dropIn .6s cubic-bezier(.2,.8,.2,1) ${(at + i * 0.09).toFixed(3)}s both`;
       el.appendChild(l);
     });
   }

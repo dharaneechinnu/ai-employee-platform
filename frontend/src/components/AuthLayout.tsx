@@ -35,7 +35,7 @@ export function AuthStage({
     <section className="auth-aside flex w-full flex-col justify-between gap-10 border-line px-6 py-5 sm:px-12 lg:min-h-screen lg:w-auto lg:flex-[1_1_520px] lg:border-r lg:px-14 lg:py-12">
       <div className="flex items-center gap-3">
         <BrandMark size={32} />
-        <span className="flex-1 font-display text-[17px] font-semibold tracking-[-0.01em]">AI Employees</span>
+        <span className="flex-1 font-display text-[17px] font-semibold tracking-[-0.01em]">Baton</span>
         {badge && <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold tracking-wide text-accent-text">{badge}</span>}
         <ThemeToggle />
       </div>

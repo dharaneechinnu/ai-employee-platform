@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     )
 
     # --- app ---------------------------------------------------------
-    app_name: str = "AI Employee Platform"
+    app_name: str = "Baton"
     environment: Literal["dev", "test", "prod"] = "dev"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"

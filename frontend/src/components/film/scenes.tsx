@@ -200,7 +200,7 @@ function IntroVisual() {
         <span style={{ position: "absolute", right: -6, top: -6, width: 22, height: 22, borderRadius: 999, background: "var(--spark)", boxShadow: "0 0 30px var(--spark)", ...A(s("f-pop", 900, 500), loop("f-pulse", 2000, 1400, "ease-out")) }} />
       </div>
       <div className="f-display" style={{ fontSize: 30, fontWeight: 600, color: "var(--muted)", ...A(s("f-rise", 600)) }}>
-        AI Employees
+        Baton
       </div>
       <h1 className="f-display" style={{ margin: "14px 0 0", fontSize: 92, lineHeight: 1.02, fontWeight: 700 }}>
         <span style={{ display: "block", ...A(s("f-rise", 900, 900)) }}>Your assistant,</span>
@@ -561,7 +561,7 @@ function ConnectVisual() {
       <div className="f-card" style={{ position: "absolute", left: 170, top: 150, width: 400, padding: 22, zIndex: 20, display: "flex", flexDirection: "column", gap: 12, ...A(s("f-slide-up", 1800, 600), then("f-slide-away", 3900, 450)) }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <BrandTile kind="google" size={34} />
-          <span style={{ fontWeight: 600 }}>AI Employees wants to</span>
+          <span style={{ fontWeight: 600 }}>Baton wants to</span>
         </div>
         {["Read, draft and send mail", "See and create calendar events", "Read Drive files (read-only)"].map((t, i) => (
           <div key={t} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--muted)", ...A(s("f-rise", 2100 + i * 300, 500)) }}>

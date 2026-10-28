@@ -12,6 +12,6 @@
     { "at": "route", "offset": 6.6, "text": "and sends it to the model that's *best at that task*. Automatically." },
     { "at": "fallback", "offset": 0.4, "text": "If one model hits its free limit, the next one *takes over*. No errors, no waiting." },
     { "at": "agents", "offset": 0.4, "text": "Build agents just by chatting. They run on a schedule, and anything risky *waits for your yes*." },
-    { "at": "outro", "offset": 0.6, "text": "AI Employees. Free models, smart routing, *real work*. Start free today.", "pace": 0.92 }
+    { "at": "outro", "offset": 0.6, "text": "Baton. *Pass every task to the right AI.* Start free today.", "pace": 0.92 }
   ]
 }

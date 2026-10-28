@@ -100,7 +100,7 @@ export default function Login() {
             <AuthSwitch question="New here?" to={registerTo} action="Create an account" />
             <p className="border-t border-line pt-4 text-center text-[13px] text-dim">
               <Link to="/" className="hover:text-ink hover:underline">
-                What is AI Employees?
+                What is Baton?
               </Link>
             </p>
           </>

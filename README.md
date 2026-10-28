@@ -1,6 +1,10 @@
-# AI Employees
+# Baton
 
-A **personal AI assistant** that does real work. One person signs in and gets:
+**Pass every task to the right AI.**
+
+Bring free AI keys (Gemini, Groq, OpenRouter, Mistral and more). For every prompt, Baton picks the connected model that is best at that kind of task, and hands the work to the next one if a model hits its limit, the way a relay runner passes the baton.
+
+Baton is a **personal AI assistant** that does real work. One person signs in and gets:
 
 - a chat assistant that can use real tools, not just talk;
 - their own AI keys from any provider (you bring your own key, so you pay the provider directly);
@@ -9,7 +13,7 @@ A **personal AI assistant** that does real work. One person signs in and gets:
 - **agents** they design by chatting, which can run on a schedule;
 - approvals, so nothing risky happens until they say yes.
 
-"AI Employees" is the product and repository name. The product used to be a tool for companies to "hire" AI workers. It is now a personal assistant: every account belongs to one person, and that person's data is kept apart from everyone else's.
+"Baton" is the product name. The repository keeps its original name, `ai-employee-platform`, from when the product was called "AI Employees" and was a tool for companies to "hire" AI workers. It is now a personal assistant: every account belongs to one person, and that person's data is kept apart from everyone else's.
 
 ![The product overview page](docs/screenshots/01-landing.png)
 
@@ -359,7 +363,7 @@ npm run ad:voice-setup && npm run ad  # docs/product-ad.mp4 (narrated)
 
 ## 🎬 Product videos
 
-▶️ **Watch on Google Drive:** [AI Employees – Product Videos](https://drive.google.com/file/d/1L8DQJJeDJeSN5XoC2bQ4jBIS5LagYWRL/view?usp=sharing)
+▶️ **Watch on Google Drive:** [Product videos, earlier version](https://drive.google.com/file/d/1L8DQJJeDJeSN5XoC2bQ4jBIS5LagYWRL/view?usp=sharing)
 
 The same files are in this repository under `docs/`. The first one shows the product as it is now; the others show the earlier company version.
 
