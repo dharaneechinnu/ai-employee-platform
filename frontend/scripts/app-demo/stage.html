@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Baton · live demo stage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  /*
+   * The recording stage for the live demo (RECORDING AID, not part of the
+   * app). The real app runs full-frame in the iframe, on the same origin
+   * as this page (Vite serves both), so sign-in works as normal.
+   * Everything drawn over it (cursor, chapter titles, spotlight, labels,
+   * the opening and closing cards) lives here and is driven by
+   * record-app-demo.mjs through window.stage.
+   */
+  :root { --bg: #f5f4fb; --panel: #ffffff; --ink: #17152a; --muted: #5d5a78; --line: #e4e1f2; --accent: #5a3fd8; --accent-soft: #eeebfd; --spark: #ff8a4c; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+
+  #window { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; transition: transform 1000ms cubic-bezier(.65,0,.25,1); }
+  iframe { display: block; width: 1920px; height: 1080px; border: 0; background: var(--bg); }
+
+  #cursor { position: absolute; left: 0; top: 0; z-index: 50; pointer-events: none; transition-property: transform; transition-timing-function: cubic-bezier(.45,0,.2,1); opacity: 0; }
+  #cursor svg { filter: drop-shadow(0 5px 8px rgba(23,21,42,.35)); }
+  .ripple { position: absolute; z-index: 49; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 99px; border: 3px solid var(--accent); pointer-events: none; animation: ripple 650ms ease-out forwards; }
+  @keyframes ripple { from { opacity: .9; transform: scale(.2); } to { opacity: 0; transform: scale(1.5); } }
+
+  /* Chapter title: big over a soft scrim, then a small corner tag. */
+  #scrim { position: absolute; inset: 0; z-index: 44; background: radial-gradient(ellipse at 30% 50%, rgba(245,244,251,.94), rgba(245,244,251,.8)); backdrop-filter: blur(10px); opacity: 0; transition: opacity 500ms ease; pointer-events: none; }
+  #scrim.on { opacity: 1; }
+  #featBig { position: absolute; z-index: 47; left: 150px; top: 50%; max-width: 1400px; pointer-events: none; opacity: 0; transform: translateY(-40%) scale(.96); transition: opacity 550ms ease, transform 800ms cubic-bezier(.16,1,.3,1); }
+  #featBig.on { opacity: 1; transform: translateY(-50%) scale(1); }
+  #featBig.away { opacity: 0; transform: translate(-60px, -64%) scale(.7); transition-duration: 500ms, 600ms; }
+  #featBig .kick { display: flex; align-items: center; gap: 16px; font-family: "Geist Mono", monospace; font-size: 24px; letter-spacing: .14em; color: var(--accent); text-transform: uppercase; }
+  #featBig .kick i { width: 64px; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--spark)); }
+  #featBig .ttl { margin-top: 18px; font-weight: 800; font-size: 108px; line-height: 1.0; letter-spacing: -.04em; }
+  #featBig .sub { margin-top: 22px; font-size: 34px; color: var(--muted); }
+  #featTag { position: absolute; z-index: 46; right: 28px; top: 22px; display: inline-flex; align-items: center; gap: 12px; padding: 9px 20px 9px 9px; border-radius: 999px;
+    background: rgba(23,21,42,.9); color: #fff; box-shadow: 0 18px 40px -18px rgba(23,21,42,.6); opacity: 0; transform: translateY(-14px); transition: opacity 400ms ease, transform 550ms cubic-bezier(.16,1,.3,1); pointer-events: none; }
+  #featTag.on { opacity: 1; transform: none; }
+  #featTag .n { font-family: "Geist Mono", monospace; font-size: 15px; font-weight: 500; color: #fff; background: var(--accent); border-radius: 999px; padding: 5px 11px; }
+  #featTag .t { font-weight: 700; font-size: 22px; letter-spacing: -.01em; }
+
+  #spot { position: absolute; z-index: 43; border-radius: 16px; pointer-events: none; opacity: 0;
+    box-shadow: 0 0 0 3px rgba(90,63,216,.95), 0 0 34px 6px rgba(90,63,216,.35), 0 0 0 4000px rgba(23,21,42,.38);
+    transition: left 600ms cubic-bezier(.65,0,.25,1), top 600ms cubic-bezier(.65,0,.25,1), width 600ms cubic-bezier(.65,0,.25,1), height 600ms cubic-bezier(.65,0,.25,1), opacity 450ms ease; }
+  #spot.on { opacity: 1; }
+  #callout { position: absolute; z-index: 48; pointer-events: none; padding: 13px 22px; border-radius: 15px; white-space: nowrap; background: var(--accent); color: #fff; font-weight: 700; font-size: 27px; letter-spacing: -.01em;
+    box-shadow: 0 22px 50px -18px rgba(90,63,216,.8); opacity: 0; transform: scale(.7); transform-origin: var(--ox, left) center; transition: opacity 280ms ease, transform 450ms cubic-bezier(.16,1.4,.3,1); }
+  #callout.on { opacity: 1; transform: scale(1); }
+  #callout::before { content: ""; position: absolute; width: 18px; height: 18px; background: var(--accent); transform: rotate(45deg); }
+  #callout[data-side="right"]::before { left: -8px; top: calc(50% - 9px); }
+  #callout[data-side="left"]::before { right: -8px; top: calc(50% - 9px); }
+  #callout[data-side="top"]::before { bottom: -8px; left: calc(50% - 9px); }
+  #callout[data-side="bottom"]::before { top: -8px; left: calc(50% - 9px); }
+
+  .overlay { position: absolute; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--bg); transition: opacity 800ms ease; overflow: hidden; }
+  .overlay.gone { opacity: 0; pointer-events: none; }
+  .overlay::before { content: ""; position: absolute; width: 1100px; height: 1100px; right: -380px; top: -520px; border-radius: 999px; background: radial-gradient(circle, rgba(90,63,216,.16), transparent 65%); }
+  .overlay::after { content: ""; position: absolute; width: 900px; height: 900px; left: -320px; bottom: -480px; border-radius: 999px; background: radial-gradient(circle, rgba(255,138,76,.12), transparent 65%); }
+  .mark { position: relative; width: 140px; height: 140px; border-radius: 40px; background: linear-gradient(135deg, #6f55f0, var(--accent)); box-shadow: 0 36px 80px -28px rgba(90,63,216,.8); animation: pop 900ms cubic-bezier(.16,1,.3,1) both; }
+  .mark::before { content: ""; position: absolute; left: 30px; bottom: 30px; width: 57px; height: 57px; border-radius: 17px; background: #fff; }
+  .mark::after { content: ""; position: absolute; right: 26px; top: 26px; width: 35px; height: 35px; border-radius: 11px; background: #c9bdff; }
+  .kicker { margin-top: 34px; font-size: 22px; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); font-weight: 600; animation: rise 800ms 250ms cubic-bezier(.16,1,.3,1) both; }
+  .title { margin: 14px 0 0; font-size: 108px; line-height: 1.02; font-weight: 800; letter-spacing: -.045em; }
+  .title span { display: block; animation: rise 900ms cubic-bezier(.16,1,.3,1) both; }
+  .title span:nth-child(1) { animation-delay: 400ms; } .title span:nth-child(2) { animation-delay: 600ms; color: var(--accent); }
+  .sub { margin-top: 26px; font-size: 30px; color: var(--muted); animation: rise 900ms 900ms cubic-bezier(.16,1,.3,1) both; }
+  .brand { margin-top: 30px; font-size: 150px; font-weight: 800; letter-spacing: -.05em; animation: rise 900ms 250ms cubic-bezier(.16,1,.3,1) both; }
+  .tagline { font-size: 46px; color: var(--muted); margin-top: 6px; animation: rise 900ms 600ms cubic-bezier(.16,1,.3,1) both; }
+  .tagline b { color: var(--accent); }
+  .cta { margin-top: 46px; background: var(--accent); color: #fff; font-weight: 700; font-size: 34px; padding: 22px 50px; border-radius: 20px; box-shadow: 0 28px 56px -24px rgba(90,63,216,.8); animation: pop 800ms 1000ms cubic-bezier(.16,1,.3,1) both; }
+  .foot { margin-top: 28px; font-size: 24px; color: var(--muted); animation: rise 900ms 1300ms cubic-bezier(.16,1,.3,1) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { 0% { opacity: 0; transform: scale(.6); } 60% { opacity: 1; transform: scale(1.06); } 100% { transform: scale(1); } }
+</style>
+</head>
+<body>
+  <div id="window"><iframe id="app" name="app" title="Baton"></iframe></div>
+
+  <div id="scrim"></div>
+  <div id="featBig"><div class="kick"><i></i><span id="fb-n">01</span></div><div class="ttl" id="fb-t"></div><div class="sub" id="fb-s"></div></div>
+  <div id="featTag"><span class="n" id="ft-n">01</span><span class="t" id="ft-t"></span></div>
+  <div id="spot"></div>
+  <div id="callout" data-side="right"></div>
+
+  <div id="cursor"><svg width="32" height="32" viewBox="0 0 24 24"><path d="M4 3l7 17 2.5-7.2L21 10z" fill="#17152a" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" /></svg></div>
+
+  <div class="overlay" id="intro">
+    <div class="mark"></div>
+    <div class="kicker">Live demo · the real app</div>
+    <h1 class="title"><span>One assistant.</span><span>Every free AI.</span></h1>
+    <div class="sub">Sign up, add a key, ask, build an agent, stay in control</div>
+    <div class="foot">Recorded in the real app. The AI's replies come from a scripted local test model.</div>
+  </div>
+  <div class="overlay gone" id="outro"></div>
+
+<script>
+  const win = document.getElementById("window");
+  const cursor = document.getElementById("cursor");
+  let view = { tx: 0, ty: 0, s: 1 };
+  let pos = { x: 1500, y: 900 };
+  const apply = () => { win.style.transform = `translate(${view.tx}px, ${view.ty}px) scale(${view.s})`; };
+
+  window.stage = {
+    load(src) { document.getElementById("app").src = src; },
+    showApp() { document.getElementById("intro").classList.add("gone"); },
+    feature(n, title, sub, holdMs = 1500) {
+      const big = document.getElementById("featBig"), tag = document.getElementById("featTag"), scrim = document.getElementById("scrim");
+      tag.classList.remove("on");
+      document.getElementById("fb-n").textContent = n;
+      document.getElementById("fb-t").textContent = title;
+      document.getElementById("fb-s").textContent = sub;
+      big.classList.remove("away");
+      big.classList.add("on");
+      scrim.classList.add("on");
+      setTimeout(() => {
+        big.classList.add("away");
+        big.classList.remove("on");
+        scrim.classList.remove("on");
+        document.getElementById("ft-n").textContent = n;
+        document.getElementById("ft-t").textContent = title;
+        setTimeout(() => tag.classList.add("on"), 250);
+      }, holdMs);
+    },
+    hideFeature() { document.getElementById("featTag").classList.remove("on"); },
+    /** Spotlight a rectangle given in app (iframe) coordinates. */
+    spotlightApp(x, y, w, h, pad = 12) {
+      const a = this.point(x - pad, y - pad), b = this.point(x + w + pad, y + h + pad);
+      const spot = document.getElementById("spot");
+      Object.assign(spot.style, { left: a.x + "px", top: a.y + "px", width: b.x - a.x + "px", height: b.y - a.y + "px" });
+      spot.classList.add("on");
+      return { x: a.x, y: a.y, w: b.x - a.x, h: b.y - a.y };
+    },
+    clearSpotlight() { document.getElementById("spot").classList.remove("on"); },
+    callout(x, y, text, side = "right") {
+      const c = document.getElementById("callout");
+      c.textContent = text;
+      c.dataset.side = side;
+      c.classList.remove("on");
+      const r = { width: c.offsetWidth, height: c.offsetHeight };
+      const gap = 22;
+      const p = {
+        right: [x + gap, y - r.height / 2, "left"],
+        left: [x - gap - r.width, y - r.height / 2, "right"],
+        top: [x - r.width / 2, y - gap - r.height, "center"],
+        bottom: [x - r.width / 2, y + gap, "center"],
+      }[side];
+      c.style.left = Math.max(16, Math.min(1920 - r.width - 16, p[0])) + "px";
+      c.style.top = Math.max(16, Math.min(1080 - r.height - 16, p[1])) + "px";
+      c.style.setProperty("--ox", p[2]);
+      requestAnimationFrame(() => c.classList.add("on"));
+    },
+    hideCallout() { document.getElementById("callout").classList.remove("on"); },
+    /** Zoom so an app point sits at a spot on screen; the frame stays filled. */
+    zoom(x, y, s, at = [960, 540], ms = 1000) {
+      view = { s, tx: at[0] - x * s, ty: at[1] - y * s };
+      view.tx = Math.min(0, Math.max(view.tx, 1920 - 1920 * s));
+      view.ty = Math.min(0, Math.max(view.ty, 1080 - 1080 * s));
+      win.style.transitionDuration = `${ms}ms`;
+      apply();
+    },
+    unzoom(ms = 1000) { view = { tx: 0, ty: 0, s: 1 }; win.style.transitionDuration = `${ms}ms`; apply(); },
+    point(x, y) { return { x: view.tx + x * view.s, y: view.ty + y * view.s }; },
+    showCursor(on = true) { cursor.style.transition = "transform 0ms, opacity 400ms"; cursor.style.opacity = on ? 1 : 0; },
+    moveTo(x, y, ms = 900) {
+      pos = { x, y };
+      cursor.style.transition = `transform ${ms}ms cubic-bezier(.45,0,.2,1), opacity 400ms`;
+      cursor.style.transform = `translate(${x - 4}px, ${y - 3}px)`;
+    },
+    moveToApp(x, y, ms) { const p = this.point(x, y); this.moveTo(p.x, p.y, ms); return p; },
+    click() {
+      const r = document.createElement("span");
+      r.className = "ripple";
+      r.style.left = pos.x + "px"; r.style.top = pos.y + "px";
+      document.body.appendChild(r);
+      setTimeout(() => r.remove(), 900);
+      cursor.animate([{ scale: 1 }, { scale: .82 }, { scale: 1 }], { duration: 260 });
+    },
+    outro() {
+      const o = document.getElementById("outro");
+      o.innerHTML = `
+        <div class="mark"></div>
+        <div class="brand">Baton</div>
+        <div class="tagline"><b>Pass every task</b> to the right AI.</div>
+        <div class="cta">Start free →</div>
+        <div class="foot">Free AI keys · automatic routing · agents by chat · you stay in control</div>`;
+      o.classList.remove("gone");
+    },
+  };
+</script>
+</body>
+</html>

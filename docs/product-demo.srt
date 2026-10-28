@@ -1,0 +1,47 @@
+1
+00:00:00,200 --> 00:00:03,828
+This is Baton, recorded live: one assistant, on free AI keys.
+
+2
+00:00:03,880 --> 00:00:07,556
+Sign up with a username. It checks the name is free as you type.
+
+3
+00:00:13,860 --> 00:00:18,950
+Then add an AI. Free tiers are labelled, and Automatic picks the best one for each task.
+
+4
+00:00:21,560 --> 00:00:24,526
+Here we connect our own server. One click tests it.
+
+5
+00:00:30,360 --> 00:00:35,906
+Now just ask. The lead assistant brings in an Analyst and a Critic, and every step shows live.
+
+6
+00:00:40,460 --> 00:00:43,068
+The answer says which AI replied, and why.
+
+7
+00:00:43,320 --> 00:00:46,657
+Want something done every day? Describe an agent in chat.
+
+8
+00:00:55,420 --> 00:00:57,763
+Press Create, and it's ready, on a schedule.
+
+9
+00:01:01,090 --> 00:01:06,860
+The Agent Tree shows how each agent works: what starts it, its steps, its tools, and what you get.
+
+10
+00:01:12,430 --> 00:01:17,674
+And you stay in control. Actions that can't be undone are blocked, and Python asks first.
+
+11
+00:01:26,130 --> 00:01:28,536
+The run waits for your yes, then finishes.
+
+12
+00:01:33,970 --> 00:01:37,296
+Baton. Pass every task to the right AI.
