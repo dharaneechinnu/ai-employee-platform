@@ -30,6 +30,7 @@ from app.db.models.task import Task
 from app.db.repositories.identity_repo import PlatformAdminRepository
 from app.services.platform_service import (
     OAuthAppView,
+    PersonFacts,
     PlatformService,
 )
 from app.services.provider_catalog import ProviderCatalog
@@ -69,9 +70,68 @@ class PersonRow(BaseModel):
 
     id: uuid.UUID
     email: EmailStr
+    username: str
     full_name: str | None
     active: bool
     created_at: datetime
+    # "self" for a sign-up at /register, "invited" for an account staff made.
+    joined_via: str = "self"
+    # For an invited account: "waiting", "used" or "expired". None otherwise.
+    setup_link: str | None = None
+    setup_link_expires_at: datetime | None = None
+    # The later of their last sign-in and their last session renewal.
+    # None means they have never signed in.
+    last_active_at: datetime | None = None
+
+
+class SuspendRequest(BaseModel):
+    # Staff's own words, kept in the audit entry. Optional.
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class SetupLinkResponse(BaseModel):
+    # Shown once, like the first one. Only its hash is stored.
+    setup_token: str
+    expires_at: datetime
+
+
+class StaffMe(BaseModel):
+    """Who is signed in to the staff console, for the strip at the top."""
+
+    id: uuid.UUID
+    email: str
+
+
+class OverviewResponse(BaseModel):
+    """The headline numbers. Counts only, never content."""
+
+    people_total: int
+    people_active: int
+    people_suspended: int
+    joined_this_week_self: int
+    joined_this_week_invited: int
+    setup_links_waiting: int
+    setup_links_expiring_soon: int
+    ai_keys_total: int
+    ai_keys_free: int
+    ai_keys_paid: int
+    agents_built: int
+    runs_this_week: int
+
+
+class AppAccessRow(BaseModel):
+    """One kind of app, for everyone, with how many people use it."""
+
+    kind: str
+    display_name: str
+    platform_ready: bool
+    allowed: bool
+    people_connected: int
+    people_with_own_settings: int
+
+
+class SetAppAccessRequest(BaseModel):
+    allowed: bool
 
 
 class AuditEntry(BaseModel):
@@ -86,6 +146,9 @@ class AuditEntry(BaseModel):
     action: str
     target_type: str | None
     target_id: str | None
+    # Who the target is, in words: a person's name (or email) for an
+    # account, so the log reads "suspended Meera Iyer" and not a UUID.
+    target_label: str | None = None
     detail: str | None
     created_at: datetime
 
@@ -102,6 +165,9 @@ class OAuthAppRow(BaseModel):
     redirect_uri: str
     docs_url: str
     from_environment: bool
+    # When it was last saved here, and by which staff member.
+    updated_at: datetime | None = None
+    updated_by_email: str | None = None
 
 
 class ConnectionAccessRow(BaseModel):
@@ -111,6 +177,8 @@ class ConnectionAccessRow(BaseModel):
     allowed: bool
     overridden: bool
     note: str | None
+    # What everyone gets, for "Same as everyone".
+    everyone_allowed: bool = True
 
 
 class SetConnectionAccessRequest(BaseModel):
@@ -144,16 +212,23 @@ class ProviderStatusRow(BaseModel):
     last_tested_at: datetime | None
 
 
-class PersonDetail(BaseModel):
+class AppConnectedRow(BaseModel):
+    """Whether a person has connected one kind of app. Yes or no only."""
+
+    kind: str
+    display_name: str
+    connected: bool
+
+
+class PersonDetail(PersonRow):
     """Counts and health. Never content."""
 
-    id: uuid.UUID
-    email: EmailStr
-    full_name: str | None
-    active: bool
-    created_at: datetime
     task_count: int
+    agent_count: int = 0
+    scheduled_agent_count: int = 0
+    runs_this_week: int = 0
     providers: list[ProviderStatusRow]
+    apps: list[AppConnectedRow] = []
 
 
 # ----------------------------------------------------------------- auth dep
@@ -220,38 +295,91 @@ async def create_person(
     )
 
 
-def _row(user: User) -> PersonRow:
+def _row(user: User, facts: PersonFacts | None = None) -> PersonRow:
+    facts = facts or PersonFacts()
     return PersonRow(
         id=user.id,
         email=user.email,
+        username=user.username,
         full_name=user.full_name,
         active=user.is_active,
         created_at=user.created_at,
+        joined_via=facts.joined_via,
+        setup_link=facts.setup_link,
+        setup_link_expires_at=facts.setup_link_expires_at,
+        last_active_at=facts.last_active_at,
     )
+
+
+async def _one_row(service: PlatformService, user: User) -> PersonRow:
+    return _row(user, (await service.people_facts([user.id])).get(user.id))
+
+
+@router.get("/me", response_model=StaffMe, summary="Who is signed in")
+async def staff_me(admin: AdminDep) -> StaffMe:
+    return StaffMe(id=admin.id, email=admin.email)
+
+
+@router.get("/overview", response_model=OverviewResponse, summary="The headline numbers")
+async def overview(admin: AdminDep, session: SessionDep) -> OverviewResponse:
+    """How many, never what: people, sign-ups, keys, agents and runs."""
+    return OverviewResponse(**asdict(await PlatformService(session).overview()))
 
 
 @router.get("/people", response_model=list[PersonRow], summary="List accounts")
 async def list_people(admin: AdminDep, session: SessionDep) -> list[PersonRow]:
-    return [_row(user) for user in await PlatformService(session).list_people()]
+    service = PlatformService(session)
+    facts = await service.people_facts()
+    return [_row(user, facts.get(user.id)) for user in await service.list_people()]
 
 
 @router.post("/people/{owner_id}/suspend", response_model=PersonRow, summary="Suspend")
-async def suspend(owner_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> PersonRow:
+async def suspend(
+    owner_id: uuid.UUID,
+    admin: AdminDep,
+    session: SessionDep,
+    body: SuspendRequest | None = None,
+) -> PersonRow:
     """They cannot sign in. Nothing of theirs is read or deleted."""
-    user = await PlatformService(session).set_active(
-        admin_id=admin.id, owner_id=owner_id, active=False
+    service = PlatformService(session)
+    user = await service.set_active(
+        admin_id=admin.id,
+        owner_id=owner_id,
+        active=False,
+        reason=body.reason if body else None,
     )
     await session.commit()
-    return _row(user)
+    return await _one_row(service, user)
 
 
 @router.post("/people/{owner_id}/restore", response_model=PersonRow, summary="Restore")
 async def restore(owner_id: uuid.UUID, admin: AdminDep, session: SessionDep) -> PersonRow:
-    user = await PlatformService(session).set_active(
-        admin_id=admin.id, owner_id=owner_id, active=True
-    )
+    service = PlatformService(session)
+    user = await service.set_active(admin_id=admin.id, owner_id=owner_id, active=True)
     await session.commit()
-    return _row(user)
+    return await _one_row(service, user)
+
+
+@router.post(
+    "/people/{owner_id}/setup-link",
+    response_model=SetupLinkResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="A new setup link for an invited account",
+)
+async def reissue_setup_link(
+    owner_id: uuid.UUID, admin: AdminDep, session: SessionDep
+) -> SetupLinkResponse:
+    """Ends the old link and makes a new one, shown once.
+
+    Refused once the person has set a password, so staff can never use
+    a link to get into a live account.
+    """
+    service = PlatformService(session)
+    raw_token = await service.reissue_setup_link(admin_id=admin.id, owner_id=owner_id)
+    await session.commit()
+    facts = (await service.people_facts([owner_id]))[owner_id]
+    assert facts.setup_link_expires_at is not None
+    return SetupLinkResponse(setup_token=raw_token, expires_at=facts.setup_link_expires_at)
 
 
 @router.get("/audit", response_model=list[AuditEntry], summary="The diary")
@@ -259,19 +387,47 @@ async def audit_log(
     admin: AdminDep,
     session: SessionDep,
     limit: Annotated[int, Query(le=500)] = 100,
+    target_id: Annotated[str | None, Query(max_length=100)] = None,
+    before: datetime | None = None,
 ) -> list[AuditEntry]:
     """Every platform-admin action, newest first.
+
+    `target_id` narrows it to one account (or one app); `before` pages
+    back through older entries.
 
     Append-only at the database level: the application role has no
     UPDATE or DELETE on this table, so the log survives a compromise
     of the application itself.
     """
-    rows = await session.execute(
+    query = (
         select(PlatformAdminAudit, PlatformAdmin.email)
         .outerjoin(PlatformAdmin, PlatformAdmin.id == PlatformAdminAudit.admin_id)
         .order_by(PlatformAdminAudit.created_at.desc())
         .limit(limit)
     )
+    if target_id is not None:
+        query = query.where(PlatformAdminAudit.target_id == target_id)
+    if before is not None:
+        query = query.where(PlatformAdminAudit.created_at < before)
+    rows = (await session.execute(query)).all()
+
+    # Names for the accounts these entries are about. Name and email
+    # are what staff already see in the people list; nothing more.
+    people_ids = []
+    for entry, _ in rows:
+        if entry.target_type in ("user", "organization") and entry.target_id:
+            try:
+                people_ids.append(uuid.UUID(entry.target_id))
+            except ValueError:
+                continue
+    names = {
+        str(uid): full_name or email
+        for uid, full_name, email in (
+            await session.execute(
+                select(User.id, User.full_name, User.email).where(User.id.in_(people_ids))
+            )
+        ).all()
+    }
     return [
         AuditEntry(
             id=entry.id,
@@ -279,10 +435,11 @@ async def audit_log(
             action=entry.action,
             target_type=entry.target_type,
             target_id=entry.target_id,
+            target_label=names.get(entry.target_id or ""),
             detail=entry.detail,
             created_at=entry.created_at,
         )
-        for entry, email in rows.all()
+        for entry, email in rows
     ]
 
 
@@ -311,13 +468,21 @@ async def person_detail(owner_id: uuid.UUID, admin: AdminDep, session: SessionDe
         await session.scalars(select(ProviderConfig).where(ProviderConfig.owner_id == owner_id))
     ).all()
 
+    service = PlatformService(session)
+    counts = await service.person_counts(owner_id)
+    from app.services.connection_service import CATALOGUE
+
+    names = {kind.value: str(meta["display_name"]) for kind, meta in CATALOGUE.items()}
     return PersonDetail(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        active=user.is_active,
-        created_at=user.created_at,
+        **(await _one_row(service, user)).model_dump(),
         task_count=tasks or 0,
+        agent_count=counts.agent_count,
+        scheduled_agent_count=counts.scheduled_agent_count,
+        runs_this_week=counts.runs_this_week,
+        apps=[
+            AppConnectedRow(kind=kind, display_name=names[kind], connected=connected)
+            for kind, connected in (counts.apps or {}).items()
+        ],
         providers=[
             ProviderStatusRow(
                 provider_key=c.provider_key,
@@ -456,6 +621,31 @@ async def set_person_connection_access(
     return [ConnectionAccessRow(**asdict(row)) for row in await service.connection_access(owner_id)]
 
 
+@router.get(
+    "/app-access",
+    response_model=list[AppAccessRow],
+    summary="Which kinds of app everyone may connect",
+)
+async def app_access(admin: AdminDep, session: SessionDep) -> list[AppAccessRow]:
+    """One row per kind of app, with how many people have connected it.
+    A count, never which account or what is in it."""
+    return [AppAccessRow(**asdict(r)) for r in await PlatformService(session).app_access()]
+
+
+@router.put(
+    "/app-access/{kind}",
+    response_model=list[AppAccessRow],
+    summary="Open or close one kind of app for everyone",
+)
+async def set_app_access(
+    kind: str, body: SetAppAccessRequest, admin: AdminDep, session: SessionDep
+) -> list[AppAccessRow]:
+    service = PlatformService(session)
+    await service.set_app_access(admin_id=admin.id, kind=kind, allowed=body.allowed)
+    await session.commit()
+    return [AppAccessRow(**asdict(r)) for r in await service.app_access()]
+
+
 # ------------------------------------------- which parts of an app, read or edit
 
 
@@ -558,6 +748,8 @@ async def set_person_service(
 class ProviderRow(BaseModel):
     key: str
     display_name: str
+    # "llm" for an AI to run work on, "search" for a web search service.
+    kind: str = "llm"
     base_url: str | None
     api_format: str
     auth_header: str | None
@@ -565,6 +757,13 @@ class ProviderRow(BaseModel):
     docs_url: str | None
     trains_on_data: bool
     enabled: bool
+    free_tier: bool = False
+    is_local: bool = False
+    # How many people have saved a key for it. A count, never the keys.
+    people_connected: int = 0
+    # When it was last paused, and by whom, while it is paused.
+    paused_at: datetime | None = None
+    paused_by_email: str | None = None
 
 
 class SaveProviderRequest(BaseModel):
@@ -583,10 +782,15 @@ class SetProviderEnabledRequest(BaseModel):
     enabled: bool
 
 
-def _provider_row(p: SupportedProvider) -> ProviderRow:
+def _provider_row(
+    p: SupportedProvider,
+    people: int = 0,
+    paused: tuple[datetime, str | None] | None = None,
+) -> ProviderRow:
     return ProviderRow(
         key=p.key,
         display_name=p.display_name,
+        kind=p.kind.value,
         base_url=p.base_url,
         api_format=p.api_format,
         auth_header=p.auth_header,
@@ -594,12 +798,41 @@ def _provider_row(p: SupportedProvider) -> ProviderRow:
         docs_url=p.docs_url,
         trains_on_data=p.trains_on_data,
         enabled=p.enabled,
+        free_tier=p.free_tier,
+        is_local=p.is_local,
+        people_connected=people,
+        paused_at=paused[0] if paused and not p.enabled else None,
+        paused_by_email=paused[1] if paused and not p.enabled else None,
     )
+
+
+async def _last_paused(session: SessionDep) -> dict[str, tuple[datetime, str | None]]:
+    """When each provider was last paused, and by whom, from the audit log."""
+    rows = await session.execute(
+        select(PlatformAdminAudit.target_id, PlatformAdminAudit.created_at, PlatformAdmin.email)
+        .outerjoin(PlatformAdmin, PlatformAdmin.id == PlatformAdminAudit.admin_id)
+        .where(
+            PlatformAdminAudit.action == "provider_paused",
+            PlatformAdminAudit.target_type == "provider",
+        )
+        .order_by(PlatformAdminAudit.created_at)
+    )
+    return {key: (at, email) for key, at, email in rows.all() if key}
+
+
+async def _full_provider_row(session: SessionDep, row: SupportedProvider) -> ProviderRow:
+    people = await PlatformService(session).people_per_provider()
+    return _provider_row(row, people.get(row.key, 0), (await _last_paused(session)).get(row.key))
 
 
 @router.get("/providers", response_model=list[ProviderRow], summary="The AI provider catalog")
 async def list_providers(admin: AdminDep, session: SessionDep) -> list[ProviderRow]:
-    return [_provider_row(p) for p in await ProviderCatalog(session).all()]
+    people = await PlatformService(session).people_per_provider()
+    paused = await _last_paused(session)
+    return [
+        _provider_row(p, people.get(p.key, 0), paused.get(p.key))
+        for p in await ProviderCatalog(session).all()
+    ]
 
 
 @router.put(
@@ -612,7 +845,7 @@ async def save_provider(
 ) -> ProviderRow:
     row = await ProviderCatalog(session).save(admin_id=admin.id, key=key, **body.model_dump())
     await session.commit()
-    return _provider_row(row)
+    return await _full_provider_row(session, row)
 
 
 @router.patch("/providers/{key}", response_model=ProviderRow, summary="Pause or resume a provider")
@@ -623,4 +856,4 @@ async def set_provider_enabled(
         admin_id=admin.id, key=key, enabled=body.enabled
     )
     await session.commit()
-    return _provider_row(row)
+    return await _full_provider_row(session, row)

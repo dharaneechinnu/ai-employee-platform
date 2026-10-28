@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import ClassVar
 
-from sqlalchemy import select
+from sqlalchemy import case, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.services import EDIT, LEVELS, SERVICES
@@ -24,9 +24,19 @@ from app.core.errors import ConflictError, InvalidCredentialsError, NotFoundErro
 from app.core.observability import get_logger
 from app.core.security import create_access_token, hash_password, hash_token, verify_password
 from app.core.usernames import username_from_email
-from app.db.models.identity import PlatformAdmin, SetupToken, User
-from app.db.models.policy import ConnectionKind
-from app.db.models.provider import OrgConnectionAccess, PlatformOAuthApp
+from app.db.models.agent import Agent
+from app.db.models.identity import PlatformAdmin, RefreshToken, SetupToken, User
+from app.db.models.policy import Connection, ConnectionKind
+from app.db.models.provider import (
+    OrgConnectionAccess,
+    OrgServiceAccess,
+    PlatformConnectionAccess,
+    PlatformOAuthApp,
+    ProviderConfig,
+    ProviderKind,
+    SupportedProvider,
+)
+from app.db.models.task import Run
 from app.db.repositories.identity_repo import PlatformAdminRepository, UserRepository
 from app.services.oauth_providers import get_oauth_provider, resolve_client
 from app.services.service_access_service import ServiceAccessService
@@ -55,6 +65,9 @@ class OAuthAppView:
     redirect_uri: str
     docs_url: str
     from_environment: bool
+    # When it was last saved here, and by which staff member.
+    updated_at: datetime | None = None
+    updated_by_email: str | None = None
 
 
 @dataclass(slots=True)
@@ -70,6 +83,78 @@ class ConnectionAccessView:
     # False when no ruling exists and the person simply inherits.
     overridden: bool
     note: str | None
+    # What everyone gets, so "Same as everyone" can say what that is.
+    everyone_allowed: bool = True
+
+
+# "This week" everywhere on the staff console means the last seven days,
+# not since Monday, so the number does not fall to zero every week.
+WEEK = timedelta(days=7)
+
+
+@dataclass(slots=True)
+class PersonFacts:
+    """How someone joined and when they were last around. No content.
+
+    `joined_via` is "invited" when a Platform Admin made the account
+    (it has a setup link), otherwise "self". `setup_link` is "waiting",
+    "used" or "expired" for an invited account, and None for a self
+    sign-up.
+
+    `last_active_at` is the later of their last sign-in and the last
+    time their session was renewed. The app renews a session every few
+    minutes while it is open, so this tracks "was using Baton" without
+    reading anything they did. A scheduled agent running on its own
+    does not count: that is the agent being active, not the person.
+    """
+
+    joined_via: str = "self"
+    setup_link: str | None = None
+    setup_link_expires_at: datetime | None = None
+    last_active_at: datetime | None = None
+
+
+@dataclass(slots=True)
+class PersonCounts:
+    """How much someone has built and run. Numbers and yes or no only."""
+
+    agent_count: int = 0
+    scheduled_agent_count: int = 0
+    runs_this_week: int = 0
+    # Connection kind -> whether they have at least one connected.
+    apps: dict[str, bool] | None = None
+
+
+@dataclass(slots=True)
+class Overview:
+    """The headline numbers. Counts only."""
+
+    people_total: int
+    people_active: int
+    people_suspended: int
+    joined_this_week_self: int
+    joined_this_week_invited: int
+    setup_links_waiting: int
+    # Waiting links that stop working within the next 24 hours.
+    setup_links_expiring_soon: int
+    ai_keys_total: int
+    ai_keys_free: int
+    ai_keys_paid: int
+    agents_built: int
+    runs_this_week: int
+
+
+@dataclass(slots=True)
+class AppAccessView:
+    """One kind of app, as it stands for everyone."""
+
+    kind: str
+    display_name: str
+    platform_ready: bool
+    allowed: bool
+    people_connected: int
+    # People with their own ruling on this app or on any part of it.
+    people_with_own_settings: int
 
 
 class PlatformService:
@@ -180,11 +265,20 @@ class PlatformService:
         rows = await self.session.scalars(select(User).order_by(User.created_at))
         return list(rows.all())
 
-    async def set_active(self, *, admin_id: uuid.UUID, owner_id: uuid.UUID, active: bool) -> User:
+    async def set_active(
+        self,
+        *,
+        admin_id: uuid.UUID,
+        owner_id: uuid.UUID,
+        active: bool,
+        reason: str | None = None,
+    ) -> User:
         """Suspend or restore an account.
 
         Their work is untouched: a suspended person cannot sign in,
-        and nothing of theirs is read or deleted here.
+        and nothing of theirs is read or deleted here. The optional
+        reason is staff's own words and goes into the audit entry, so
+        the next person to look knows why.
         """
         user = await self._person(owner_id)
         user.is_active = active
@@ -193,8 +287,189 @@ class PlatformService:
             action="account_restored" if active else "account_suspended",
             target_type="user",
             target_id=str(owner_id),
+            detail=(reason or "").strip()[:500] or None,
         )
         return user
+
+    async def reissue_setup_link(self, *, admin_id: uuid.UUID, owner_id: uuid.UUID) -> str:
+        """A fresh setup link for an invited account nobody has set up yet.
+
+        Only the hash of a link is stored, so the old one cannot be shown
+        again; this makes a new one and ends the old. It is refused once
+        the account has a password of its own: a link sets the password,
+        so handing staff one for a live account would let them sign in
+        as that person.
+        """
+        await self._person(owner_id)
+        links = (
+            await self.session.scalars(select(SetupToken).where(SetupToken.user_id == owner_id))
+        ).all()
+        if not links:
+            raise ConflictError("This person signed up themselves, so there is no setup link.")
+        if any(link.used_at is not None for link in links):
+            raise ConflictError("This person has already set their password.")
+
+        now = datetime.now(UTC)
+        for link in links:
+            if link.expires_at > now:
+                link.expires_at = now
+
+        raw_token = secrets.token_urlsafe(32)
+        self.session.add(
+            SetupToken(
+                user_id=owner_id,
+                token_hash=hash_token(raw_token),
+                expires_at=now + timedelta(hours=self.settings.setup_link_expiry_hours),
+            )
+        )
+        self.admins.record_audit(
+            admin_id=admin_id,
+            action="setup_link_reissued",
+            target_type="user",
+            target_id=str(owner_id),
+        )
+        return raw_token
+
+    # --- what staff may know about people: facts and counts ----------
+
+    async def people_facts(
+        self, owner_ids: list[uuid.UUID] | None = None
+    ) -> dict[uuid.UUID, PersonFacts]:
+        """How each person joined and when they were last active."""
+        links = select(
+            SetupToken.user_id,
+            func.bool_or(SetupToken.used_at.is_not(None)),
+            func.max(SetupToken.expires_at),
+        ).group_by(SetupToken.user_id)
+        sessions = select(RefreshToken.user_id, func.max(RefreshToken.created_at)).group_by(
+            RefreshToken.user_id
+        )
+        users = select(User.id, User.last_login_at)
+        if owner_ids is not None:
+            links = links.where(SetupToken.user_id.in_(owner_ids))
+            sessions = sessions.where(RefreshToken.user_id.in_(owner_ids))
+            users = users.where(User.id.in_(owner_ids))
+
+        now = datetime.now(UTC)
+        out: dict[uuid.UUID, PersonFacts] = {}
+        renewed = dict((await self.session.execute(sessions)).all())
+        for uid, last_login in (await self.session.execute(users)).all():
+            seen = [t for t in (last_login, renewed.get(uid)) if t is not None]
+            out[uid] = PersonFacts(last_active_at=max(seen) if seen else None)
+        for uid, used, expires in (await self.session.execute(links)).all():
+            facts = out.setdefault(uid, PersonFacts())
+            facts.joined_via = "invited"
+            if used:
+                facts.setup_link = "used"
+            else:
+                facts.setup_link = "waiting" if expires > now else "expired"
+                facts.setup_link_expires_at = expires
+        return out
+
+    async def person_counts(self, owner_id: uuid.UUID) -> PersonCounts:
+        """Agents built, runs this week, and which apps are connected."""
+        agents, scheduled = (
+            await self.session.execute(
+                select(
+                    func.count(),
+                    func.count().filter(Agent.schedule_enabled.is_(True)),
+                ).where(Agent.owner_id == owner_id, Agent.archived.is_(False))
+            )
+        ).one()
+        runs = await self.session.scalar(
+            select(func.count())
+            .select_from(Run)
+            .where(Run.owner_id == owner_id, Run.created_at >= datetime.now(UTC) - WEEK)
+        )
+        connected = set(
+            (
+                await self.session.scalars(
+                    select(Connection.kind).where(Connection.owner_id == owner_id).distinct()
+                )
+            ).all()
+        )
+        from app.services.connection_service import CATALOGUE
+
+        return PersonCounts(
+            agent_count=agents or 0,
+            scheduled_agent_count=scheduled or 0,
+            runs_this_week=runs or 0,
+            apps={kind.value: kind in connected for kind in CATALOGUE},
+        )
+
+    async def overview(self) -> Overview:
+        """The numbers on the landing page. Counts only, never content."""
+        now = datetime.now(UTC)
+        total, active = (
+            await self.session.execute(
+                select(func.count(), func.count().filter(User.is_active.is_(True)))
+            )
+        ).one()
+
+        facts = await self.people_facts()
+        recent = set(
+            (await self.session.scalars(select(User.id).where(User.created_at >= now - WEEK))).all()
+        )
+        invited_recent = sum(
+            1 for uid in recent if facts.get(uid, PersonFacts()).joined_via == "invited"
+        )
+        waiting = [f for f in facts.values() if f.setup_link == "waiting"]
+
+        # A key's plan is what the person said ("free" or "paid"). When
+        # they said nothing, a provider with a free tier or one running
+        # on their own machine counts as free.
+        free_case = case(
+            (ProviderConfig.plan == "free", 1),
+            (ProviderConfig.plan == "paid", 0),
+            (SupportedProvider.free_tier.is_(True) | SupportedProvider.is_local.is_(True), 1),
+            else_=0,
+        )
+        keys, free = (
+            await self.session.execute(
+                select(func.count(), func.coalesce(func.sum(free_case), 0))
+                .select_from(ProviderConfig)
+                .join(SupportedProvider, SupportedProvider.key == ProviderConfig.provider_key)
+                .where(
+                    ProviderConfig.owner_id.is_not(None),
+                    SupportedProvider.kind == ProviderKind.LLM,
+                )
+            )
+        ).one()
+
+        agents = await self.session.scalar(
+            select(func.count()).select_from(Agent).where(Agent.archived.is_(False))
+        )
+        runs = await self.session.scalar(
+            select(func.count()).select_from(Run).where(Run.created_at >= now - WEEK)
+        )
+        return Overview(
+            people_total=total or 0,
+            people_active=active or 0,
+            people_suspended=(total or 0) - (active or 0),
+            joined_this_week_self=len(recent) - invited_recent,
+            joined_this_week_invited=invited_recent,
+            setup_links_waiting=len(waiting),
+            setup_links_expiring_soon=sum(
+                1
+                for f in waiting
+                if f.setup_link_expires_at is not None
+                and f.setup_link_expires_at <= now + timedelta(hours=24)
+            ),
+            ai_keys_total=keys or 0,
+            ai_keys_free=int(free or 0),
+            ai_keys_paid=(keys or 0) - int(free or 0),
+            agents_built=agents or 0,
+            runs_this_week=runs or 0,
+        )
+
+    async def people_per_provider(self) -> dict[str, int]:
+        """How many people have connected each AI provider. A count, no keys."""
+        rows = await self.session.execute(
+            select(ProviderConfig.provider_key, func.count(distinct(ProviderConfig.owner_id)))
+            .where(ProviderConfig.owner_id.is_not(None))
+            .group_by(ProviderConfig.provider_key)
+        )
+        return dict(rows.all())
 
     async def _person(self, owner_id: uuid.UUID) -> User:
         user = await self.users.get(owner_id)
@@ -220,6 +495,9 @@ class PlatformService:
             app.provider: app
             for app in (await self.session.scalars(select(PlatformOAuthApp))).all()
         }
+        staff = dict(
+            (await self.session.execute(select(PlatformAdmin.id, PlatformAdmin.email))).all()
+        )
 
         out: list[OAuthAppView] = []
         for kind in (ConnectionKind.GOOGLE, ConnectionKind.MICROSOFT):
@@ -241,6 +519,8 @@ class PlatformService:
                     redirect_uri=provider.redirect_uri(),
                     docs_url=self.OAUTH_DOCS[kind.value],
                     from_environment=from_env,
+                    updated_at=app.updated_at if app else None,
+                    updated_by_email=staff.get(app.updated_by) if app and app.updated_by else None,
                 )
             )
         return out
@@ -348,6 +628,7 @@ class PlatformService:
             ).all()
         }
 
+        everyone = await self._everyone_apps()
         out: list[ConnectionAccessView] = []
         for kind, meta in CATALOGUE.items():
             provider = get_oauth_provider(kind.value)
@@ -357,17 +638,111 @@ class PlatformService:
                 else True
             )
             ruling = rows.get(kind)
+            default = everyone.get(kind, True)
             out.append(
                 ConnectionAccessView(
                     kind=kind.value,
                     display_name=str(meta["display_name"]),
                     platform_ready=ready,
-                    allowed=ruling.allowed if ruling else True,
+                    allowed=ruling.allowed if ruling else default,
                     overridden=ruling is not None,
                     note=ruling.note if ruling else None,
+                    everyone_allowed=default,
                 )
             )
         return out
+
+    async def _everyone_apps(self) -> dict[ConnectionKind, bool]:
+        rows = await self.session.scalars(select(PlatformConnectionAccess))
+        return {row.kind: row.allowed for row in rows.all()}
+
+    # --- which kinds of app everyone may connect ------------------------
+
+    async def app_access(self) -> list[AppAccessView]:
+        """Every kind of app, whether it is open to everyone, and how many
+        people use it. Counts only."""
+        from app.agent.services import SERVICES
+        from app.services.connection_service import CATALOGUE
+
+        everyone = await self._everyone_apps()
+        connected = dict(
+            (
+                await self.session.execute(
+                    select(Connection.kind, func.count(distinct(Connection.owner_id))).group_by(
+                        Connection.kind
+                    )
+                )
+            ).all()
+        )
+        own_app = {
+            kind: set(owners)
+            for kind, owners in (
+                await self.session.execute(
+                    select(
+                        OrgConnectionAccess.kind, func.array_agg(OrgConnectionAccess.owner_id)
+                    ).group_by(OrgConnectionAccess.kind)
+                )
+            ).all()
+        }
+        for service, owner in (
+            await self.session.execute(
+                select(OrgServiceAccess.service, OrgServiceAccess.owner_id).distinct()
+            )
+        ).all():
+            svc = SERVICES.get(service)
+            if svc is not None:
+                own_app.setdefault(ConnectionKind(svc.app), set()).add(owner)
+
+        out: list[AppAccessView] = []
+        for kind, meta in CATALOGUE.items():
+            provider = get_oauth_provider(kind.value)
+            out.append(
+                AppAccessView(
+                    kind=kind.value,
+                    display_name=str(meta["display_name"]),
+                    platform_ready=(
+                        await resolve_client(self.session, provider) is not None
+                        if provider is not None
+                        else True
+                    ),
+                    allowed=everyone.get(kind, True),
+                    people_connected=connected.get(kind, 0),
+                    people_with_own_settings=len(own_app.get(kind, set())),
+                )
+            )
+        return out
+
+    async def set_app_access(self, *, admin_id: uuid.UUID, kind: str, allowed: bool) -> None:
+        """Open or close one kind of app for everyone.
+
+        People with their own ruling keep it; everyone else follows
+        this. Nobody's existing connection is deleted: a closed app
+        simply cannot be connected or used until it is opened again.
+        """
+        from app.services.connection_service import CATALOGUE
+
+        try:
+            kind_enum = ConnectionKind(kind)
+        except ValueError as exc:
+            raise NotFoundError(f"'{kind}' is not a connection type.") from exc
+        if kind_enum not in CATALOGUE:
+            raise NotFoundError(f"'{kind}' is not a connection type.")
+
+        row = await self.session.scalar(
+            select(PlatformConnectionAccess).where(PlatformConnectionAccess.kind == kind_enum)
+        )
+        if row is None:
+            self.session.add(
+                PlatformConnectionAccess(kind=kind_enum, allowed=allowed, updated_by=admin_id)
+            )
+        else:
+            row.allowed, row.updated_by = allowed, admin_id
+        self.admins.record_audit(
+            admin_id=admin_id,
+            action="app_allowed" if allowed else "app_blocked",
+            target_type="platform",
+            detail=kind,
+        )
 
     async def set_connection_access(
         self,
