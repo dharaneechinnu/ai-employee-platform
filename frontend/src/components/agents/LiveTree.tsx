@@ -6,6 +6,7 @@ import { toolLabel } from "../../lib/labels";
 import { Icon } from "../icons";
 import { Button, Spinner, relativeTime, useToast } from "../ui";
 import AgentAvatar from "./AgentAvatar";
+import AgentTreeGraph from "./AgentTreeGraph";
 import RunPanel, { type PanelNode } from "./RunPanel";
 
 const W = 220;
@@ -166,7 +167,10 @@ export default function LiveTree({
   const panelNode: PanelNode | null = panelSlot;
   const panelLive: NodeLive | null = panelSlot ? (nodes[panelSlot.id] ?? null) : null;
 
+  const showGraph = panelSlot && (panelSlot.kind === "agent" || panelSlot.kind === "lead" || panelSlot.kind === "helper");
+
   return (
+    <div className="flex flex-col gap-4">
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted">
@@ -264,6 +268,12 @@ export default function LiveTree({
         onStop={(id) => void stop(id)}
         onApprove={(id) => void approve(id)}
       />
+    </div>
+    {showGraph ? (
+      <AgentTreeGraph node={panelSlot} live={panelLive} agents={agents} />
+    ) : (
+      <p className="text-[14px] text-dim">Click any agent or helper to see its tree: what starts it, what it does and what you get.</p>
+    )}
     </div>
   );
 }

@@ -1,16 +1,14 @@
-import type { Agent } from "../../lib/api";
-import { toolLabel } from "../../lib/labels";
-import { Icon, type IconName } from "../icons";
-import AgentAvatar from "./AgentAvatar";
+import type { IconName } from "../components/icons";
+import type { Agent } from "./api";
 
 /**
- * How an agent works, drawn as a small graph: what comes in, each step
- * in order with the tools it uses, and what it hands back. The built-in
- * helpers have a fixed way of working (their tools are set in the
- * backend's `team.py`); an agent you made is drawn from its own tools.
+ * How each agent works: what starts it, the stages it goes through with
+ * the tools each uses, and what it gives back. The built-in helpers
+ * follow their roles in the backend's `team.py`; an agent you made is
+ * worked out from its own tools. The agent tree draws these as a graph.
  */
 
-interface FlowStep {
+export interface FlowStep {
   title: string;
   detail: string;
   icon: IconName;
@@ -21,7 +19,7 @@ interface FlowStep {
   helpers?: string[];
 }
 
-interface Flow {
+export interface Flow {
   gets: string;
   steps: FlowStep[];
   gives: string;
@@ -196,7 +194,7 @@ const CHANGES = /create|append|update|draft|organize|comment|propose|remember|sa
 const WORKS = /^(calculator|current_time|text_tools|report_write)$/;
 
 /** An agent you made: its own tools, put in the order a run uses them. */
-function agentFlow(agent: Agent): Flow {
+export function agentFlow(agent: Agent): Flow {
   const tools = agent.tools ?? [];
   const recall: string[] = tools.filter((t) => t === "recall");
   const acts = tools.filter((t) => ACTS.test(t));
@@ -204,13 +202,13 @@ function agentFlow(agent: Agent): Flow {
   const works = tools.filter((t) => WORKS.test(t));
   const reads = tools.filter((t) => !recall.includes(t) && !acts.includes(t) && !changes.includes(t) && !works.includes(t));
   const steps: FlowStep[] = [];
-  if (recall.length) steps.push({ title: "Remembers your preferences", detail: "Checks what you told it before.", icon: "memory", tools: recall });
+  if (recall.length) steps.push({ title: "Remembers you", detail: "Checks what you told it before.", icon: "memory", tools: recall });
   if (reads.length) steps.push({ title: "Looks things up", detail: "Reads what the job needs, in your apps and on the web.", icon: "search", tools: reads });
   if (works.length) steps.push({ title: "Works it out", detail: "Exact sums, dates and text checks.", icon: "chart", tools: works });
-  if (changes.length) steps.push({ title: "Makes the changes", detail: "Drafts, rows, events and labels: things you can undo.", icon: "pen", tools: changes });
+  if (changes.length) steps.push({ title: "Makes changes", detail: "Drafts, rows, events and labels: things you can undo.", icon: "pen", tools: changes });
   if (acts.length)
     steps.push({ title: "Sends or posts", detail: "Can't be undone, so it follows your Permissions: blocked, ask first, or allowed.", icon: "approvals", tools: acts, asks: true });
-  if (!steps.length) steps.push({ title: "Works with every tool you allow", detail: "No list was set, so your Permissions decide.", icon: "zap" });
+  if (!steps.length) steps.push({ title: "Uses what you allow", detail: "No list was set, so your Permissions decide.", icon: "zap" });
   return {
     gets: agent.schedule_enabled && agent.schedule_text ? `On schedule: ${agent.schedule_text}` : "When you ask, or @mention it in Chat",
     steps,
@@ -218,75 +216,9 @@ function agentFlow(agent: Agent): Flow {
   };
 }
 
-export function hasFlow(kind: string, key: string): boolean {
-  return kind === "agent" || kind === "lead" || key in FLOWS;
-}
-
-export default function AgentFlow({
-  kind,
-  flowKey,
-  agent,
-  name,
-}: {
-  kind: string;
-  flowKey: string;
-  agent: Agent | null;
-  name: string;
-}) {
-  const flow = kind === "agent" && agent ? agentFlow(agent) : FLOWS[kind === "lead" ? "lead" : flowKey];
-  if (!flow) return null;
-  return (
-    <section className="flex flex-col gap-2" aria-label={`How ${name} works`}>
-      <div className="text-[12.5px] font-semibold text-muted">How {name} works</div>
-      <ol className="aflow stagger">
-        <li className="aflow-end is-in">
-          <span className="aflow-dot" aria-hidden="true">
-            <Icon name="arrow" size={13} strokeWidth={2.2} />
-          </span>
-          <span className="min-w-0">
-            <small>Gets</small>
-            <b>{flow.gets}</b>
-          </span>
-        </li>
-        {flow.steps.map((step, i) => (
-          <li key={step.title} className={`aflow-step ${step.asks ? "is-asks" : ""}`}>
-            <span className="aflow-dot" aria-hidden="true">
-              <Icon name={step.icon} size={14} strokeWidth={2} />
-              <i>{i + 1}</i>
-            </span>
-            <span className="min-w-0">
-              <b>{step.title}</b>
-              <span className="aflow-detail">{step.detail}</span>
-              {step.tools && step.tools.length > 0 && (
-                <span className="aflow-tools">
-                  {step.tools.map((t) => (
-                    <span key={t}>{toolLabel(t)}</span>
-                  ))}
-                </span>
-              )}
-              {step.helpers && (
-                <span className="aflow-helpers">
-                  {step.helpers.map((h) => (
-                    <span key={h} title={h}>
-                      <AgentAvatar role={h} size={16} />
-                    </span>
-                  ))}
-                </span>
-              )}
-            </span>
-          </li>
-        ))}
-        <li className="aflow-end is-out">
-          <span className="aflow-dot" aria-hidden="true">
-            <Icon name="check" size={13} strokeWidth={2.4} />
-          </span>
-          <span className="min-w-0">
-            <small>Gives back</small>
-            <b>{flow.gives}</b>
-          </span>
-        </li>
-      </ol>
-      {flow.note && <p className="text-[12.5px] text-dim">{flow.note}</p>}
-    </section>
-  );
+/** The way of working for a node in the tree, or null when it has none. */
+export function flowFor(kind: string, key: string, agent: Agent | null): Flow | null {
+  if (kind === "agent") return agent ? agentFlow(agent) : null;
+  if (kind === "lead") return FLOWS.lead;
+  return FLOWS[key] ?? null;
 }

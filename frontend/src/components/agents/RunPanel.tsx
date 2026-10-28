@@ -7,7 +7,6 @@ import type { NodeLive, StoryItem } from "../../lib/liveTree";
 import { Icon, type IconName } from "../icons";
 import { Button, StatusChip, relativeTime } from "../ui";
 import AgentAvatar from "./AgentAvatar";
-import AgentFlow from "./AgentFlow";
 
 export interface PanelNode {
   id: string;
@@ -117,8 +116,6 @@ export default function RunPanel({
                 : "Nothing running right now. When it starts, each step appears here."}
             </p>
           )}
-
-          <AgentFlow kind={node.kind} flowKey={node.role} agent={node.agent} name={node.name} />
 
           {live.problem && (
             <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-[13.5px] text-bad-text">
