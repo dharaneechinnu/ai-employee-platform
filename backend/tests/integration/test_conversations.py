@@ -109,8 +109,7 @@ async def test_a_chat_remembers_the_conversation(
     ]
 
     # Every turn is a task, and the task list is how the activity
-    # count and the notification bell find them. (They used to be kept
-    # out of it, back when the list belonged to AI Employees.)
+    # count and the notification bell find them.
     listed = (await api.get("/api/v1/me/tasks", headers=headers)).json()
     assert len(listed) == 2
     assert {t["conversation_id"] for t in listed} == {cid}
@@ -206,7 +205,6 @@ async def test_every_tool_the_person_can_use_is_on_without_picking(
     offered = {t.name for t in recorder.calls[-1]["tools"]}
     assert {"get_webpage", "recall", "remember"} <= offered
     assert "gmail_send" not in offered  # Google is not connected
-    assert "delegate_to_specialist" not in offered  # that is for AI Employees
 
     blocked = await api.put(
         "/api/v1/me/policies",
@@ -415,7 +413,7 @@ async def test_with_team_mode_off_there_is_no_specialist_tool(
 async def test_an_unreadable_saved_key_is_explained_not_left_hanging(
     api: AsyncClient, session: AsyncSession, recorder: type[Recorder]
 ) -> None:
-    """A key saved under another scope (as companies' keys were before
+    """A key saved under another scope (as people's keys were before
     personal accounts) used to crash the worker and leave the chat
     waiting for ever. It now ends the turn with what to do."""
     from sqlalchemy import update

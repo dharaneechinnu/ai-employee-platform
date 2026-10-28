@@ -1,137 +1,69 @@
 # Custom agents, created in chat
 
-> **Update, October 2026.** The Build tab is gone: agents are made in Chat. Say
-> "I want an agent that ..." and the assistant asks what it needs, then shows a
-> draft card with a readiness check (is each app connected, allowed by the
-> platform, granted by you, permitted on your Permissions page). Create stays
-> off until every link passes. Agents can run on a schedule you choose, in your
-> time zone; a worker job starts them, re-checks the links first, and tells you
-> when something broke. The AI Agents page only manages them: schedule, run now,
-> pause, edit, tree, cost. Permissions are split by service (Gmail, Drive, Sheets,
-> Calendar) and level (read, edit) at the platform (for everyone or for one
-> person), connection and agent levels. Not built yet: effort-based model choice, failure-based retry and
-> escalation, usage and quality monitoring, and Excel through Microsoft 365.
+Status: **built.** This page describes how agents work today, the rules they keep, and what is not built.
 
+## What an agent is
 
-Status: **planned, not built.** Decisions are settled; the phases below are the order to build in.
+An **agent** is a saved, named helper that a person designs: its instructions, which tools it may use, which AI it prefers, and optionally a schedule. A person can have up to 30.
 
-## What we are building
+A chat has a fixed *mode* (General, Study, Work, Research, Code) and an optional *team* switch that brings in six built-in helpers (researcher, analyst, writer, critic, developer, generalist). Those live in code. Agents are the part a person controls.
 
-An **agent** is a saved, named helper that a person designs: its instructions,
-which tools it may use, and which AI it prefers. A person can have many.
-
-Today a chat has one fixed *mode* (General, Study, Work, Research, Code) and an
-optional *team* switch that brings in four hard-coded specialists (researcher,
-analyst, writer, critic). All of it lives in code, so nobody can change or add
-any of it. Agents replace that with one idea:
-
-- the five modes and four specialists become **starter agents** that ship with
-  the product and can be copied and edited;
-- a person's own agents sit beside them;
-- an agent can be **the chat's persona** or **a teammate** the assistant calls.
-
-### Decisions already made
+### Decisions
 
 | Question | Decision | Why |
 |---|---|---|
-| What does "multiple agents" mean? | Both: persona *and* teammates | Persona alone is custom GPTs; teammates is what makes it an agent system |
 | Private memory per agent? | No. One shared memory per person | Keeps one memory the person can read and edit, instead of a separate memory per helper |
+| Does an agent get its own runtime? | No. A run is an ordinary assistant run with the agent's instructions | Permissions, approvals, memory and cost tracking apply unchanged |
+| How is an agent made? | By chatting, then pressing Create on a draft card | Nothing exists until a person presses the button |
 
 ## How it works
 
-**Creating one.** The person says, in plain words, "make me an agent that reads
-my newsletters and writes a Friday digest". The assistant calls a
-`create_agent` tool with a name, instructions and tool list. That tool is a
-*write*, so under the default permissions it **pauses for approval**, and the
-approval card shows every field. No new confirm UI: the existing approval flow
-*is* the confirmation. Approve and the agent exists; reject and nothing happens.
+**Creating one.** The person says in Chat: "I want an agent that reads my newsletters and writes a Friday digest". The assistant asks what it needs, then calls the `propose_agent` tool. That tool changes nothing. It shows a **draft card** with a name, a description, the tools, the preferred AI, an optional schedule, and a **readiness check**: is each app connected, allowed by the platform, granted by the person, and permitted on the Permissions page? **Create** stays off until every check passes. Pressing it saves the agent.
 
-**Using one as the persona.** Pick an agent when starting a chat, or switch
-mid-chat. Its instructions replace the mode's.
+**Scheduling.** An agent can run daily, on weekdays, or on chosen days, at a time in the person's time zone. A worker job looks for due agents every minute. Before each run it checks the same links again. If one is broken, the agent is marked as needing attention and the person is told, instead of failing at night. An agent that writes to a spreadsheet may only write to the sheet the person named.
 
-**Using one as a teammate.** In team mode the assistant can call any of the
-person's agents (and the starters) in parallel, and combine what comes back.
-`@mention` addresses one directly for a single turn: "@Digest summarise this".
+**Running.** An agent can be run now, paused, resumed, edited or removed. Removing archives it, so old chats that used it still read. Each agent's runs are written into a conversation of its own, so the results read like any chat. The person can also open a chat with the agent.
 
-## The AI Agents tab (added after the first draft)
+**Starters.** The five chat modes and the six helper roles are shown as read-only starters that a person can copy into an agent and edit.
 
-Agents get their own tab in the menu, separate from Chat. It has three parts:
+## The AI Agents page
 
-1. **Builder chat.** A conversation whose only job is making agents. You
-   describe what you want; it asks what it needs, then shows a live draft card
-   (name, what it does, tools, preferred AI). Create / Edit / Discard. Nothing is
-   saved until you press Create. This is the main way to make an agent.
-2. **Agent tree.** Your agents drawn as a tree: you, your assistant, and the
-   agents it can call, with each agent's tools hanging off it. Built from real
-   runs, not a mock-up: the branches that were actually used light up.
-3. **Flow and cost.** A flow view of one agent's run, drawn differently from
-   the route view in Chat (that one shows *where a request went*; this one shows
-   *who did what and what it cost*): a timeline lane per agent, a bar per step,
-   and tokens and cost per lane and in total.
+It manages agents. It does not create them; Chat does. It has four tabs, and the tab is part of the address (`/agents?tab=tree`):
 
-It must look and behave differently from the existing route view, not reuse it.
+1. **Agents.** The list, with schedule, last run, cost, and run now, pause, edit.
+2. **Tree.** A live tree of the person, the assistant and the agents, with each agent's tools hanging off it. It is built from real runs, and the scheduler flow shows what runs next. Branches in use light up.
+3. **History.** Past runs with filters, a detail view of each run, and replay of its steps from the event log.
+4. **Models and cost.** What the models cost, an estimate of what was saved against a reference model, and free versus paid keys. Every figure is an estimate, because Baton cannot see the provider's invoice.
 
-## Rules it must keep
+## Rules it keeps
 
-1. **An agent can only narrow, never widen.** Its tool list is intersected with
-   the person's Permissions. An agent cannot reach a tool the person has blocked.
-2. **Agents cannot create agents.** `create_agent` is lead-only and is never
-   offered to a specialist. Otherwise one poisoned web page could make an agent
-   spawn a swarm.
-3. **Depth stays 1.** A teammate cannot call another teammate.
-4. **"Ask me first" becomes a refusal for a teammate**, as it does now: a
-   specialist works inside the lead's step and cannot pause for a person.
-5. **Caps.** A maximum number of agents per person, and the existing maximum of
-   specialist calls per reply.
-6. **Isolation.** Agents are scoped by `owner_id`; another person's agent is a
-   404, and the isolation guard test covers the new table.
+1. **An agent can only narrow, never widen.** Its tool list is intersected with the person's Permissions. An agent cannot reach a tool the person has blocked.
+2. **Agents cannot create agents.** `propose_agent` is given only to a chat that is designing an agent, never to a saved agent or a scheduled run. Otherwise one poisoned web page could make an agent spawn a swarm.
+3. **Depth stays 1.** A team helper cannot call another helper.
+4. **"Ask me first" becomes a refusal for a team helper**, because a helper works inside the lead's step and cannot pause for a person. A scheduled agent run pauses for approval like any run.
+5. **Caps.** At most 30 agents per person, a step limit per run (default 40, at most 80), and at most six helper calls per chat message.
+6. **Isolation.** Agents are scoped by `owner_id`. Another person's agent is a 404, and the isolation test covers the table.
 
 ## Data and API
 
-New table `agents`: `owner_id`, `name`, `handle` (unique per person, used for
-`@mention`), `description`, `instructions` (max 8,000 chars), `model` (`auto` or
-`provider:model`), `routing`, `tools` (list of tool names, or null for "everything
-I'm allowed"), `archived`. Not versioned yet; a reply records which agent and
-which instructions hash produced it, so history stays explainable.
+Table `agents`: `owner_id`, `name`, `handle` (unique per person), `description`, `instructions` (at most 8,000 characters), `model` (`auto` or `provider:model`), `routing`, `tools` (a list of tool names, or null for everything the person allows), `archived`, and the schedule fields. Agents are not versioned.
 
-Changes elsewhere: `conversations.agent_id` (nullable, SET NULL) for the persona;
-`tasks.agent_id` (nullable) for a one-turn `@mention`, so the reply can say who
-answered.
+Also: `conversations.agent_id` (nullable) and `tasks.agent_id` (nullable), so a run and its chat know which agent produced them.
 
-Routes: `GET/POST /me/agents`, `GET/PATCH/DELETE /me/agents/{id}`; the
-conversation create/update routes accept `agent_id`.
+Routes (all under `/me/agents`): `GET /overview`, `GET /tree`, `POST /readiness`, `POST /` (create), `GET/PATCH/DELETE /{id}`, `GET /{id}/readiness`, `POST /{id}/pause`, `/resume`, `/run` and `/chat`. History is under `/me/history` and cost under `/me/usage`. See the [LLD](LLD.md) for the full list.
 
-Starter agents stay in code as read-only defaults. "Copy to mine" creates a row.
-That avoids seeding rows for every person and lets starters improve in a release.
+## Tests
 
-## Build order
-
-| Phase | Delivers | Done when |
-|---|---|---|
-| 1 | `agents` table, CRUD, pick an agent as a chat persona; modes become starter agents | A person can write an agent by hand and chat with it |
-| 2 | `create_agent` tool with the approval card | "Make me an agent that…" produces a card, and approving it creates the agent |
-| 3 | Agents as teammates in team mode, and `@mention` | The assistant calls two custom agents in parallel and combines them |
-| 4 | Copy a starter, export/import as JSON | A person can share an agent as a file |
-
-Build 1 and 2, then **use it for a while before building 3**. Phase 3 is the
-largest and its shape depends on what people actually create.
-
-## Tests that must exist
-
-- Narrowing: an agent listing a blocked tool never gets it; an agent can't use a
-  tool its person hasn't connected.
-- No recursion: a teammate is never offered `create_agent`.
-- Creating through chat pauses for approval, shows every field, and creates
-  nothing on reject.
-- Handles are unique per person and a mention of someone else's agent resolves
-  to nothing.
+- Narrowing: an agent listing a blocked tool never gets it.
+- No recursion: a team helper is never offered `propose_agent`.
+- Readiness: each failed link reports a plain sentence and a fix.
+- Schedules: due agents start once, and a broken link stops the run with a note.
 - Cross-person isolation on every route.
 - An archived agent is not callable, and a conversation that used it still reads.
 
-## Open items (decide when we reach them, not now)
+## Not built
 
-- Whether an agent's instructions *replace* the mode's or *add to* it. Planned:
-  replace, since a starter agent already contains the mode's text.
-- Whether to let a person edit a proposed agent on the approval card before
-  approving. Planned: no for phase 2; reject and ask again.
-- Per-agent cost and usage display.
+- Using an agent as a team helper, and `@mention` of an agent.
+- Effort-based model choice.
+- Retry that escalates to a stronger model after a failed agent run.
+- Sharing an agent as a file.

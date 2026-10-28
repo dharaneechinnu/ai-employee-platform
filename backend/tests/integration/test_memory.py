@@ -6,17 +6,17 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_person
 
 
 async def test_default_provider_is_local(api: AsyncClient, session: AsyncSession) -> None:
-    """Local by default: free, no key, no rate limit, and no company
+    """Local by default: free, no key, no rate limit, and no person
     document leaves the server."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
 
     response = await api.get(
         "/api/v1/me/embedding-config",
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     assert response.status_code == 200
     assert response.json()["provider_key"] == "local"
@@ -24,8 +24,8 @@ async def test_default_provider_is_local(api: AsyncClient, session: AsyncSession
 
 
 async def test_add_and_list_a_memory(api: AsyncClient, session: AsyncSession) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     created = await api.post(
         "/api/v1/me/memory",
@@ -40,8 +40,8 @@ async def test_add_and_list_a_memory(api: AsyncClient, session: AsyncSession) ->
 
 
 async def test_search_finds_a_stored_memory(api: AsyncClient, session: AsyncSession) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     for content in [
         "The deployment script lives in scripts/deploy.sh",
@@ -65,8 +65,8 @@ async def test_keyword_search_catches_exact_strings(
 ) -> None:
     """A vector model is weak on error codes and file names, which is
     exactly what gets searched for. The keyword half covers that."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     await api.post(
         "/api/v1/me/memory",
@@ -84,8 +84,8 @@ async def test_keyword_search_catches_exact_strings(
 
 
 async def test_deleting_removes_it_from_search(api: AsyncClient, session: AsyncSession) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     created = await api.post(
         "/api/v1/me/memory",
@@ -108,16 +108,16 @@ async def test_memory_never_crosses_person_boundaries(
     """Memory holds the most sensitive text in the product: business
     rules, customer notes, internal documents. A leak here is the worst
     one available."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    globex = await seed_company(session, api, name="Globex", slug="globex")
+    acme = await seed_person(session, api, name="Acme")
+    globex = await seed_person(session, api, name="Globex")
 
     await api.post(
         "/api/v1/me/memory",
         json={"content": "Acme's secret margin is 42 percent"},
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
 
-    globex_headers = {"Authorization": f"Bearer {globex.admin_token}"}
+    globex_headers = {"Authorization": f"Bearer {globex.token}"}
 
     listed = await api.get("/api/v1/me/memory", headers=globex_headers)
     assert listed.json() == []
@@ -136,8 +136,8 @@ async def test_switching_provider_requires_reembedding_and_search_refuses(
     """Comparing vectors from two models computes a number and means
     nothing. Refusing is the only honest behaviour: silent nonsense is
     far worse than a clear error."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     await api.post(
         "/api/v1/me/memory",
@@ -167,8 +167,8 @@ async def test_switching_back_restores_search_without_reembedding(
 ) -> None:
     """The original vectors were never deleted, so returning to the
     provider that wrote them makes search valid again immediately."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     await api.post(
         "/api/v1/me/memory",
@@ -207,8 +207,8 @@ async def test_reembedding_moves_vectors_to_the_new_model(
     import app.services.memory_service as memory_service
     from app.agent.embeddings import LocalEmbeddingProvider
 
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     await api.post(
         "/api/v1/me/memory",

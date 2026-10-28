@@ -17,7 +17,7 @@ from app.agent.providers.base import (
     StopReason,
     Usage,
 )
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_person
 
 
 @pytest.fixture
@@ -28,9 +28,9 @@ def public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(urls, "is_private_address", lambda host: False)
 
 
-async def _company(api: AsyncClient, session: AsyncSession) -> tuple[Any, dict[str, str]]:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    return acme, {"Authorization": f"Bearer {acme.admin_token}"}
+async def _person(api: AsyncClient, session: AsyncSession) -> tuple[Any, dict[str, str]]:
+    acme = await seed_person(session, api, name="Acme")
+    return acme, {"Authorization": f"Bearer {acme.token}"}
 
 
 # ------------------------------------------------------------ providers
@@ -39,7 +39,7 @@ async def _company(api: AsyncClient, session: AsyncSession) -> tuple[Any, dict[s
 async def test_claude_and_your_own_server_are_on_the_menu(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    _acme, headers = await _company(api, session)
+    _acme, headers = await _person(api, session)
     menu = (await api.get("/api/v1/me/providers/available", headers=headers)).json()
     keys = {p["key"]: p for p in menu}
     assert keys["anthropic"]["default_model"] == "claude-opus-5-5"
@@ -49,7 +49,7 @@ async def test_claude_and_your_own_server_are_on_the_menu(
 async def test_your_own_server_needs_an_address_and_a_model(
     api: AsyncClient, session: AsyncSession, public_dns: None
 ) -> None:
-    _acme, headers = await _company(api, session)
+    _acme, headers = await _person(api, session)
     url = "/api/v1/me/providers"
 
     missing = await api.post(
@@ -85,7 +85,7 @@ async def test_your_own_server_needs_an_address_and_a_model(
 
 async def test_a_private_address_is_refused(api: AsyncClient, session: AsyncSession) -> None:
     """Otherwise our servers could be made to call cloud metadata or internal services."""
-    _acme, headers = await _company(api, session)
+    _acme, headers = await _person(api, session)
     for address in ("https://169.254.169.254/v1", "https://localhost:8000/v1"):
         response = await api.post(
             "/api/v1/me/providers",
@@ -96,7 +96,7 @@ async def test_a_private_address_is_refused(api: AsyncClient, session: AsyncSess
         assert "private" in response.json()["detail"]
 
 
-async def test_a_company_picks_its_model_and_runs_use_it(
+async def test_a_person_picks_its_model_and_runs_use_it(
     api: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import app.workers.jobs.agent_run as job
@@ -119,7 +119,7 @@ async def test_a_company_picks_its_model_and_runs_use_it(
             return None
 
     monkeypatch.setattr(job, "build_provider", lambda key, api_key, **_: Answers(api_key))
-    _acme, headers = await _company(api, session)
+    _acme, headers = await _person(api, session)
     await api.post(
         "/api/v1/me/providers",
         json={"provider_key": "anthropic", "api_key": "sk-ant-test-1234"},

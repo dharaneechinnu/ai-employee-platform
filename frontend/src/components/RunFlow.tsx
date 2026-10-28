@@ -102,7 +102,7 @@ const VERBS: Record<string, string> = {
   github_propose_change: "proposes the change as a pull request",
 };
 
-export function buildStages(
+function buildStages(
   events: RunEvent[],
   assistant: string,
   runStatus: string | null,

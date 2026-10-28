@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.services import EDIT, LEVELS, READ, SERVICES
 from app.core.errors import ValidationError
-from app.db.models.provider import OrgServiceAccess, PlatformServiceAccess
+from app.db.models.provider import PersonServiceAccess, PlatformServiceAccess
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,9 +50,9 @@ class ServiceAccessService:
         rows = await self.session.scalars(select(PlatformServiceAccess))
         return {(r.service, r.level): r.allowed for r in rows.all()}
 
-    async def _person(self, owner_id: uuid.UUID) -> dict[tuple[str, str], OrgServiceAccess]:
+    async def _person(self, owner_id: uuid.UUID) -> dict[tuple[str, str], PersonServiceAccess]:
         rows = await self.session.scalars(
-            select(OrgServiceAccess).where(OrgServiceAccess.owner_id == owner_id)
+            select(PersonServiceAccess).where(PersonServiceAccess.owner_id == owner_id)
         )
         return {(r.service, r.level): r for r in rows.all()}
 
@@ -110,10 +110,10 @@ class ServiceAccessService:
         _check(service, level)
         if allowed is None:
             await self.session.execute(
-                delete(OrgServiceAccess).where(
-                    OrgServiceAccess.owner_id == owner_id,
-                    OrgServiceAccess.service == service,
-                    OrgServiceAccess.level == level,
+                delete(PersonServiceAccess).where(
+                    PersonServiceAccess.owner_id == owner_id,
+                    PersonServiceAccess.service == service,
+                    PersonServiceAccess.level == level,
                 )
             )
             await self.session.flush()
@@ -121,7 +121,7 @@ class ServiceAccessService:
         row = (await self._person(owner_id)).get((service, level))
         if row is None:
             self.session.add(
-                OrgServiceAccess(
+                PersonServiceAccess(
                     owner_id=owner_id,
                     service=service,
                     level=level,
@@ -140,7 +140,7 @@ class ServiceAccessService:
 @dataclass(frozen=True, slots=True)
 class Snapshot:
     platform: dict[tuple[str, str], bool]
-    person: dict[tuple[str, str], OrgServiceAccess]
+    person: dict[tuple[str, str], PersonServiceAccess]
 
     def _rule(self, service: str, level: str) -> Decision:
         if (ruling := self.person.get((service, level))) is not None:

@@ -24,7 +24,6 @@ from app.db.models.memory import (
     MemoryVector768,
     MemoryVector1024,
     MemoryVector1536,
-    ReembedJob,
     RunSummary,
 )
 from app.db.models.notification import NotificationSettings
@@ -41,9 +40,9 @@ from app.db.models.policy import (
 )
 from app.db.models.provider import (
     ConnectionStatus,
-    OrgConnectionAccess,
-    OrgOAuthApp,
-    OrgServiceAccess,
+    PersonConnectionAccess,
+    PersonOAuthApp,
+    PersonServiceAccess,
     PlatformConnectionAccess,
     PlatformOAuthApp,
     PlatformServiceAccess,
@@ -89,9 +88,9 @@ __all__ = [
     "MemoryVector1536",
     "MessageRole",
     "NotificationSettings",
-    "OrgConnectionAccess",
-    "OrgOAuthApp",
-    "OrgServiceAccess",
+    "PersonConnectionAccess",
+    "PersonOAuthApp",
+    "PersonServiceAccess",
     "PlatformAdmin",
     "PlatformAdminAudit",
     "PlatformConnectionAccess",
@@ -103,7 +102,6 @@ __all__ = [
     "PolicySetting",
     "ProviderConfig",
     "ProviderKind",
-    "ReembedJob",
     "RefreshToken",
     "Run",
     "RunCheckpoint",

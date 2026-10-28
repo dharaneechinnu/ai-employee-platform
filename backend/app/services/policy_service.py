@@ -41,18 +41,6 @@ class Decision:
     setting: PolicySetting
     reason: str
 
-    @property
-    def is_auto(self) -> bool:
-        return self.setting is PolicySetting.AUTO
-
-    @property
-    def needs_approval(self) -> bool:
-        return self.setting is PolicySetting.ASK
-
-    @property
-    def is_blocked(self) -> bool:
-        return self.setting is PolicySetting.BLOCKED
-
 
 @dataclass(slots=True)
 class PolicyRow:

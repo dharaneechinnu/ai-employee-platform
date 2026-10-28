@@ -70,7 +70,7 @@ function hour(d: Date): string {
 }
 
 /** "5 minutes ago", "2 hours ago", "Yesterday", "9 days ago". */
-export function ago(iso: string, now = new Date()): string {
+function ago(iso: string, now = new Date()): string {
   const then = new Date(iso);
   const minutes = Math.max(0, Math.round((now.getTime() - then.getTime()) / 60000));
   if (minutes < 1) return "Just now";
@@ -150,7 +150,7 @@ const SERVICE_NAME: Record<string, string> = {
 };
 
 /** "Gmail · change" from "google.gmail:edit". */
-export function serviceLabel(detail: string): string {
+function serviceLabel(detail: string): string {
   const [service, level] = detail.split(":");
   return `${SERVICE_NAME[service] ?? service} · ${level === "edit" ? "change" : "look"}`;
 }

@@ -21,7 +21,7 @@ type Role =
 
 const ROLE_OF: Record<string, Role> = { generalist: "general", scheduled: "agent" };
 
-export function avatarRole(key: string | null | undefined): Role {
+function avatarRole(key: string | null | undefined): Role {
   const k = ROLE_OF[key ?? ""] ?? key ?? "agent";
   return (DRAWINGS as Record<string, unknown>)[k] ? (k as Role) : "agent";
 }

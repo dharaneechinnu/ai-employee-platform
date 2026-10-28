@@ -28,8 +28,8 @@ from app.db.models.agent import Agent
 from app.db.models.identity import PlatformAdmin, RefreshToken, SetupToken, User
 from app.db.models.policy import Connection, ConnectionKind
 from app.db.models.provider import (
-    OrgConnectionAccess,
-    OrgServiceAccess,
+    PersonConnectionAccess,
+    PersonServiceAccess,
     PlatformConnectionAccess,
     PlatformOAuthApp,
     ProviderConfig,
@@ -624,7 +624,9 @@ class PlatformService:
             row.kind: row
             for row in (
                 await self.session.scalars(
-                    select(OrgConnectionAccess).where(OrgConnectionAccess.owner_id == owner_id)
+                    select(PersonConnectionAccess).where(
+                        PersonConnectionAccess.owner_id == owner_id
+                    )
                 )
             ).all()
         }
@@ -680,14 +682,14 @@ class PlatformService:
             for kind, owners in (
                 await self.session.execute(
                     select(
-                        OrgConnectionAccess.kind, func.array_agg(OrgConnectionAccess.owner_id)
-                    ).group_by(OrgConnectionAccess.kind)
+                        PersonConnectionAccess.kind, func.array_agg(PersonConnectionAccess.owner_id)
+                    ).group_by(PersonConnectionAccess.kind)
                 )
             ).all()
         }
         for service, owner in (
             await self.session.execute(
-                select(OrgServiceAccess.service, OrgServiceAccess.owner_id).distinct()
+                select(PersonServiceAccess.service, PersonServiceAccess.owner_id).distinct()
             )
         ).all():
             svc = SERVICES.get(service)
@@ -773,9 +775,9 @@ class PlatformService:
         await self._person(owner_id)
 
         existing = await self.session.scalar(
-            select(OrgConnectionAccess).where(
-                OrgConnectionAccess.owner_id == owner_id,
-                OrgConnectionAccess.kind == kind_enum,
+            select(PersonConnectionAccess).where(
+                PersonConnectionAccess.owner_id == owner_id,
+                PersonConnectionAccess.kind == kind_enum,
             )
         )
 
@@ -785,7 +787,7 @@ class PlatformService:
             action = "connection_access_inherited"
         elif existing is None:
             self.session.add(
-                OrgConnectionAccess(
+                PersonConnectionAccess(
                     owner_id=owner_id,
                     kind=kind_enum,
                     allowed=allowed,
@@ -803,7 +805,7 @@ class PlatformService:
         self.admins.record_audit(
             admin_id=admin_id,
             action=action,
-            target_type="organization",
+            target_type="user",
             target_id=str(owner_id),
             detail=kind,
         )
@@ -888,7 +890,7 @@ class PlatformService:
                 if allowed
                 else "service_blocked"
             ),
-            target_type="organization",
+            target_type="user",
             target_id=str(owner_id),
             detail=f"{service}:{level}",
         )

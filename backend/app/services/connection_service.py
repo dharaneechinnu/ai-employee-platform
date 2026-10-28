@@ -37,7 +37,7 @@ from app.core.errors import NotFoundError, PermissionDeniedError, ValidationErro
 from app.core.observability import get_logger
 from app.core.signed import InvalidSignedTokenError, sign_for, verify
 from app.db.models.policy import Connection, ConnectionKind
-from app.db.models.provider import OrgConnectionAccess, OrgOAuthApp, PlatformConnectionAccess
+from app.db.models.provider import PersonConnectionAccess, PersonOAuthApp, PlatformConnectionAccess
 from app.services.oauth_providers import OAuthProvider, get_oauth_provider, resolve_client
 
 log = get_logger(__name__)
@@ -101,13 +101,13 @@ MANUAL_CONFIGS: dict[ConnectionKind, type[BaseModel]] = {
 # Fields are described here rather than in the frontend, so adding a
 # manual kind is a backend change only.
 _EMAIL_FIELDS = [
-    {"key": "username", "label": "Email address", "placeholder": "ops@company.com"},
+    {"key": "username", "label": "Email address", "placeholder": "you@example.com"},
     {"key": "imap_host", "label": "IMAP server", "placeholder": "imap.gmail.com"},
     {"key": "smtp_host", "label": "SMTP server", "placeholder": "smtp.gmail.com"},
     {"key": "smtp_port", "label": "SMTP port", "placeholder": "465"},
 ]
 _DATABASE_FIELDS = [
-    {"key": "host", "label": "Host", "placeholder": "db.company.com"},
+    {"key": "host", "label": "Host", "placeholder": "db.example.com"},
     {"key": "port", "label": "Port", "placeholder": "5432"},
     {"key": "database", "label": "Database", "placeholder": "analytics"},
     {"key": "username", "label": "Read-only user", "placeholder": "readonly"},
@@ -259,7 +259,7 @@ async def connection_rulings(
     }
     for row in (
         await session.scalars(
-            select(OrgConnectionAccess).where(OrgConnectionAccess.owner_id == owner_id)
+            select(PersonConnectionAccess).where(PersonConnectionAccess.owner_id == owner_id)
         )
     ).all():
         out[row.kind] = ConnectionRuling(row.allowed, "person", row.note)
@@ -358,7 +358,7 @@ class ConnectionService:
         read path for the secret itself, here or anywhere.
         """
         rows = await self.session.scalars(
-            select(OrgOAuthApp).where(OrgOAuthApp.owner_id == self.owner_id)
+            select(PersonOAuthApp).where(PersonOAuthApp.owner_id == self.owner_id)
         )
         return {
             row.provider.value: {"client_id": row.client_id, "secret_last4": row.secret_last4}
@@ -367,7 +367,7 @@ class ConnectionService:
 
     async def save_own_oauth_app(
         self, *, kind: str, client_id: str, client_secret: str
-    ) -> OrgOAuthApp:
+    ) -> PersonOAuthApp:
         """Register this person's own Google or Microsoft app.
 
         The point is that nobody else has to act first: a person can
@@ -382,8 +382,8 @@ class ConnectionService:
         await self._require_allowed(provider.kind)
 
         existing = await self.session.scalar(
-            select(OrgOAuthApp).where(
-                OrgOAuthApp.owner_id == self.owner_id, OrgOAuthApp.provider == provider.kind
+            select(PersonOAuthApp).where(
+                PersonOAuthApp.owner_id == self.owner_id, PersonOAuthApp.provider == provider.kind
             )
         )
         # The person's own key, so their scope opens it.
@@ -391,7 +391,7 @@ class ConnectionService:
         last4 = client_secret[-4:] if len(client_secret) >= 4 else "????"
 
         if existing is None:
-            existing = OrgOAuthApp(
+            existing = PersonOAuthApp(
                 owner_id=self.owner_id,
                 provider=provider.kind,
                 client_id=client_id,
@@ -412,8 +412,9 @@ class ConnectionService:
         provider = get_oauth_provider(kind)
         row = (
             await self.session.scalar(
-                select(OrgOAuthApp).where(
-                    OrgOAuthApp.owner_id == self.owner_id, OrgOAuthApp.provider == provider.kind
+                select(PersonOAuthApp).where(
+                    PersonOAuthApp.owner_id == self.owner_id,
+                    PersonOAuthApp.provider == provider.kind,
                 )
             )
             if provider

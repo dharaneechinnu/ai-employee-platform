@@ -18,7 +18,7 @@ const DEFAULT_POINTS: { icon: IconName; title: string; body: string }[] = [
   { icon: "approvals", title: "You stay in control", body: "Agents run on a schedule, and anything risky waits for your yes." },
 ];
 
-export function AuthStage({
+function AuthStage({
   headline,
   ticker,
   points,

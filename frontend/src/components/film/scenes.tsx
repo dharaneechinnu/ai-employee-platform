@@ -233,7 +233,7 @@ function IntroVisual() {
 
 // ---------------------------------------------------------------- 2. set up
 
-function HireVisual() {
+function SetupVisual() {
   const tools: [string, Tone][] = [
     ["gmail_search", "mute"],
     ["google_calendar_list", "mute"],
@@ -742,11 +742,11 @@ export interface SceneDef {
 export const SCENES: SceneDef[] = [
   { id: "intro", label: "Intro", duration: 6000, Visual: IntroVisual },
   {
-    id: "hire",
+    id: "setup",
     label: "Set up",
     duration: 8000,
     caption: { n: "01", kicker: "Set up", title: "Set up a helper in a minute", body: "Answer three plain questions and pick its tools. No prompt engineering." },
-    Visual: HireVisual,
+    Visual: SetupVisual,
   },
   {
     id: "assign",

@@ -459,7 +459,7 @@ function ConnectionPanel({
             </svg>
             {option.display_name} is connected
           </div>
-          <Button size="sm" icon="employees" onClick={() => navigate("/agents")}>
+          <Button size="sm" icon="helpers" onClick={() => navigate("/agents")}>
             Make an agent that uses this
           </Button>
         </div>

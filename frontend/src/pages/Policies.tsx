@@ -205,7 +205,7 @@ export default function Policies() {
                     {/* Only worth a line when it is not the default: the tag already says what the default means. */}
                     {!/^platform default/i.test(tool.reason) && (
                       <span className="text-xs text-accent-text">
-                        {/^set by (your company|you)\b/i.test(tool.reason) ? "Changed by you" : plainReason(tool.reason)}
+                        {/^set by you\b/i.test(tool.reason) ? "Changed by you" : plainReason(tool.reason)}
                       </span>
                     )}
                   </div>

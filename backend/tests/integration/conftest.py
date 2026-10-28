@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ.setdefault("ENVIRONMENT", "test")
 
 # A SEPARATE database, on purpose. These tests delete every
-# organization between cases, so running them against the development
+# account between cases, so running them against the development
 # database destroys whatever you were working with. TEST_DATABASE_URL
 # overrides it; DATABASE_URL deliberately does not.
 #
@@ -58,7 +58,7 @@ os.environ["DATABASE_URL"] = DATABASE_URL
 # referencing table outright, which wipes the platform templates seeded
 # by migration 0003 (they are rows in `templates` with owner_id NULL).
 # DELETE follows the ON DELETE CASCADE foreign keys instead, so
-# company-scoped rows go and platform-wide rows stay.
+# person-scoped rows go and platform-wide rows stay.
 ROOT_TABLES_TO_CLEAR = [
     "platform_admin_audit",  # FK to platform_admins is SET NULL, so clear it first
     # Platform-wide and reached by no cascade: nothing owns it, so
@@ -69,7 +69,7 @@ ROOT_TABLES_TO_CLEAR = [
     "platform_connection_access",
     "platform_admins",
     # One line now, because everything a person owns hangs off
-    # them: deleting the user cascades to their AI Employees,
+    # them: deleting the user cascades to their
     # tasks, memory, connections and setup tokens.
     "users",
 ]
@@ -146,17 +146,6 @@ class SeededPerson:
     email: str
     token: str
 
-    # The old fixture handed back an admin and a member of one
-    # company. There are no roles now, so a test that needs two
-    # parties seeds two people.
-    @property
-    def admin_token(self) -> str:
-        return self.token
-
-    @property
-    def admin_email(self) -> str:
-        return self.email
-
 
 async def seed_person(
     session: AsyncSession, api: AsyncClient, *, email: str | None = None, name: str = "Person"
@@ -181,14 +170,3 @@ async def seed_person(
         json={"email": email, "password": "correct-horse-battery"},
     )
     return SeededPerson(owner_id=user.id, email=email, token=login.json()["access_token"])
-
-
-async def seed_company(
-    session: AsyncSession, api: AsyncClient, *, name: str, slug: str
-) -> SeededPerson:
-    """Compatibility shim for tests written against companies.
-
-    A company of one is now simply a person, so the old call site
-    still means something sensible.
-    """
-    return await seed_person(session, api, email=f"admin@{slug}.com", name=name)

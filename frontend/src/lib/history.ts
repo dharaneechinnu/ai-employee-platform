@@ -24,14 +24,6 @@ export const STATUS_CHOICES: { value: string; label: string }[] = [
   { value: "cancelled", label: "Stopped" },
 ];
 
-const STATUS_WORDS: Record<string, string> = Object.fromEntries(
-  STATUS_CHOICES.filter((s) => s.value).map((s) => [s.value, s.label]),
-);
-
-export function statusWords(status: string): string {
-  return STATUS_WORDS[status] ?? status.replace(/_/g, " ");
-}
-
 /** "2m 40s", "48s", "1h 5m". */
 export function fmtDuration(seconds: number | null): string {
   if (seconds === null) return "not started";

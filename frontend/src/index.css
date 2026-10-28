@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 /*
- * The "Workspace" theme, in violet-indigo.
+ * The Baton theme, in violet-indigo.
  *
- * Calm and neutral, in the spirit of Google Workspace and Microsoft 365:
+ * Calm and neutral:
  * white and soft-grey surfaces, hairline borders, one confident blue for
  * what you can do and where you are, and four status colours that say
- * what the AI team is doing. No gradients on controls, no glows.
+ * what your assistant is doing. No gradients on controls, no glows.
  *
  * Every colour on screen is one of these names; [data-theme="dark"]
  * swaps the values. .staff adds the staff console's own strip colours
@@ -355,9 +355,6 @@ html[data-dock='right'] body {
     @apply rounded-md border border-line2 px-1.5 py-0.5 font-mono text-xs text-dim;
   }
 
-  .eyebrow {
-    @apply font-mono text-xs uppercase tracking-[0.12em] text-dim;
-  }
 
   /* Once an animated rainbow border; now a plain hairline frame with a
      soft shadow. Kept as a class so every panel that used it is calm. */
@@ -378,18 +375,6 @@ html[data-dock='right'] body {
     @apply rounded-md;
   }
 
-  .scan-bar {
-    @apply relative h-[3px] overflow-hidden rounded bg-raised;
-  }
-  .scan-bar::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 30%;
-    background: linear-gradient(90deg, transparent, var(--run), transparent);
-    animation: scan 1.6s ease-in-out infinite;
-  }
 
   .dot-grid {
     background-image: none;
@@ -402,10 +387,6 @@ html[data-dock='right'] body {
     display: none;
   }
 
-  .flow-line {
-    stroke-dasharray: 6 8;
-    animation: flow 1.1s linear infinite;
-  }
 
   .switch {
     @apply relative h-[24px] w-10 shrink-0 cursor-pointer rounded-full border-0 bg-line2;
@@ -725,7 +706,7 @@ html[data-dock='right'] body {
     bottom: calc(100% + 12px);
     right: 0;
   }
-  .rail-menu-org {
+  .rail-menu-me {
     @apply relative mb-1 flex items-center gap-2.5 rounded-xl border border-line px-2.5 py-2;
   }
   .rail-menu-section {
@@ -796,9 +777,6 @@ html[data-dock='right'] body {
   .rise {
     animation: rise 0.3s cubic-bezier(0.2, 0, 0, 1) both;
   }
-  .slide-in {
-    animation: slide-in 0.2s cubic-bezier(0.2, 0, 0, 1) both;
-  }
   .pop {
     animation: pop 0.2s cubic-bezier(0.2, 0, 0, 1) both;
   }
@@ -808,22 +786,12 @@ html[data-dock='right'] body {
   .live-ask {
     animation: pulse-ask 1.8s infinite;
   }
-  .caret {
-    animation: blink 1s steps(1) infinite;
-  }
   .spin {
     animation: spin 1s linear infinite;
   }
   .orbit,
   .float {
     animation: none;
-  }
-  .grow-x {
-    transform-origin: left;
-    animation: grow-x 1.3s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
-  }
-  .text-balance {
-    text-wrap: balance;
   }
 }
 
@@ -893,16 +861,6 @@ html[data-dock='right'] body {
   from {
     opacity: 0;
     transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@keyframes slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -1025,11 +983,6 @@ html[data-dock='right'] body {
     transform: none;
   }
 }
-@keyframes grow-x {
-  from {
-    transform: scaleX(0);
-  }
-}
 @keyframes drift {
   to {
     transform: none;
@@ -1082,8 +1035,7 @@ html[data-dock='right'] body {
   cursor: default;
 }
 .coach-glow,
-.coach-ping,
-.coach-burst {
+.coach-ping {
   display: none;
 }
 .coach-ring {
@@ -1370,9 +1322,6 @@ html[data-dock='right'] body {
   font-size: 15px;
   line-height: 1.6;
   color: var(--muted);
-}
-.welcome-word {
-  display: inline;
 }
 .welcome-foot {
   display: flex;
@@ -1922,16 +1871,6 @@ html[data-dock='bottom'] .chat-shell {
 
 /* ------------------------------------------------------------ AI Agents
    Plain CSS, outside any layer, so none of it can be tree-shaken away. */
-.agent-idea {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--raised);
-  padding: 7px 14px;
-  font-size: 13.5px;
-  text-align: left;
-  transition: border-color 0.15s, background 0.15s;
-}
-.agent-idea:hover:not(:disabled) { border-color: var(--accent-line); background: var(--accent-soft); }
 .agent-draft {
   display: flex;
   flex-direction: column;
@@ -2210,11 +2149,6 @@ html[data-dock='bottom'] .chat-shell {
 .auth-card {
   @apply w-full rounded-2xl border border-line bg-panel p-6 sm:p-8;
   box-shadow: var(--shadow-lg);
-}
-.auth-quote {
-  @apply rounded-2xl border border-line bg-panel p-4 text-[14px] leading-relaxed text-muted;
-  background: color-mix(in srgb, var(--panel) 80%, transparent);
-  backdrop-filter: blur(8px);
 }
 .strength {
   @apply flex gap-1;

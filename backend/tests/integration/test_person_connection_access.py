@@ -1,12 +1,12 @@
-"""Which connections one company may use.
+"""Which connections one person may use.
 
 Registering an OAuth app decides whether a connection exists on the
-platform at all. This decides whether a *particular* company may use
-it — a customer whose plan excludes database access, say — without
+platform at all. This decides whether a *particular* person may use
+it — a person who should not have database access, say — without
 taking it away from everyone.
 
 Absence of a ruling means inherit, so the table starts empty and
-nothing changed for companies already connected.
+nothing changed for people already connected.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_person
 
 
 async def _platform_token(api: AsyncClient, session: AsyncSession) -> str:
@@ -60,7 +60,7 @@ async def _available(
 async def test_everything_is_open_until_someone_says_otherwise(
     api: AsyncClient, session: AsyncSession, staff: dict[str, str]
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
 
     rows = await api.get(f"/api/v1/platform/people/{acme.owner_id}/connections", headers=staff)
     assert rows.status_code == 200
@@ -70,26 +70,26 @@ async def test_everything_is_open_until_someone_says_otherwise(
         assert row["overridden"] is False
 
 
-async def test_closing_one_connection_for_one_company(
+async def test_closing_one_connection_for_one_person(
     api: AsyncClient, session: AsyncSession, staff: dict[str, str]
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    other = await seed_company(session, api, name="Globex", slug="globex")
-    acme_admin = {"Authorization": f"Bearer {acme.admin_token}"}
-    other_admin = {"Authorization": f"Bearer {other.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    other = await seed_person(session, api, name="Globex")
+    acme_admin = {"Authorization": f"Bearer {acme.token}"}
+    other_admin = {"Authorization": f"Bearer {other.token}"}
 
     closed = await api.put(
         f"/api/v1/platform/people/{acme.owner_id}/connections/database",
-        json={"allowed": False, "note": "Not included on your plan."},
+        json={"allowed": False, "note": "Not available for this account."},
         headers=staff,
     )
     assert closed.status_code == 200
 
     acme_db = await _available(api, acme.owner_id, acme_admin, "database")
     assert acme_db["allowed"] is False
-    assert acme_db["blocked_note"] == "Not included on your plan."
+    assert acme_db["blocked_note"] == "Not available for this account."
 
-    # The ruling is about one company, not the connection itself.
+    # The ruling is about one person, not the connection itself.
     other_db = await _available(api, other.owner_id, other_admin, "database")
     assert other_db["allowed"] is True
 
@@ -98,29 +98,29 @@ async def test_a_closed_connection_cannot_be_created_anyway(
     api: AsyncClient, session: AsyncSession, staff: dict[str, str]
 ) -> None:
     """A greyed-out button is a courtesy; this is the control."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    acme_admin = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    acme_admin = {"Authorization": f"Bearer {acme.token}"}
 
     allowed = await api.post("/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin)
     assert allowed.status_code == 201
 
     await api.put(
         f"/api/v1/platform/people/{acme.owner_id}/connections/database",
-        json={"allowed": False, "note": "Not included on your plan."},
+        json={"allowed": False, "note": "Not available for this account."},
         headers=staff,
     )
 
     refused = await api.post("/api/v1/me/connections", json=DB_CONNECTION, headers=acme_admin)
-    # Forbidden, not unprocessable: the request is fine, the company is not.
+    # Forbidden, not unprocessable: the request is fine, the person is not.
     assert refused.status_code == 403
-    assert "plan" in refused.text.lower()
+    assert "not available" in refused.text.lower()
 
 
-async def test_returning_a_company_to_the_platform_default(
+async def test_returning_a_person_to_the_platform_default(
     api: AsyncClient, session: AsyncSession, staff: dict[str, str]
 ) -> None:
     """Three states, not two: a ruling can be withdrawn."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
 
     await api.put(
         f"/api/v1/platform/people/{acme.owner_id}/connections/database",
@@ -138,25 +138,25 @@ async def test_returning_a_company_to_the_platform_default(
     assert row["overridden"] is False
 
 
-async def test_a_company_cannot_open_a_connection_for_itself(
+async def test_a_person_cannot_open_a_connection_for_itself(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     """Otherwise the ruling would be advice rather than a control."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    acme_admin = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    acme_admin = {"Authorization": f"Bearer {acme.token}"}
 
     for method, path in (
         ("GET", f"/api/v1/platform/people/{acme.owner_id}/connections"),
         ("PUT", f"/api/v1/platform/people/{acme.owner_id}/connections/database"),
     ):
         response = await api.request(method, path, headers=acme_admin, json={"allowed": True})
-        assert response.status_code in (401, 403), f"{method} {path} accepted a company token"
+        assert response.status_code in (401, 403), f"{method} {path} accepted a person token"
 
 
 async def test_the_decision_is_recorded(
     api: AsyncClient, session: AsyncSession, staff: dict[str, str]
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
 
     await api.put(
         f"/api/v1/platform/people/{acme.owner_id}/connections/database",

@@ -75,9 +75,7 @@ class Task(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     # Every task is one turn of a conversation with the person's own
-    # assistant. There is no other kind: the named AI Employees that
-    # used to take tasks directly were removed, and with them the
-    # check that a task had exactly one worker.
+    # assistant. There is no other kind of task.
     conversation_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
     )

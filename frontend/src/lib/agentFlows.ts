@@ -8,7 +8,7 @@ import type { Agent } from "./api";
  * worked out from its own tools. The agent tree draws these as a graph.
  */
 
-export interface FlowStep {
+interface FlowStep {
   title: string;
   detail: string;
   icon: IconName;
@@ -194,7 +194,7 @@ const CHANGES = /create|append|update|draft|organize|comment|propose|remember|sa
 const WORKS = /^(calculator|current_time|text_tools|report_write)$/;
 
 /** An agent you made: its own tools, put in the order a run uses them. */
-export function agentFlow(agent: Agent): Flow {
+function agentFlow(agent: Agent): Flow {
   const tools = agent.tools ?? [];
   const recall: string[] = tools.filter((t) => t === "recall");
   const acts = tools.filter((t) => ACTS.test(t));

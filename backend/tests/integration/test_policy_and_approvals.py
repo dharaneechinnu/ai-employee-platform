@@ -18,7 +18,7 @@ from app.agent.providers.base import (
     ToolCall,
     Usage,
 )
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_person
 
 
 class SendsThenAnswers(LLMProvider):
@@ -89,8 +89,8 @@ def stub_sender(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch)
 
 async def _setup(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
     """A person with a connected AI, ready to chat."""
-    person = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {person.admin_token}"}
+    person = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {person.token}"}
 
     await api.post(
         "/api/v1/me/providers",
@@ -122,8 +122,8 @@ async def _run(task_id: str) -> dict[str, Any]:
 
 
 async def test_the_default_policy_is_seeded(api: AsyncClient, session: AsyncSession) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     response = await api.get("/api/v1/me/policies", headers=headers)
     assert response.status_code == 200
@@ -134,13 +134,13 @@ async def test_the_default_policy_is_seeded(api: AsyncClient, session: AsyncSess
     assert all(r["is_default"] for r in response.json())
 
 
-async def test_a_company_can_set_a_rule_looser_than_the_default(
+async def test_a_person_can_set_a_rule_looser_than_the_default(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    """It is their email account. A company that understands its own
+    """It is their email account. A person that understands its own
     risk may say "we trust this, stop asking"."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     response = await api.put(
         "/api/v1/me/policies",
@@ -157,11 +157,11 @@ async def test_a_company_can_set_a_rule_looser_than_the_default(
     assert response.json()["is_default"] is False
 
 
-async def test_a_company_can_set_a_rule_stricter_than_the_default(
+async def test_a_person_can_set_a_rule_stricter_than_the_default(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     response = await api.put(
         "/api/v1/me/policies",
@@ -176,20 +176,20 @@ async def test_a_catastrophic_action_cannot_be_enabled(
 ) -> None:
     """Refused by the backend, not merely greyed out on the screen: a
     screen-only check is bypassed by calling the API directly."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
 
     response = await api.put(
         "/api/v1/me/policies",
         json={"scope": "tool", "scope_value": "delete_repository", "setting": "auto"},
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     assert response.status_code == 422
     assert "blocked platform-wide" in response.json()["detail"]
 
 
 async def test_reset_returns_to_the_defaults(api: AsyncClient, session: AsyncSession) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     await api.put(
         "/api/v1/me/policies",
@@ -205,11 +205,11 @@ async def test_reset_returns_to_the_defaults(api: AsyncClient, session: AsyncSes
 async def test_the_tool_catalogue_shows_the_effective_setting(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
 
     response = await api.get(
         "/api/v1/me/tools",
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     by_name = {t["name"]: t for t in response.json()}
 

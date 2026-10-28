@@ -44,7 +44,7 @@ interface RailItem {
 // One person owns everything, so every item is shown to everyone.
 const ITEMS: RailItem[] = [
   { to: "/chat", label: "Chat", icon: "chat" },
-  { to: "/agents", label: "AI Agents", icon: "employees" },
+  { to: "/agents", label: "AI Agents", icon: "helpers" },
   { to: "/approvals", label: "Approvals", icon: "approvals" },
 
   { to: "/memory", label: "Memory", icon: "memory", startsGroup: true },
@@ -224,11 +224,9 @@ export default function Rail({
 
           {menuOpen && (
             <div role="menu" className={`rail-menu ${MENU_SIDE[dock]}`}>
-              {/* No company to switch between: the account is the
-                  scope. What used to be a switcher is simply who you
-                  are signed in as. */}
+              {/* The account is the scope: this is who you are signed in as. */}
               {me && (
-                <div className="rail-menu-org">
+                <div className="rail-menu-me">
                   <Avatar name={me.full_name || me.username || me.email} size={28} rounded="rounded-[9px]" />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm font-medium">

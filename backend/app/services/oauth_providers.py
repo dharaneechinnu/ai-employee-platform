@@ -140,14 +140,14 @@ async def resolve_client(
     variables were still set.
     """
     from app.db.models.provider import (  # circular at import time
-        OrgOAuthApp,
+        PersonOAuthApp,
         PlatformOAuthApp,
     )
 
     if owner_id is not None:
         own = await session.scalar(
-            select(OrgOAuthApp).where(
-                OrgOAuthApp.owner_id == owner_id, OrgOAuthApp.provider == provider.kind
+            select(PersonOAuthApp).where(
+                PersonOAuthApp.owner_id == owner_id, PersonOAuthApp.provider == provider.kind
             )
         )
         if own is not None:

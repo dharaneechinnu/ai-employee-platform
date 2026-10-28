@@ -322,7 +322,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
     name: "You",
     kind: "you",
     role: "you",
-    icon: "members",
+    icon: "people",
     tone: "var(--accent)",
     agent: null,
     x: COL_A,

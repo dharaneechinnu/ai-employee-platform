@@ -13,8 +13,3 @@ def test_slow_mode_forces_single_concurrency() -> None:
 def test_disabling_slow_mode_uses_configured_concurrency() -> None:
     settings = Settings(slow_mode=False, worker_max_jobs=10)
     assert settings.effective_worker_concurrency == 10
-
-
-def test_is_testing_flag() -> None:
-    assert Settings(environment="test").is_testing is True
-    assert Settings(environment="dev").is_testing is False

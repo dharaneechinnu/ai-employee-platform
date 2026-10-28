@@ -116,10 +116,6 @@ class Settings(BaseSettings):
     def email_notifications_available(self) -> bool:
         return bool(self.smtp_host and (self.smtp_from or self.smtp_username))
 
-    @property
-    def is_testing(self) -> bool:
-        return self.environment == "test"
-
     @model_validator(mode="after")
     def _reject_dev_secret_in_prod(self) -> "Settings":
         """A forgotten secret in production is a total auth bypass: anyone

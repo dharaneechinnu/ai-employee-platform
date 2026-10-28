@@ -1,5 +1,3 @@
-import type { IconName } from "./icons";
-
 /**
  * The real logos of the services a run actually touches.
  *
@@ -71,14 +69,6 @@ export const SERVICE_NAME: Record<ServiceKey, string> = {
   slack: "Slack",
   teams: "Microsoft Teams",
   github: "GitHub",
-};
-
-/** A plain icon for anything with no logo of its own. */
-export const SERVICE_FALLBACK: Record<string, IconName> = {
-  web: "link",
-  memory: "memory",
-  specialist: "employees",
-  tool: "terminal",
 };
 
 export function ServiceMark({ service, size = 18 }: { service: ServiceKey; size?: number }) {

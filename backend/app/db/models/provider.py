@@ -167,12 +167,12 @@ class PlatformOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
 
-class OrgConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+class PersonConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """A Platform Admin's ruling on one person and one connection.
 
     The platform decides whether a connection exists at all (by
     registering its OAuth app); this decides whether a *particular*
-    person may use it. A customer on a plan that excludes email, or
+    person may use it. A person who should not have email, or
     one who asked for Drive to stay out of reach, is handled here
     rather than by taking the app away from everyone.
 
@@ -186,8 +186,8 @@ class OrgConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     customer.
     """
 
-    __tablename__ = "org_connection_access"
-    __table_args__ = (UniqueConstraint("owner_id", "kind", name="uq_org_connection_access"),)
+    __tablename__ = "person_connection_access"
+    __table_args__ = (UniqueConstraint("owner_id", "kind", name="uq_person_connection_access"),)
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
@@ -208,7 +208,7 @@ class PlatformConnectionAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """A Platform Admin's ruling on one kind of app, for everyone.
 
     "Nobody may connect PostgreSQL for now" is one row here, rather than
-    a row per person in `org_connection_access`. A person's own ruling
+    a row per person in `person_connection_access`. A person's own ruling
     there still beats this one, in either direction, the same way a
     person's service ruling beats the platform's.
 
@@ -233,7 +233,7 @@ class PlatformServiceAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     `service` is one part of an app ("google.sheets"); `level` is "read"
     or "edit". No row means allowed, so adding this table changed
     nothing for anyone already connected. A person's own ruling in
-    `org_service_access` beats this one, in either direction.
+    `person_service_access` beats this one, in either direction.
     """
 
     __tablename__ = "platform_service_access"
@@ -247,17 +247,17 @@ class PlatformServiceAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
 
-class OrgServiceAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+class PersonServiceAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """A Platform Admin's ruling on one person and one service.
 
-    Same idea as `OrgConnectionAccess`, one level finer: "this person
+    Same idea as `PersonConnectionAccess`, one level finer: "this person
     may use Drive and Sheets but not Gmail", or "Drive is read only".
     No row means inherit from the platform.
     """
 
-    __tablename__ = "org_service_access"
+    __tablename__ = "person_service_access"
     __table_args__ = (
-        UniqueConstraint("owner_id", "service", "level", name="uq_org_service_access"),
+        UniqueConstraint("owner_id", "service", "level", name="uq_person_service_access"),
     )
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
@@ -272,7 +272,7 @@ class OrgServiceAccess(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
 
 
-class OrgOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+class PersonOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """One person's own Google or Microsoft app registration.
 
     The platform-wide app in `platform_oauth_apps` is the easy path:
@@ -290,8 +290,8 @@ class OrgOAuthApp(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     other.
     """
 
-    __tablename__ = "org_oauth_apps"
-    __table_args__ = (UniqueConstraint("owner_id", "provider", name="uq_org_oauth_app"),)
+    __tablename__ = "person_oauth_apps"
+    __table_args__ = (UniqueConstraint("owner_id", "provider", name="uq_person_oauth_app"),)
 
     owner_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False

@@ -1,9 +1,9 @@
-# High Level Design — AI Employees (personal assistant)
+# High Level Design — Baton (personal assistant)
 
-**Last updated:** 2026-10-26
-**Companion documents:** [Low Level Design](LLD.md) · [Agents plan](AGENTS_PLAN.md) · [Google connection](GOOGLE_CONNECTION.md) · [Implementation Plan](IMPLEMENTATION_PLAN.md) (the original build plan)
+**Last updated:** 2026-10-28
+**Companion documents:** [Low Level Design](LLD.md) · [Agents plan](AGENTS_PLAN.md) · [Google connection](GOOGLE_CONNECTION.md)
 
-> **What changed.** This design first described a product for companies: a Company Admin "hired" AI Employees and Members gave them tasks. The product is now a **personal assistant**. Each account belongs to one person. Companies, memberships, invitations, roles and per-company limits are gone, and AI Employees were replaced by **agents** that a person designs in chat. The architecture (five containers, a queue, an append-only event log, permissions and approvals) stayed the same.
+> **In short.** Baton is a **personal assistant**. Each account belongs to one person, and **agents** are designed by that person in chat. The architecture is five containers, a queue, an append-only event log, permissions and approvals. One short-lived container, `migrate`, also runs the database migrations at start-up.
 
 ## How to read this document
 
@@ -40,28 +40,30 @@ Two actors. Keeping them apart is the backbone of the security model.
 | Actor | Who they are | What they do | Boundary |
 |---|---|---|---|
 | 👤 **Person** (a normal account) | Anyone with an account | Chats with the assistant, designs and schedules agents, connects apps, adds AI keys, sets permissions, approves paused actions | Sees and changes **only their own** data |
-| 🔑 **Platform Admin** | Whoever runs the server | Creates accounts and their one-time setup links, suspends and restores accounts, registers the shared Google and Microsoft sign-in apps, opens or closes parts of an app, manages the AI provider catalog | **Cannot read anyone's content, credentials or keys.** Not access-controlled: the endpoints do not exist. |
+| 🔑 **Platform Admin** | Whoever runs the server | Creates accounts with one-time setup links, suspends and restores accounts, registers the shared Google and Microsoft sign-in apps, opens or closes parts of an app, manages the AI provider catalog | **Cannot read anyone's content, credentials or keys.** Not access-controlled: the endpoints do not exist. |
 
 **The guiding principle: you own your assistant. The Platform Admin runs the server and never looks inside.**
 
-There is **no self sign-up yet** (planned). A Platform Admin creates the account and gets a setup link, shown once. The person opens it and chooses their own password, so the admin never knows it.
+Anyone can create their own account at `/register` with a username, an email and a password, and later sign in with the email or the username. A Platform Admin can also create an account and get a setup link, shown once. The person opens it and chooses their own password, so the admin never knows it.
 
 ## 1.4 The outside systems it talks to
 
 | System | Direction | Purpose | Whose credential |
 |---|---|---|---|
 | **LLM providers**: Claude, OpenAI, Gemini, Groq, DeepSeek, Mistral, OpenRouter, Together, NVIDIA, Sarvam, or the person's own OpenAI-compatible server | Outbound | The reasoning for every step | The **person's own** key |
-| **Embedding providers**: local by default, or an API | Outbound | Turning text into vectors for memory search | The person's own (local needs none) |
+| **Embedding providers**: local by default, or Gemini, OpenAI or Jina | Outbound | Turning text into vectors for memory search | The person's own (local needs none) |
 | **Google Workspace / Microsoft 365** | Outbound | Mail, calendar, files; Google Sheets | The person's own OAuth token |
 | **Any mailbox (IMAP/SMTP)** | Outbound | Read, draft and send mail | The person's own app password |
 | **GitHub** | Outbound | Read code, issues and CI; propose changes as pull requests | The person's own fine-grained token |
 | **A database** (PostgreSQL) | Outbound | Read-only questions | The person's own read-only user |
-| **Web search** (Tavily or Brave) | Outbound | Finding pages | One key for the whole server, set by whoever runs it |
+| **Web search** (Tavily or Brave) | Outbound | Finding pages | The person's own search key, added under AI keys, is used first; else one key for the whole server, set by whoever runs it |
+| **Groq Whisper** | Outbound | Turning a short voice recording into text | The person's own Groq key |
+| **Slack and Teams webhooks** | Outbound | Posting a message to one channel | The person's own incoming-webhook address |
 | **Email (SMTP) and Slack** | Outbound | Notifications and approve-from-inbox links | Server SMTP settings; the person's own Slack webhook |
 
 ### Two facts worth stating plainly
 
-**1. Almost every outbound call uses the person's own credential.** This is "bring your own key". The person pays their AI provider directly, and nobody can run up someone else's bill. The exceptions are web search and the SMTP server for notification email, which the operator sets once.
+**1. Almost every outbound call uses the person's own credential.** This is "bring your own key". The person pays their AI provider directly, and nobody can run up someone else's bill. The exceptions are the fallback web search key and the SMTP server for notification email, which the operator sets once.
 
 **2. Work starts from inside the app, or from a schedule.** A chat message or a press of **Run now** starts a run, and a worker job starts scheduled agents. There are no inbound webhooks yet.
 
@@ -74,7 +76,7 @@ graph TB
         PA["🔑 Platform Admin<br/><i>runs the server</i>"]
     end
 
-    SYS["<b>AI Employees</b><br/>───────────────<br/>Personal assistant:<br/>chat, agents, schedules,<br/>tools and approvals"]
+    SYS["<b>Baton</b><br/>───────────────<br/>Personal assistant:<br/>chat, agents, schedules,<br/>tools and approvals"]
 
     subgraph ai["🧠 AI Providers"]
         LLM["LLM APIs<br/><i>Claude · OpenAI · Gemini<br/>Groq · own server …</i>"]
@@ -112,7 +114,9 @@ graph TB
 
 | Capability |
 |---|
-| Personal accounts created by a Platform Admin with a one-time setup link |
+| Personal accounts: self sign-up with a username, email and password (sign in with either), or created by a Platform Admin with a one-time setup link |
+| Sign-up and sign-in limits shared through Redis: 10 sign-ups an hour per address; 8 wrong passwords lock an account for 15 minutes |
+| A setup bar and guided AI-key setup; AI keys as cards (free Gemini and Groq, local models, web search keys), each marked Free or Paid |
 | A separate Platform Admin area that cannot read content |
 | Chat as the home screen, with modes (General, Study, Work, Research, Code) and an AI picker |
 | Any LLM provider with the person's own key; automatic choice of AI per task, with fallback |
@@ -121,17 +125,19 @@ graph TB
 | Permissions (Always allow / Ask me first / Blocked) and approvals, also from email or Slack |
 | Per-service read/edit permissions for Google and Microsoft, at platform, connection and agent level |
 | Memory with search by meaning and by words |
+| AI Agents page: Agents, Tree (live tree), History (filters, run details, replay), Models and cost (spend and estimated savings) |
+| Command palette (Ctrl+K) and keyboard shortcuts |
 | Team mode: a lead and read-only helpers working in parallel |
 | Agents designed in chat, with a readiness check, schedules and run history |
+| Excel in OneDrive, Slack and Teams posting, PDF reading |
 
 ### Planned or off by default
 
 | Capability | Status |
 |---|---|
-| Self sign-up | Planned |
 | Saving approval pauses as LangGraph state (`AGENT_CHECKPOINTER`) | Built, off by default |
 | A supervisor graph for team mode, with a review loop (`AGENT_SUPERVISOR`) | Built, off by default |
-| Excel through Microsoft 365; effort-based model choice | Planned |
+| Effort-based model choice | Planned |
 | Inbound webhooks and mail push notifications | Not planned yet |
 
 ### Out of scope
@@ -354,7 +360,7 @@ The things the system stores, and how they relate. Exact columns are in the [LLD
 | **Your setup** | Agent · Provider config (your AI keys) · Connection · Your own OAuth app · Policy · Notification settings · Embedding config |
 | **Platform rules** | Supported provider (the catalog) · Policy default · Platform OAuth app · Service access (platform-wide and per person) · Connection access (per person) |
 | **Conversation and execution** | Conversation · Message · Task · Run · Run event · LLM call · Tool invocation · Approval · Run checkpoint · Graph checkpoint |
-| **Knowledge** | Memory · Memory vector · Run summary · Re-embed job |
+| **Knowledge** | Memory · Memory vector · Run summary |
 
 ## 3.2 Entity relationship diagram
 
@@ -465,7 +471,7 @@ An agent is created only when the person presses **Create** on a draft card in c
 
 # Part 4 — Core flows
 
-## 4.1 A new account
+## 4.1 A new account made by a Platform Admin
 
 ```mermaid
 sequenceDiagram
@@ -473,6 +479,8 @@ sequenceDiagram
     participant API
     participant DB as PostgreSQL
     actor P as 👤 Person
+
+    Note over P,API: Most people skip this: they sign up themselves at /register.
 
     PA->>API: POST /platform/people {email, name}
     API->>API: check platform token
@@ -489,7 +497,9 @@ sequenceDiagram
     API-->>P: access token + refresh cookie
 ```
 
-**Why no sign-up page yet:** an account cannot exist unless a Platform Admin made it. The person sets their own password, so staff never know it and cannot sign in as anyone.
+**Why a link:** the person sets their own password, so staff never know it and cannot sign in as anyone.
+
+**Self sign-up** is simpler: `POST /auth/register` with a username, email and password creates the account and signs the person in at once. It is limited to 10 sign-ups an hour per address. Sign-in (`POST /auth/login`) takes the email or the username, and 8 wrong passwords lock that account and address for 15 minutes. Both limits are counted in Redis, so every API instance shares them.
 
 ## 4.2 Adding a key and designing an agent
 
@@ -762,7 +772,7 @@ graph LR
 | 5 | **Runaway cost** | 🟡 High | Max steps, tokens and time per run; helper call caps |
 | 6 | **Free-tier rate limits** | 🟡 High | Queue, slow mode, fallback to another AI |
 | 7 | **An unattended agent runs on a broken connection** | 🟡 High | Re-check readiness before each scheduled run; mark it as needing attention |
-| 8 | **Wrong memory search after a model switch** | 🟡 High | Store the model per memory; re-embed job |
+| 8 | **Wrong memory search after a model switch** | 🟡 High | Store the embedding model per memory; switching provider re-embeds in the request |
 | 9 | **Irreversible action without a person** | 🟡 High | Side-effect labels, permissions, catastrophic blocklist |
 | 10 | **The Python tool escapes its sandbox** | 🟡 High | It is a restricted subprocess, not a container; labelled write, so it asks first and unattended agents cannot use it |
 
@@ -770,7 +780,6 @@ graph LR
 
 | Change | Trigger |
 |---|---|
-| Self sign-up with abuse controls | Opening to the public |
 | Postgres row-level security | First outside security review |
 | Partition `run_events` by month | ~10M rows |
 | OpenTelemetry to a managed backend | More than one engineer on call |

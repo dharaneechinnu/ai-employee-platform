@@ -198,8 +198,8 @@ status then requires.
 ### 6.2 Gmail scopes are "restricted" and need verification
 
 `gmail.readonly` and `gmail.modify` are restricted scopes. An app in
-production asking for them and serving people outside its own
-organisation must go through Google's OAuth verification, which for
+production asking for them and serving people other than its own
+developer must go through Google's OAuth verification, which for
 restricted scopes also means an annual third-party security assessment
 (CASA). This takes weeks and costs money.
 
@@ -212,7 +212,7 @@ capped at a small number of users.
   mode. Everything works. Just know the 7-day clock is running.
 - **For one person, or a few:** each person registers the app in their
   own Google Cloud project (path 1 in §2). An app used only by its own
-  developer, or only inside its own Workspace organisation, does not
+  developer, or only inside its own Google Workspace domain, does not
   need the external verification. This is the main reason a person can
   bring their own app.
 - **For many people on one shared app:** the platform registers one
@@ -263,8 +263,8 @@ For a person registering their own app (§2, path 1):
   path to any credential
 - Automatic access-token refresh with a margin, and a clear
   `needs_reconnect` state when it fails
-- Twelve Google tools (including four for Sheets) and eight Microsoft
-  tools, each declaring its own side effect so Permissions can gate it
+- Fifteen Google tools (including four for Sheets) and fourteen
+  Microsoft tools (including three for Excel), each declaring its own side effect so Permissions can gate it
 - A Platform Admin screen to register the shared app, and a
   Connections screen where a person registers their own
 - Platform Admin controls to open or close a connection, or one part of

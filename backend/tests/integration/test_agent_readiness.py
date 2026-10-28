@@ -215,7 +215,7 @@ async def test_closing_reading_closes_editing_too(api: AsyncClient, session: Asy
     assert result["ok"] is False
 
 
-async def test_one_company_can_be_opened_while_the_platform_is_closed(
+async def test_one_person_can_be_opened_while_the_platform_is_closed(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     pilot, pilot_headers = await _person(api, session)
@@ -239,7 +239,7 @@ async def test_one_company_can_be_opened_while_the_platform_is_closed(
     assert (await _check(api, pilot_headers, ["sheets_append_rows"]))["ok"] is True
     assert (await _check(api, other_headers, ["sheets_append_rows"]))["ok"] is False
 
-    # Removing the company's ruling returns it to the platform's.
+    # Removing the person's ruling returns it to the platform's.
     await api.put(
         f"{PLATFORM}/people/{pilot.owner_id}/services/google.sheets/edit",
         json={"allowed": None},
@@ -248,7 +248,7 @@ async def test_one_company_can_be_opened_while_the_platform_is_closed(
     assert (await _check(api, pilot_headers, ["sheets_append_rows"]))["ok"] is False
 
 
-async def test_a_company_can_be_closed_for_one_service_only(
+async def test_a_person_can_be_closed_for_one_service_only(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     person, headers = await _person(api, session)
@@ -257,16 +257,16 @@ async def test_a_company_can_be_closed_for_one_service_only(
 
     await api.put(
         f"{PLATFORM}/people/{person.owner_id}/services/google.gmail/read",
-        json={"allowed": False, "note": "Mail stays out of reach on this plan."},
+        json={"allowed": False, "note": "Mail stays out of reach for this account."},
         headers=staff,
     )
     failed = _failed(await _check(api, headers, ["gmail_search"]))
-    assert failed["platform:ask_admin"]["detail"] == "Mail stays out of reach on this plan."
+    assert failed["platform:ask_admin"]["detail"] == "Mail stays out of reach for this account."
     # Another service on the same app is untouched.
     assert (await _check(api, headers, ["sheets_read"]))["ok"] is True
 
 
-async def test_a_company_closed_for_the_whole_app_is_reported(
+async def test_a_person_closed_for_the_whole_app_is_reported(
     api: AsyncClient, session: AsyncSession
 ) -> None:
     person, headers = await _person(api, session)
@@ -274,11 +274,11 @@ async def test_a_company_closed_for_the_whole_app_is_reported(
     await _connect_google(session, person.owner_id, WITH_SHEETS)
     await api.put(
         f"{PLATFORM}/people/{person.owner_id}/connections/google",
-        json={"allowed": False, "note": "Not on your plan."},
+        json={"allowed": False, "note": "Not available for this account."},
         headers=staff,
     )
     failed = _failed(await _check(api, headers, ["sheets_read"]))
-    assert failed["platform:ask_admin"]["detail"] == "Not on your plan."
+    assert failed["platform:ask_admin"]["detail"] == "Not available for this account."
 
 
 async def test_a_customer_cannot_reach_the_service_rules(
@@ -497,5 +497,5 @@ async def test_the_platform_screen_lists_every_service_and_level(
     assert ("google.drive", "edit") not in pairs  # nothing edits Drive
     assert all(r["allowed"] for r in matrix)
 
-    company = (await api.get(f"{PLATFORM}/people/{person.owner_id}/services", headers=staff)).json()
-    assert all(r["allowed"] and not r["overridden"] for r in company)
+    person = (await api.get(f"{PLATFORM}/people/{person.owner_id}/services", headers=staff)).json()
+    assert all(r["allowed"] and not r["overridden"] for r in person)

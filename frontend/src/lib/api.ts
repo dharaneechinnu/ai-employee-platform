@@ -309,10 +309,10 @@ export interface ConnectedProvider {
   last_tested_at: string | null;
   last_error: string | null;
   trains_on_data: boolean;
-  /** What runs: the company's chosen model, else the provider's default. */
+  /** What runs: your chosen model, else the provider's default. */
   default_model: string | null;
   model_chosen?: boolean;
-  /** Only for "custom": the company's own OpenAI-compatible server. */
+  /** Only for "custom": your own OpenAI-compatible server. */
   base_url?: string | null;
   /** What Automatic sends to this AI, in plain words. */
   strengths?: string[] | null;
@@ -320,7 +320,7 @@ export interface ConnectedProvider {
   plan?: "free" | "paid" | null;
 }
 
-export type TaskStatus =
+type TaskStatus =
   | "queued"
   | "running"
   | "awaiting_approval"
@@ -337,7 +337,7 @@ export interface TaskListItem {
   created_at: string;
 }
 
-export interface Run {
+interface Run {
   id: string;
   status: string;
   step_count: number;
@@ -409,7 +409,7 @@ export interface EmbeddingConfig {
   memories_needing_reembedding: number;
 }
 
-export interface ConnectionField {
+interface ConnectionField {
   key: string;
   label: string;
   placeholder?: string;
@@ -472,7 +472,7 @@ export interface ApprovalLinkView {
 
 export type ChatMode = "general" | "study" | "work" | "research" | "code";
 
-export interface ChatModeInfo {
+interface ChatModeInfo {
   key: ChatMode;
   label: string;
   for_whom: string;
@@ -549,7 +549,7 @@ export interface AgentDraft {
 }
 
 /** One link in the chain behind an agent: is it ready, and how to fix it. */
-export interface ReadinessCheck {
+interface ReadinessCheck {
   ok: boolean;
   layer: "app" | "platform" | "connection" | "permission" | "agent" | "setup";
   title: string;
@@ -574,7 +574,7 @@ export interface RunNowResult {
   readiness: Readiness | null;
 }
 
-export interface AgentUsage {
+interface AgentUsage {
   runs: number;
   prompt_tokens: number;
   output_tokens: number;
@@ -728,13 +728,13 @@ export interface HistoryItem {
 }
 
 /** What the models cost: see `GET /me/usage`. Every figure is an estimate. */
-export interface UsageModelChoice {
+interface UsageModelChoice {
   provider_key: string;
   provider_name: string;
   model: string;
 }
 
-export interface UsagePlanShare {
+interface UsagePlanShare {
   calls: number;
   tokens: number;
   cost_usd: string;

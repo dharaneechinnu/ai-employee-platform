@@ -1,12 +1,12 @@
 """The confidentiality boundary, tested rather than asserted in a document.
 
-The plan's rule is one line: a Platform Admin sees **how much** and
+The rule is one line: a Platform Admin sees **how much** and
 **how healthy**, never **what**.
 
 This matters more than a normal access check. A Platform Admin account
-is a master key to every company at once. If it could read customer
+is a master key to every person at once. If it could read customer
 content, one stolen password would leak every customer's code, email
-and client list simultaneously — the kind of event a company does not
+and client list simultaneously — the kind of event a person does not
 recover from.
 
 So the control is not an access rule that could be misconfigured. It
@@ -23,7 +23,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_person
 
 # Strings planted in customer data. None may appear in any
 # platform-admin response.
@@ -49,8 +49,8 @@ async def _platform_token(api: AsyncClient, session: AsyncSession) -> str:
 @pytest.fixture
 async def seeded(api: AsyncClient, session: AsyncSession) -> dict[str, str]:
     """A person holding content that must never be readable from /platform."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
 
     await api.post(
         "/api/v1/me/providers",
@@ -118,7 +118,7 @@ async def test_no_platform_endpoint_leaks_customer_content(
 async def test_the_customer_routes_are_closed_to_platform_staff(
     api: AsyncClient, seeded: dict[str, str]
 ) -> None:
-    """A platform token must not work on the company API either.
+    """A platform token must not work on the person API either.
 
     Otherwise the missing /platform endpoint would be no protection at
     all: staff would simply call the customer route instead.
@@ -129,7 +129,7 @@ async def test_the_customer_routes_are_closed_to_platform_staff(
         "/api/v1/me/tasks",
         "/api/v1/me/memory",
         "/api/v1/me/providers",
-        "/api/v1/me/ai-employees",
+        "/api/v1/me/conversations",
     ):
         response = await api.get(path, headers=headers)
         assert response.status_code in (401, 403, 404), f"{path} accepted a platform token"

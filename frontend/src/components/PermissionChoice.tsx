@@ -23,8 +23,6 @@ export const PERMISSION_OPTIONS: { key: Setting; label: string; hint: string }[]
   { key: "blocked", label: "Blocked", hint: "Never runs" },
 ];
 
-export const PERMISSION_LABEL: Record<Setting, string> = { auto: "Always allow", ask: "Ask me first", blocked: "Blocked" };
-
 const SELECTED: Record<Setting, string> = {
   auto: "bg-ok-soft text-ok-text shadow-[inset_0_0_0_1px_var(--ok)] font-semibold",
   ask: "bg-ask-soft text-ask-text shadow-[inset_0_0_0_1px_var(--ask)] font-semibold",

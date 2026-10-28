@@ -409,7 +409,7 @@ export function statusTone(status: string): Tone {
 }
 
 /** "awaiting_approval" reads better as "awaiting approval". */
-export function humanise(value: string): string {
+function humanise(value: string): string {
   return value.replace(/_/g, " ");
 }
 
@@ -434,15 +434,6 @@ export function Chip({
 
 export function StatusChip({ status }: { status: string }) {
   return <Chip tone={statusTone(status)}>{humanise(status)}</Chip>;
-}
-
-/** @deprecated kept so older call sites read naturally; prefer Chip. */
-export function Badge({ children, tone = "mute" }: { children: ReactNode; tone?: Tone }) {
-  return (
-    <Chip tone={tone} dot={false}>
-      {children}
-    </Chip>
-  );
 }
 
 // Deep, calm tones that all carry white initials at 4.5:1 or better.
@@ -488,26 +479,6 @@ export function Avatar({
     >
       {name.trim().charAt(0).toUpperCase() || "?"}
     </span>
-  );
-}
-
-export function UsageMeter({ used, limit, label }: { used: number; limit: number; label: string }) {
-  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  return (
-    <div className="flex min-w-[160px] flex-col gap-1.5">
-      <div className="flex justify-between text-xs text-muted">
-        <span>{label}</span>
-        <span className="font-mono text-ink">
-          {used} / {limit}
-        </span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-raised" role="presentation">
-        <div
-          className="grow-x h-full rounded-full"
-          style={{ width: `${pct}%`, background: "var(--accent)" }}
-        />
-      </div>
-    </div>
   );
 }
 

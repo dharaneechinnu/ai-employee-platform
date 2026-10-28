@@ -72,7 +72,6 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         self.model = model
         self.dim = dim
         self._backend = None
-        self._semantic = False
 
         try:
             from fastembed import TextEmbedding
@@ -88,10 +87,6 @@ class LocalEmbeddingProvider(EmbeddingProvider):
                     "for real local embeddings."
                 ),
             )
-
-    @property
-    def is_semantic(self) -> bool:
-        return self._semantic
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if self._backend is not None:

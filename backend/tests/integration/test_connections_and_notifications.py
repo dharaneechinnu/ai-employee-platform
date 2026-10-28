@@ -20,7 +20,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_person
 from tests.integration.test_policy_and_approvals import SendsThenAnswers, _run, _say, _setup
 
 ACCESS = "ya29.fake-access-token-0001"
@@ -94,10 +94,10 @@ async def _connect_google(api: AsyncClient, owner_id: uuid.UUID, token: str) -> 
 async def test_the_catalogue_lists_one_click_apps_and_their_tools(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
     response = await api.get(
         "/api/v1/me/connections/available",
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     assert response.status_code == 200
     by_kind = {c["kind"]: c for c in response.json()}
@@ -111,10 +111,10 @@ async def test_the_catalogue_lists_one_click_apps_and_their_tools(
 async def test_starting_a_connection_without_an_oauth_app_says_why(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
     response = await api.post(
         "/api/v1/me/connections/oauth/google/start",
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     assert response.status_code == 422
     assert "not set up" in response.json()["detail"]
@@ -126,15 +126,15 @@ async def test_one_click_google_connection_end_to_end(
     oauth_configured: None,
     fake_google: list[dict[str, Any]],
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    callback = await _connect_google(api, acme.owner_id, acme.admin_token)
+    acme = await seed_person(session, api, name="Acme")
+    callback = await _connect_google(api, acme.owner_id, acme.token)
 
     assert callback.status_code == 303
     assert "connected=google" in callback.headers["location"]
 
     listed = await api.get(
         "/api/v1/me/connections",
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     [conn] = listed.json()
     assert conn["kind"] == "google"
@@ -154,7 +154,6 @@ async def test_a_tampered_state_is_refused(
     assert "error=" in response.headers["location"]
 
 
-
 async def test_an_expiring_token_is_refreshed_before_a_run(
     api: AsyncClient,
     session: AsyncSession,
@@ -167,8 +166,8 @@ async def test_an_expiring_token_is_refreshed_before_a_run(
     from app.db.models.policy import Connection
     from app.services.connection_service import ConnectionService
 
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    await _connect_google(api, acme.owner_id, acme.admin_token)
+    acme = await seed_person(session, api, name="Acme")
+    await _connect_google(api, acme.owner_id, acme.token)
 
     conn = await session.scalar(select(Connection).where(Connection.owner_id == acme.owner_id))
     assert conn is not None
@@ -185,7 +184,7 @@ async def test_an_expiring_token_is_refreshed_before_a_run(
 async def test_a_manual_mailbox_connection_is_stored_write_only(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
     response = await api.post(
         "/api/v1/me/connections",
         json={
@@ -194,7 +193,7 @@ async def test_a_manual_mailbox_connection_is_stored_write_only(
             "secret": "app-password-wxyz",
             "config": {"username": "support@acme.com"},
         },
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     assert response.status_code == 201, response.text
     body = response.json()
@@ -206,11 +205,11 @@ async def test_a_manual_mailbox_connection_is_stored_write_only(
 async def test_one_click_kinds_cannot_be_added_by_hand(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
+    acme = await seed_person(session, api, name="Acme")
     response = await api.post(
         "/api/v1/me/connections",
         json={"kind": "google", "label": "x", "secret": "y", "config": {}},
-        headers={"Authorization": f"Bearer {acme.admin_token}"},
+        headers={"Authorization": f"Bearer {acme.token}"},
     )
     assert response.status_code == 422
 
@@ -243,8 +242,8 @@ def outbox(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, list[Any]]]:
 async def test_notification_settings_default_and_update(
     api: AsyncClient, session: AsyncSession, outbox: dict[str, list[Any]]
 ) -> None:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
     url = "/api/v1/me/notifications"
 
     initial = (await api.get(url, headers=headers)).json()
@@ -272,7 +271,6 @@ async def test_notification_settings_default_and_update(
     assert test.json()["slack"] == "sent"
     assert test.json()["email"].startswith("sent to")
     assert len(outbox["slack"]) == 1
-
 
 
 async def test_approve_from_an_email_link_resumes_the_run(
@@ -337,7 +335,6 @@ async def test_approve_from_an_email_link_resumes_the_run(
     assert not any("finished" in e["subject"] for e in outbox["email"])
 
 
-
 async def test_a_forged_approval_link_is_not_found(api: AsyncClient) -> None:
     response = await api.get("/api/v1/approval-links/forged.token.value")
     assert response.status_code == 404
@@ -348,6 +345,6 @@ async def test_an_access_token_is_not_an_approval_link(
 ) -> None:
     """Purposes are not interchangeable: a session token pasted into a
     link must not be read as one."""
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    response = await api.get(f"/api/v1/approval-links/{acme.admin_token}")
+    acme = await seed_person(session, api, name="Acme")
+    response = await api.get(f"/api/v1/approval-links/{acme.token}")
     assert response.status_code == 404

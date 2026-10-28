@@ -1,4 +1,4 @@
-"""Voice typing: Whisper through the company's own Groq key.
+"""Voice typing: Whisper through the person's own Groq key.
 
 Groq is never contacted: its HTTP client is replaced with a fake that
 records what it was sent.
@@ -13,7 +13,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_person
 
 GROQ_KEY = "gsk_test-key-5678"
 WEBM = b"\x1aE\xdf\xa3" + b"\x00" * 2048  # a WebM header, then silence
@@ -39,11 +39,11 @@ def fake_groq(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return seen
 
 
-async def _company(
+async def _person(
     api: AsyncClient, session: AsyncSession, *, groq: bool
 ) -> tuple[Any, dict[str, str]]:
-    acme = await seed_company(session, api, name="Acme", slug="acme")
-    headers = {"Authorization": f"Bearer {acme.admin_token}"}
+    acme = await seed_person(session, api, name="Acme")
+    headers = {"Authorization": f"Bearer {acme.token}"}
     if groq:
         connected = await api.post(
             "/api/v1/me/providers",
@@ -57,7 +57,7 @@ async def _company(
 async def test_without_a_groq_key_the_browser_does_the_listening(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    _acme, headers = await _company(api, session, groq=False)
+    _acme, headers = await _person(api, session, groq=False)
     response = await api.get("/api/v1/me/speech", headers=headers)
     assert response.status_code == 200
     assert response.json()["engine"] == "browser"
@@ -67,7 +67,7 @@ async def test_without_a_groq_key_the_browser_does_the_listening(
 async def test_with_a_groq_key_whisper_transcribes(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
-    _acme, headers = await _company(api, session, groq=True)
+    _acme, headers = await _person(api, session, groq=True)
 
     engine = await api.get("/api/v1/me/speech", headers=headers)
     assert engine.json() == {
@@ -84,7 +84,7 @@ async def test_with_a_groq_key_whisper_transcribes(
     assert response.status_code == 200, response.text
     assert response.json() == {"text": "Why did checkouts fail overnight?"}
 
-    # The company's own key, decrypted only for this call, and the file
+    # The person's own key, decrypted only for this call, and the file
     # named so Groq can tell the format.
     assert fake_groq["auth"] == f"Bearer {GROQ_KEY}"
     assert fake_groq["url"].endswith("/openai/v1/audio/transcriptions")
@@ -95,7 +95,7 @@ async def test_with_a_groq_key_whisper_transcribes(
 async def test_voice_typing_works(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
-    acme, _ = await _company(api, session, groq=True)
+    acme, _ = await _person(api, session, groq=True)
     response = await api.post(
         "/api/v1/me/speech/transcribe",
         content=WEBM,
@@ -107,7 +107,7 @@ async def test_voice_typing_works(
 async def test_transcribing_without_a_groq_key_says_what_to_do(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    _acme, headers = await _company(api, session, groq=False)
+    _acme, headers = await _person(api, session, groq=False)
     response = await api.post(
         "/api/v1/me/speech/transcribe",
         content=WEBM,
@@ -120,7 +120,7 @@ async def test_transcribing_without_a_groq_key_says_what_to_do(
 async def test_bad_uploads_are_refused_before_groq_is_called(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
-    _acme, headers = await _company(api, session, groq=True)
+    _acme, headers = await _person(api, session, groq=True)
     url = "/api/v1/me/speech/transcribe"
 
     wrong_type = await api.post(
@@ -149,7 +149,7 @@ async def test_groq_failures_become_clear_errors(
     groq_status: int,
     ours: int,
 ) -> None:
-    _acme, headers = await _company(api, session, groq=True)
+    _acme, headers = await _person(api, session, groq=True)
     fake_groq["status"] = groq_status
     response = await api.post(
         "/api/v1/me/speech/transcribe",
@@ -164,12 +164,12 @@ async def test_groq_failures_become_clear_errors(
 async def test_another_person_cannot_use_your_groq_key(
     api: AsyncClient, session: AsyncSession, fake_groq: dict[str, Any]
 ) -> None:
-    _acme, _ = await _company(api, session, groq=True)
-    other = await seed_company(session, api, name="Globex", slug="globex")
+    _acme, _ = await _person(api, session, groq=True)
+    other = await seed_person(session, api, name="Globex")
     response = await api.post(
         "/api/v1/me/speech/transcribe",
         content=WEBM,
-        headers={"Authorization": f"Bearer {other.admin_token}", "Content-Type": "audio/webm"},
+        headers={"Authorization": f"Bearer {other.token}", "Content-Type": "audio/webm"},
     )
     # No id in the path to forge any more: they are scoped to
     # themselves, and they have connected no key, so the answer is

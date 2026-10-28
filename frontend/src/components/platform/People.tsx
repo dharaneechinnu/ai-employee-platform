@@ -107,7 +107,7 @@ export function PeopleSection({ people, act, links, busy }: { people: Person[]; 
     return (
       <section className="rounded-2xl border border-line bg-panel">
         <EmptyCard
-          icon="members"
+          icon="people"
           tone="brand"
           title="No one has joined yet"
           actions={

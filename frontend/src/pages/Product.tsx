@@ -30,7 +30,7 @@ const FEATURES: Feature[] = [
     title: "Ask in plain words. Watch every step.",
     body: "Type what you need in chat, the way you would ask a friend. Set up your own helpers by answering three plain questions. Every thought, tool call and result streams live.",
     points: [
-      { icon: "employees", text: "Guided setup: what it does, what it must never do, when to ask you" },
+      { icon: "helpers", text: "Guided setup: what it does, what it must never do, when to ask you" },
       { icon: "terminal", text: "A live, replayable log of every step, token and cost" },
       { icon: "tree", text: "Bigger questions are split between specialists, shown as a live tree" },
     ],
@@ -71,7 +71,7 @@ const FEATURES: Feature[] = [
     points: [
       { icon: "memory", text: "Your memory, searched by meaning; forget anything, any time" },
       { icon: "providers", text: "Bring your own key: Gemini, OpenRouter and more" },
-      { icon: "members", text: "Your account is sealed off; whoever runs the server sees counts, never content" },
+      { icon: "people", text: "Your account is sealed off; whoever runs the server sees counts, never content" },
     ],
   },
 ];
@@ -81,7 +81,7 @@ const WORKS_WITH = ["Gmail", "Google Calendar", "Google Drive", "Outlook", "OneD
 const STEPS: { icon: IconName; title: string; body: string }[] = [
   { icon: "link", title: "Connect", body: "Sign in to Google or Microsoft once. Set what needs your approval." },
   { icon: "tasks", title: "Ask", body: "Type what you need in chat and watch it happen, step by step." },
-  { icon: "employees", title: "Make it yours", body: "Set up your own helpers in three plain answers and pick their tools." },
+  { icon: "helpers", title: "Make it yours", body: "Set up your own helpers in three plain answers and pick their tools." },
 ];
 
 export default function Product() {

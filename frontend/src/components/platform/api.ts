@@ -80,7 +80,7 @@ export interface Overview {
 }
 
 /** Whether a person has connected a provider. Never the key, not even masked. */
-export interface ProviderStatus {
+interface ProviderStatus {
   provider_key: string;
   connected: boolean;
   status: string;

@@ -57,7 +57,7 @@ type CoachApi = {
 
 const CoachContext = createContext<CoachApi | null>(null);
 
-export function useCoach(): CoachApi {
+function useCoach(): CoachApi {
   const api = useContext(CoachContext);
   if (!api) throw new Error("useCoach needs <CoachProvider>");
   return api;

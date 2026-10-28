@@ -1,18 +1,13 @@
-"""Step 4a: our loop, tools and providers seen from LangChain and LangGraph.
+"""The run as a LangGraph graph.
 
 The point of this step is that nothing changes for the person, so the
 main test runs the same scripted conversation through the loop directly
-and through the graph and expects the same outcome. The rest prove the
-adapters are good enough for the supervisor graph that comes next.
+and through the graph and expects the same outcome.
 """
 
 import uuid
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-
 from app.agent.graph import build_graph, run_in_graph
-from app.agent.lc.model import ProviderChatModel, to_langchain, to_ours
-from app.agent.lc.tools import to_langchain_tools
 from app.agent.loop import AgentLoop, Budget
 from app.agent.providers.base import (
     LLMProvider,
@@ -115,56 +110,3 @@ async def test_a_paused_run_still_pauses_inside_the_graph() -> None:
         "arguments": {"expression": "1+1"},
     }
     assert outcome.saved_state is not None
-
-
-async def test_our_tools_work_as_langchain_tools() -> None:
-    (tool,) = to_langchain_tools([Calculator], CTX)
-    assert tool.name == "calculator"
-    assert "expression" in tool.args_schema.model_json_schema()["properties"]
-    assert '"result": 261' in await tool.ainvoke({"expression": "(1200 * 0.18) + 45"})
-    # A failure is text for the model, as in our own loop.
-    assert "zero" in (await tool.ainvoke({"expression": "1 / 0"})).lower()
-
-
-def test_messages_survive_the_round_trip() -> None:
-    theirs = [
-        SystemMessage(content="be brief"),
-        HumanMessage(content="hi"),
-        AIMessage(
-            content="",
-            tool_calls=[{"id": "a", "name": "calculator", "args": {"expression": "1"}}],
-        ),
-        ToolMessage(content="1", tool_call_id="a", name="calculator"),
-    ]
-    ours = to_ours(theirs)
-    assert [m.role for m in ours] == [Role.SYSTEM, Role.USER, Role.ASSISTANT, Role.TOOL]
-    assert ours[2].tool_calls[0].arguments == {"expression": "1"}
-    assert ours[3].tool_call_id == "a"
-    back = to_langchain(ours[2])
-    assert back.tool_calls[0]["name"] == "calculator"
-
-
-async def test_our_provider_works_as_a_langchain_chat_model() -> None:
-    provider = Scripted([answer("Hello there")])
-    model = ProviderChatModel(provider=provider, model="m").bind_tools(
-        to_langchain_tools([Calculator], CTX)
-    )
-    reply = await model.ainvoke([HumanMessage(content="hi")])
-    assert reply.content == "Hello there"
-    assert reply.usage_metadata["total_tokens"] == 15
-    sent = provider.calls[0]
-    assert [t.name for t in sent["tools"]] == ["calculator"]
-    assert sent["messages"][0].content == "hi"
-
-
-async def test_langgraphs_tool_agent_runs_on_our_model_and_tools() -> None:
-    """What the supervisor graph (step 4b) will build each agent node from."""
-    from langgraph.prebuilt import create_react_agent
-
-    provider = Scripted([asks("calculator", {"expression": "2 ** 10"}), answer("1024")])
-    agent = create_react_agent(
-        ProviderChatModel(provider=provider, model="m"), to_langchain_tools([Calculator], CTX)
-    )
-    final = await agent.ainvoke({"messages": [HumanMessage(content="2 to the 10?")]})
-    assert final["messages"][-1].content == "1024"
-    assert any(isinstance(m, ToolMessage) and "1024" in m.content for m in final["messages"])

@@ -449,7 +449,7 @@ async def audit_log(
     # are what staff already see in the people list; nothing more.
     people_ids = []
     for entry, _ in rows:
-        if entry.target_type in ("user", "organization") and entry.target_id:
+        if entry.target_type == "user" and entry.target_id:
             try:
                 people_ids.append(uuid.UUID(entry.target_id))
             except ValueError:

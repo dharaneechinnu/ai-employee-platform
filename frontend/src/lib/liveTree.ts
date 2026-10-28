@@ -15,9 +15,9 @@ import { toolLabel } from "./labels";
 const DONE_FOR_MS = 45_000;
 const MAX_STORY = 40;
 
-export type NodeState = TreeState | "done";
+type NodeState = TreeState | "done";
 /** Where a scheduled start has got to. */
-export type Phase = "due" | "ready" | "blocked" | "starting" | "skipped" | null;
+type Phase = "due" | "ready" | "blocked" | "starting" | "skipped" | null;
 
 export interface StoryItem {
   id: string;
@@ -49,7 +49,7 @@ export interface NodeLive {
   waitingFor: string | null;
 }
 
-export interface LiveTreeState {
+interface LiveTreeState {
   ready: boolean;
   nodes: Record<string, NodeLive>;
   tree: AgentsTree | null;

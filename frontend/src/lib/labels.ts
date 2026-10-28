@@ -6,7 +6,7 @@
  * same thing for the same tool.
  */
 
-export const TOOL_LABELS: Record<string, string> = {
+const TOOL_LABELS: Record<string, string> = {
   gmail_search: "Search Gmail",
   gmail_read: "Read a Gmail email",
   gmail_create_draft: "Save a Gmail draft",
@@ -69,7 +69,7 @@ export const TOOL_LABELS: Record<string, string> = {
   propose_agent: "Draft a new agent",
 };
 
-export function humanise(id: string): string {
+function humanise(id: string): string {
   const words = id.replace(/[_-]+/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -84,7 +84,7 @@ export function toolAction(name: string): string {
   return label.charAt(0).toLowerCase() + label.slice(1);
 }
 
-export const PACK_LABELS: Record<string, string> = {
+const PACK_LABELS: Record<string, string> = {
   google: "Google Workspace",
   microsoft: "Microsoft 365",
   email: "Mailbox (IMAP)",
@@ -122,10 +122,6 @@ export function effectLabel(effect: string): string {
   return EFFECTS[effect as Effect]?.label ?? humanise(effect);
 }
 
-export function effectTone(effect: string): "ok" | "brand" | "bad" {
-  return EFFECTS[effect as Effect]?.tone ?? "brand";
-}
-
 const PROVIDER_NAMES: Record<string, string> = {
   gemini: "Gemini",
   groq: "Groq",
@@ -138,7 +134,7 @@ const PROVIDER_NAMES: Record<string, string> = {
 };
 
 /** "auto" (and the old "gemini-flash") means: whichever AI is connected. */
-export function isAutoModel(model: string): boolean {
+function isAutoModel(model: string): boolean {
   return ["auto", "gemini-flash", ""].includes(model.trim());
 }
 
@@ -205,7 +201,7 @@ export function aiChoiceLabel(model: string, routing?: string): string {
  * lets the agent do. Tools without an entry fall back to the first
  * sentence of their own description.
  */
-export const TOOL_BLURBS: Record<string, string> = {
+const TOOL_BLURBS: Record<string, string> = {
   current_time: "Lets it know today's date, so it can tell upcoming from past.",
   calculator: "Does sums, percentages and averages exactly instead of guessing.",
   text_tools: "Counts words, finds emails, links and numbers, and shows what changed between two versions.",

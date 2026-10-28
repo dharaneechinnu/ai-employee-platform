@@ -30,7 +30,6 @@ log = get_logger(__name__)
 
 MAX_CONVERSATIONS = 200
 TITLE_CHARS = 60
-UNSET = object()
 
 
 @dataclass(slots=True)

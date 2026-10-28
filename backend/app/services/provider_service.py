@@ -1,7 +1,7 @@
 """BYOK provider configuration.
 
 Each person brings their own API key. That is what makes the platform
-viable on no budget: cost per customer is zero, and one heavy customer
+viable on no budget: cost per person is zero, and one heavy user
 cannot inflate anyone else's bill.
 
 The key is write-only. After it is saved there is no code path that

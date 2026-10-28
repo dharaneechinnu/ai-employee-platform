@@ -5,16 +5,16 @@ from __future__ import annotations
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.integration.conftest import seed_company
+from tests.integration.conftest import seed_person
 
 
 async def test_login_with_wrong_password_is_rejected(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    company = await seed_company(session, api, name="Acme", slug="acme")
+    person = await seed_person(session, api, name="Acme")
 
     response = await api.post(
-        "/api/v1/auth/login", json={"email": company.admin_email, "password": "wrong-password-xx"}
+        "/api/v1/auth/login", json={"email": person.email, "password": "wrong-password-xx"}
     )
     assert response.status_code == 401
 
@@ -24,10 +24,10 @@ async def test_unknown_email_gives_the_same_message_as_a_wrong_password(
 ) -> None:
     """Different messages would let someone enumerate which email
     addresses have accounts."""
-    company = await seed_company(session, api, name="Acme", slug="acme")
+    person = await seed_person(session, api, name="Acme")
 
     wrong_password = await api.post(
-        "/api/v1/auth/login", json={"email": company.admin_email, "password": "wrong-password-xx"}
+        "/api/v1/auth/login", json={"email": person.email, "password": "wrong-password-xx"}
     )
     unknown_user = await api.post(
         "/api/v1/auth/login", json={"email": "nobody@nowhere.com", "password": "wrong-password-xx"}

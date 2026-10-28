@@ -192,7 +192,7 @@ export default function Agents() {
                   ) : (
                     <li key={s.key} className="flex flex-col gap-2 rounded-xl border border-line p-3">
                       <div className="flex items-center gap-2">
-                        <Icon name={s.kind === "mode" ? "chat" : "employees"} size={15} className="text-dim" />
+                        <Icon name={s.kind === "mode" ? "chat" : "helpers"} size={15} className="text-dim" />
                         <b className="text-[14px]">{s.name}</b>
                         <span className="text-[11.5px] uppercase tracking-wider text-dim">
                           {s.kind === "mode" ? "style" : "teammate"}

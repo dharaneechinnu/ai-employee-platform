@@ -7,7 +7,7 @@ import type { IconName } from "../components/icons";
  * Keys are the plain role names the team uses. A saved agent the person
  * made themselves has no role of its own and gets the generic mark.
  */
-export type AgentRole =
+type AgentRole =
   | "lead"
   | "researcher"
   | "analyst"
@@ -24,7 +24,7 @@ interface AgentLook {
   tone: string;
 }
 
-export const AGENT_LOOK: Record<AgentRole, AgentLook> = {
+const AGENT_LOOK: Record<AgentRole, AgentLook> = {
   lead: { label: "Lead assistant", icon: "tree", tone: "var(--accent)" },
   researcher: { label: "Researcher", icon: "search", tone: "var(--run)" },
   analyst: { label: "Analyst", icon: "chart", tone: "var(--ok)" },

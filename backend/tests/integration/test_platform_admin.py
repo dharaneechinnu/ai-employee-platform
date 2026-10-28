@@ -38,7 +38,7 @@ async def test_a_wrong_password_is_refused(api: AsyncClient, session: AsyncSessi
     """The only thing guarding this account now that 2FA is gone.
 
     Worth a test of its own precisely because it is the whole gate: a
-    Platform Admin can create and suspend every company, and there is
+    Platform Admin can create and suspend every person, and there is
     no second factor behind this check any more.
     """
     email, _ = await _make_admin(session)
@@ -122,16 +122,16 @@ async def test_suspend_and_restore_an_account(api: AsyncClient, session: AsyncSe
 async def test_a_customer_token_cannot_reach_platform_routes(
     api: AsyncClient, session: AsyncSession
 ) -> None:
-    """The one security test worth keeping here. A Company Admin token
+    """The one security test worth keeping here. A customer token
     carries typ=access, not typ=platform_access, so it is refused even
-    though its holder is an admin of their own company."""
-    from tests.integration.conftest import seed_company
+    though its holder is an admin of their own person."""
+    from tests.integration.conftest import seed_person
 
-    company = await seed_company(session, api, name="Acme", slug="acme")
+    person = await seed_person(session, api, name="Acme")
 
     response = await api.get(
         "/api/v1/platform/people",
-        headers={"Authorization": f"Bearer {company.admin_token}"},
+        headers={"Authorization": f"Bearer {person.token}"},
     )
     assert response.status_code == 401
 

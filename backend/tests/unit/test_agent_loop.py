@@ -201,8 +201,8 @@ async def test_token_usage_is_accumulated() -> None:
     assert outcome.output_tokens == 10
 
 
-async def test_only_the_employees_own_tools_are_offered_to_the_model() -> None:
-    """A tool the employee is not allowed does not appear in the schema
+async def test_only_the_agents_own_tools_are_offered_to_the_model() -> None:
+    """A tool the agent is not allowed does not appear in the schema
     list, so as far as the model is concerned it does not exist. This
     is the main defence against prompt injection."""
     loop = _loop(ScriptedProvider([_answer("ok")]), [EchoTool])

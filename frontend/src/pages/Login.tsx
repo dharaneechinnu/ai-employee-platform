@@ -6,9 +6,6 @@ import { ErrorNote, Input } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
-// The staff sign-in imports the brand panel from here.
-export { AuthStage } from "../components/AuthLayout";
-
 /**
  * Sign in, or finish setting up an account.
  *

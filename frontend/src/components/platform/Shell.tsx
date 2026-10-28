@@ -12,7 +12,7 @@ import { StaffBadge, StaffLogo } from "./bits";
 export type View = "overview" | "signin" | "access" | "audit";
 
 const NAV: { heading?: string; items: { key: View; label: string; icon: IconName | "sliders" | "signin" }[] }[] = [
-  { items: [{ key: "overview", label: "Overview and people", icon: "members" }] },
+  { items: [{ key: "overview", label: "Overview and people", icon: "people" }] },
   {
     heading: "Settings",
     items: [
@@ -58,7 +58,7 @@ const LOG_ICON = (
 );
 
 /** The one thing the customer app never has: who is signed in, and that it is all logged. */
-export function StaffStrip({ email }: { email: string | null }) {
+function StaffStrip({ email }: { email: string | null }) {
   return (
     <div className="flex min-h-[30px] flex-wrap items-center justify-between gap-x-6 gap-y-1 px-4 text-xs sm:min-h-9 sm:px-6 sm:text-[12.5px]" style={{ background: "var(--strip-bg)", color: "var(--strip-text)" }}>
       <div className="flex min-w-0 items-center gap-2">

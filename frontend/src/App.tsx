@@ -54,7 +54,7 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Outside the company layout: separate session, separate token. */}
+      {/* Outside the app layout: separate session, separate token. */}
       <Route path="/platform" element={<PlatformAdmin />} />
       <Route path="/approve/:token" element={<ApproveLink />} />
       <Route path="/product" element={<Product />} />
@@ -66,7 +66,7 @@ export default function App() {
         <Route path="/chat" element={<Chat />} />
         <Route path="/chat/:id" element={<Chat />} />
         <Route path="/agents" element={<Agents />} />
-        {/* Old bookmarks and links. Tasks and AI Employees were folded
+        {/* Old bookmarks and links. Tasks and the old helper list were folded
             into the assistant, which lives in chat. */}
         <Route path="/tasks" element={<Navigate to="/chat" replace />} />
         <Route path="/employees" element={<Navigate to="/chat" replace />} />

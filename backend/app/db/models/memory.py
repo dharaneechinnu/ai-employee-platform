@@ -17,14 +17,12 @@ means no index, or distance maths that is quietly meaningless.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Computed,
-    DateTime,
     ForeignKey,
     Index,
     Integer,
@@ -166,24 +164,3 @@ class RunSummary(Base, TimestampMixin):
     lesson: Mapped[str | None] = mapped_column(Text)
 
     __table_args__ = (Index("ix_run_summaries_owner", "owner_id"),)
-
-
-class ReembedJob(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    """Progress for a provider switch.
-
-    Changing embedding provider means re-processing every memory. With
-    ten thousand rows that is a background job with a progress bar, not
-    an instant toggle.
-    """
-
-    __tablename__ = "reembed_jobs"
-
-    owner_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    from_model: Mapped[str | None] = mapped_column(String(100))
-    to_model: Mapped[str] = mapped_column(String(100), nullable=False)
-    total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="running")
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
