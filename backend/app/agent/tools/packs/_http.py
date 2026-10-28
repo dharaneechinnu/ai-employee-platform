@@ -7,8 +7,10 @@ person must reconnect, which the model cannot fix, so it says so; a
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import html
+import io
 import re
 from abc import abstractmethod
 from typing import Any
@@ -20,6 +22,9 @@ from app.agent.tools.base import Tool, ToolContext, ToolResult
 
 HTTP_TIMEOUT_S = 20.0
 MAX_TEXT_CHARS = 15_000
+# A PDF bigger than this, or longer than this many pages, is read in part.
+MAX_PDF_BYTES = 20_000_000
+MAX_PDF_PAGES = 60
 
 
 class ApiError(Exception):
@@ -121,3 +126,35 @@ def clip(text: str, limit: int = MAX_TEXT_CHARS) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + f"\n\n[... cut at {limit} characters]"
+
+
+def is_pdf(content: bytes, mime: str = "", name: str = "") -> bool:
+    return "pdf" in mime.lower() or name.lower().endswith(".pdf") or content[:5] == b"%PDF-"
+
+
+def _pdf_text_sync(data: bytes) -> str:
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        if reader.is_encrypted and not reader.decrypt(""):
+            raise ValueError("it is protected with a password")
+        total = len(reader.pages)
+        pages = [(page.extract_text() or "").strip() for page in list(reader.pages)[:MAX_PDF_PAGES]]
+    except (PdfReadError, OSError, KeyError, TypeError) as exc:
+        raise ValueError("it is damaged or not really a PDF") from exc
+    text = "\n\n".join(f"[page {i}]\n{t}" for i, t in enumerate(pages, 1) if t)
+    if not text:
+        raise ValueError("it has no text layer (it may be a scanned image)")
+    if total > MAX_PDF_PAGES:
+        text += f"\n\n[... only the first {MAX_PDF_PAGES} of {total} pages were read]"
+    return text
+
+
+async def pdf_text(data: bytes) -> str:
+    """The text of a PDF, page by page. Parsing is slow, so it runs off
+    the event loop. Raises ValueError with the reason it cannot be read."""
+    if len(data) > MAX_PDF_BYTES:
+        raise ValueError(f"it is larger than {MAX_PDF_BYTES // 1_000_000} MB")
+    return await asyncio.to_thread(_pdf_text_sync, data)

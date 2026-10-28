@@ -100,6 +100,7 @@ ROLES: dict[str, SpecialistRole] = {
             "google_drive_read",
             "onedrive_search",
             "onedrive_read",
+            "excel_read",
             "list_tables",
             "describe_table",
             "run_query",

@@ -159,3 +159,52 @@ def test_every_agent_can_recall_what_it_was_told_but_saves_only_when_asked() -> 
     assert "recall" in infer_tools("Help me with things.")
     assert "remember" not in infer_tools("Help me with things.")
     assert "remember" in infer_tools("Remember my preferences for next time.")
+
+
+@pytest.mark.parametrize(
+    ("words", "connected", "wanted", "not_wanted"),
+    [
+        ("Reschedule my 3pm meeting to Friday.", None, {"google_calendar_update"}, set()),
+        (
+            "Cancel every meeting in my calendar on Friday.",
+            {"microsoft"},
+            {"outlook_calendar_cancel"},
+            {"google_calendar_cancel"},
+        ),
+        (
+            "List my calendar for the week.",
+            None,
+            {"google_calendar_list"},
+            {"google_calendar_update", "google_calendar_cancel"},
+        ),
+        ("Archive newsletters in my inbox and label invoices.", None, {"gmail_organize"}, set()),
+        ("Archive newsletters in my inbox.", {"microsoft"}, {"outlook_organize"}, set()),
+        ("Post a summary to Slack every evening.", None, {"slack_post"}, {"teams_post"}),
+        ("Post the summary to our Microsoft Teams channel.", None, {"teams_post"}, set()),
+        ("My teams are busy this week.", None, set(), {"teams_post"}),
+        (
+            "Add new leads to the Excel workbook in OneDrive.",
+            None,
+            {"excel_read", "excel_append_rows"},
+            {"sheets_append_rows"},
+        ),
+        (
+            "Keep my expenses spreadsheet up to date.",
+            {"microsoft"},
+            {"excel_append_rows"},
+            {"sheets_append_rows"},
+        ),
+        (
+            "Reschedule my Outlook calendar meeting.",
+            {"google"},
+            {"outlook_calendar_update"},
+            {"outlook_search", "google_calendar_update"},
+        ),
+    ],
+)
+def test_the_new_tools_come_with_the_words_that_need_them(
+    words: str, connected: set[str] | None, wanted: set[str], not_wanted: set[str]
+) -> None:
+    tools = set(infer_tools(words, connected=connected))
+    assert wanted <= tools, wanted - tools
+    assert not not_wanted & tools, not_wanted & tools

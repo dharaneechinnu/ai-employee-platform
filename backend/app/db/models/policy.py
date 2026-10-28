@@ -160,6 +160,9 @@ class ConnectionKind(StrEnum):
     # calendar and OneDrive.
     GOOGLE = "google"
     MICROSOFT = "microsoft"
+    # A team chat channel, through the incoming webhook its owner pastes in.
+    SLACK = "slack"
+    TEAMS = "teams"
 
 
 class Connection(Base, UUIDPrimaryKeyMixin, TimestampMixin):

@@ -1,8 +1,9 @@
 """Microsoft 365: Outlook mail, Outlook calendar and OneDrive, through
-Microsoft Graph. One one-click connection covers all eight tools.
+Microsoft Graph. One one-click connection covers all these tools.
 
-OneDrive is read-only by scope (`Files.Read.All`), so the token itself
-cannot change or delete a file.
+OneDrive is read-only by scope (`Files.Read.All`) unless the person
+grants OneDrive edit, which only the Excel tools use (adding rows,
+changing cells). No tool can delete a file.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from typing import Any
 from pydantic import BaseModel, EmailStr, Field
 
 from app.agent.tools.base import SideEffect, ToolContext, ToolResult
-from app.agent.tools.packs._http import ApiTool, clip, html_to_text, request
+from app.agent.tools.packs._http import ApiTool, clip, html_to_text, is_pdf, pdf_text, request
 from app.agent.tools.registry import register
 
 GRAPH = "https://graph.microsoft.com/v1.0/me"
@@ -136,6 +137,17 @@ class OutlookComposeArgs(BaseModel):
     to: list[EmailStr] = Field(min_length=1, max_length=20)
     subject: str = Field(min_length=1, max_length=300)
     body: str = Field(min_length=1, max_length=20_000)
+    reply_to_message_id: str | None = Field(
+        default=None,
+        max_length=500,
+        description="To answer an email in its own thread, the id outlook_search returned",
+    )
+
+
+def _reply(args: OutlookComposeArgs) -> dict[str, Any]:
+    """A reply in the original's conversation: Outlook adds "RE:" and the
+    quoted message below what we write."""
+    return {"message": {"toRecipients": _recipients(list(args.to))}, "comment": args.body}
 
 
 def _message(args: OutlookComposeArgs) -> dict[str, Any]:
@@ -152,7 +164,8 @@ class OutlookCreateDraft(ApiTool):
     pack = "microsoft"
     description = (
         "Save an email as an Outlook draft for a person to review and send. "
-        "Prefer this to sending when unsure."
+        "Prefer this to sending when unsure. To answer an email, pass reply_to_message_id "
+        "so the draft stays in its conversation."
     )
     args_model = OutlookComposeArgs
     side_effect = SideEffect.WRITE
@@ -164,7 +177,15 @@ class OutlookCreateDraft(ApiTool):
             return ToolResult.success(
                 {"dry_run": True, "would_draft": {"to": args.to, "subject": args.subject}}
             )
-        draft = await request(ctx, "POST", f"{GRAPH}/messages", json=_message(args))
+        if args.reply_to_message_id:
+            draft = await request(
+                ctx,
+                "POST",
+                f"{GRAPH}/messages/{args.reply_to_message_id}/createReply",
+                json=_reply(args),
+            )
+        else:
+            draft = await request(ctx, "POST", f"{GRAPH}/messages", json=_message(args))
         return ToolResult.success({"draft_id": draft.get("id"), "saved": True})
 
 
@@ -172,7 +193,10 @@ class OutlookCreateDraft(ApiTool):
 class OutlookSend(ApiTool):
     name = "outlook_send"
     pack = "microsoft"
-    description = "Send an email from the connected Outlook account. It cannot be unsent."
+    description = (
+        "Send an email from the connected Outlook account. It cannot be unsent. To answer an "
+        "email, pass reply_to_message_id so it goes in the same conversation."
+    )
     args_model = OutlookComposeArgs
     side_effect = SideEffect.DESTRUCTIVE
     supports_dry_run = True
@@ -183,13 +207,77 @@ class OutlookSend(ApiTool):
             return ToolResult.success(
                 {"dry_run": True, "would_send": {"to": args.to, "subject": args.subject}}
             )
-        await request(
-            ctx,
-            "POST",
-            f"{GRAPH}/sendMail",
-            json={"message": _message(args), "saveToSentItems": True},
-        )
+        if args.reply_to_message_id:
+            await request(
+                ctx,
+                "POST",
+                f"{GRAPH}/messages/{args.reply_to_message_id}/reply",
+                json=_reply(args),
+            )
+        else:
+            await request(
+                ctx,
+                "POST",
+                f"{GRAPH}/sendMail",
+                json={"message": _message(args), "saveToSentItems": True},
+            )
         return ToolResult.success({"sent": True})
+
+
+class OutlookOrganizeArgs(BaseModel):
+    message_ids: list[str] = Field(
+        min_length=1, max_length=50, description="Ids from outlook_search"
+    )
+    archive: bool = Field(default=False, description="Move them to the Archive folder")
+    mark_read: bool | None = Field(default=None, description="true: mark read; false: unread")
+    flag: bool | None = Field(default=None, description="true: flag for follow-up; false: clear")
+    add_categories: list[str] = Field(
+        default_factory=list, max_length=10, description="Outlook category names to add"
+    )
+
+
+@register
+class OutlookOrganize(ApiTool):
+    name = "outlook_organize"
+    pack = "microsoft"
+    description = (
+        "Tidy Outlook messages: archive them, mark them read or unread, flag them for "
+        "follow-up, or add categories. Nothing is deleted."
+    )
+    args_model = OutlookOrganizeArgs
+    side_effect = SideEffect.WRITE
+    supports_dry_run = True
+    requires_connection = "microsoft"
+
+    async def call(self, ctx: ToolContext, args: OutlookOrganizeArgs) -> ToolResult:
+        patch: dict[str, Any] = {}
+        if args.mark_read is not None:
+            patch["isRead"] = args.mark_read
+        if args.flag is not None:
+            patch["flag"] = {"flagStatus": "flagged" if args.flag else "notFlagged"}
+        if not (patch or args.archive or args.add_categories):
+            return ToolResult.failure("invalid_arguments", "Nothing to change was given.")
+        if ctx.dry_run:
+            return ToolResult.success({"dry_run": True, "would_change": len(args.message_ids)})
+        for message_id in args.message_ids:
+            change = dict(patch)
+            if args.add_categories:
+                current = await request(
+                    ctx, "GET", f"{GRAPH}/messages/{message_id}", params={"$select": "categories"}
+                )
+                had = current.get("categories", [])
+                change["categories"] = had + [c for c in args.add_categories if c not in had]
+            if change:
+                await request(ctx, "PATCH", f"{GRAPH}/messages/{message_id}", json=change)
+            # Last, because a moved message gets a new id in its new folder.
+            if args.archive:
+                await request(
+                    ctx,
+                    "POST",
+                    f"{GRAPH}/messages/{message_id}/move",
+                    json={"destinationId": "archive"},
+                )
+        return ToolResult.success({"changed": len(args.message_ids)})
 
 
 # ------------------------------------------------------------------ calendar
@@ -289,6 +377,96 @@ class OutlookCalendarCreate(ApiTool):
         return ToolResult.success({"event_id": event.get("id"), "link": event.get("webLink")})
 
 
+class OutlookCalendarUpdateArgs(BaseModel):
+    event_id: str = Field(min_length=1, max_length=500, description="The id from the calendar list")
+    title: str | None = Field(default=None, max_length=300)
+    start: datetime | None = Field(default=None, description="New start, ISO 8601 with offset")
+    end: datetime | None = Field(default=None, description="New end, ISO 8601 with offset")
+    description: str | None = Field(default=None, max_length=5000)
+    add_attendees: list[EmailStr] = Field(default_factory=list, max_length=50)
+
+
+@register
+class OutlookCalendarUpdate(ApiTool):
+    name = "outlook_calendar_update"
+    pack = "microsoft"
+    description = (
+        "Change an event on the connected Outlook calendar: move it to a new time, rename it, "
+        "change its description or invite more people. Attendees are told about the change."
+    )
+    args_model = OutlookCalendarUpdateArgs
+    side_effect = SideEffect.WRITE
+    supports_dry_run = True
+    requires_connection = "microsoft"
+
+    async def call(self, ctx: ToolContext, args: OutlookCalendarUpdateArgs) -> ToolResult:
+        if (args.start is None) != (args.end is None):
+            return ToolResult.failure(
+                "invalid_arguments",
+                "Give both start and end when moving an event, so its length is clear.",
+            )
+        if args.start is not None and args.end is not None and args.end <= args.start:
+            return ToolResult.failure("invalid_arguments", "end must be after start.")
+        patch: dict[str, Any] = {}
+        if args.title is not None:
+            patch["subject"] = args.title
+        if args.description is not None:
+            patch["body"] = {"contentType": "Text", "content": args.description}
+        if args.start is not None and args.end is not None:
+            patch["start"] = {"dateTime": _utc(args.start), "timeZone": "UTC"}
+            patch["end"] = {"dateTime": _utc(args.end), "timeZone": "UTC"}
+        if not patch and not args.add_attendees:
+            return ToolResult.failure("invalid_arguments", "Nothing to change was given.")
+        if ctx.dry_run:
+            return ToolResult.success({"dry_run": True, "would_change": sorted(patch)})
+        if args.add_attendees:
+            current = await request(
+                ctx, "GET", f"{GRAPH}/events/{args.event_id}", params={"$select": "attendees"}
+            )
+            attendees = current.get("attendees", [])
+            known = {(a.get("emailAddress") or {}).get("address") for a in attendees}
+            patch["attendees"] = attendees + [
+                {"emailAddress": {"address": a}, "type": "required"}
+                for a in args.add_attendees
+                if a not in known
+            ]
+        event = await request(ctx, "PATCH", f"{GRAPH}/events/{args.event_id}", json=patch)
+        return ToolResult.success(
+            {
+                "event_id": event.get("id"),
+                "title": event.get("subject"),
+                "start": (event.get("start") or {}).get("dateTime"),
+                "link": event.get("webLink"),
+            }
+        )
+
+
+class OutlookCalendarCancelArgs(BaseModel):
+    event_id: str = Field(min_length=1, max_length=500, description="The id from the calendar list")
+
+
+@register
+class OutlookCalendarCancel(ApiTool):
+    name = "outlook_calendar_cancel"
+    pack = "microsoft"
+    description = (
+        "Cancel and remove an event from the connected Outlook calendar. If you organised "
+        "it, attendees are told it is cancelled. This cannot be undone."
+    )
+    args_model = OutlookCalendarCancelArgs
+    # Destructive: the attendees' invitations are withdrawn for good.
+    side_effect = SideEffect.DESTRUCTIVE
+    supports_dry_run = True
+    requires_connection = "microsoft"
+
+    async def call(self, ctx: ToolContext, args: OutlookCalendarCancelArgs) -> ToolResult:
+        if ctx.dry_run:
+            return ToolResult.success({"dry_run": True, "would_cancel": args.event_id})
+        # Deleting an event you organised sends the cancellation to everyone.
+        await request(ctx, "DELETE", f"{GRAPH}/events/{args.event_id}")
+        return ToolResult.success({"event_id": args.event_id, "cancelled": True})
+
+
 # ------------------------------------------------------------------ OneDrive
 
 
@@ -335,7 +513,9 @@ class OneDriveReadArgs(BaseModel):
 class OneDriveRead(ApiTool):
     name = "onedrive_read"
     pack = "microsoft"
-    description = "Read the text of a OneDrive file by id: Word documents and plain-text files."
+    description = (
+        "Read the text of a OneDrive file by id: Word documents, PDFs and plain-text files."
+    )
     args_model = OneDriveReadArgs
     side_effect = SideEffect.READ
     requires_connection = "microsoft"
@@ -345,7 +525,8 @@ class OneDriveRead(ApiTool):
         name: str = meta.get("name", "")
         mime = (meta.get("file") or {}).get("mimeType", "")
         is_docx = mime == DOCX or name.lower().endswith(".docx")
-        if not (is_docx or mime.startswith("text/") or name.lower().endswith(TEXT_TYPES)):
+        pdf = is_pdf(b"", mime, name)
+        if not (is_docx or pdf or mime.startswith("text/") or name.lower().endswith(TEXT_TYPES)):
             return ToolResult.failure(
                 "unsupported", f"'{name}' is a {mime or 'binary'} file, which cannot be read."
             )
@@ -353,6 +534,11 @@ class OneDriveRead(ApiTool):
             return ToolResult.failure("too_large", f"'{name}' is larger than 10 MB.")
 
         content = await request(ctx, "GET", f"{GRAPH}/drive/items/{args.file_id}/content", raw=True)
+        if pdf:
+            try:
+                return ToolResult.success({"name": name, "text": clip(await pdf_text(content))})
+            except ValueError as exc:
+                return ToolResult.failure("unreadable", f"'{name}' cannot be read: {exc}.")
         try:
             text = _docx_text(content) if is_docx else content.decode(errors="replace")
         except (zipfile.BadZipFile, KeyError):

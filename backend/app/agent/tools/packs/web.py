@@ -14,11 +14,13 @@ import httpx
 from pydantic import BaseModel, Field
 
 from app.agent.tools.base import SideEffect, Tool, ToolContext, ToolResult
-from app.agent.tools.packs._http import html_to_text
+from app.agent.tools.packs._http import html_to_text, is_pdf, pdf_text
 from app.agent.tools.registry import register
 from app.core.urls import is_private_address as _is_private_address
 
 MAX_CHARS = 6_000
+# A PDF is usually the document itself (a report, a paper), so more of it is kept.
+MAX_PDF_CHARS = 15_000
 # Redirects are followed by hand, so every hop gets the same checks as
 # the first address. httpx following them itself would let a public page
 # bounce the request to an internal one.
@@ -34,8 +36,8 @@ class GetWebpage(Tool):
     name = "get_webpage"
     pack = "web"
     description = (
-        "Fetch a web page and return its text. Use this to read documentation "
-        "or any public page. Only addresses on the allowed list can be read."
+        "Fetch a web page or a PDF and return its text. Use this to read documentation, "
+        "reports, papers or any public page. Only addresses on the allowed list can be read."
     )
     args_model = GetWebpageArgs
     side_effect = SideEffect.READ
@@ -67,8 +69,22 @@ class GetWebpage(Tool):
                 "http_error", f"That page returned status {response.status_code}."
             )
 
+        content_type = response.headers.get("content-type", "").lower()
+        if is_pdf(response.content, content_type, urlparse(str(response.url)).path):
+            try:
+                text = await pdf_text(response.content)
+            except ValueError as exc:
+                return ToolResult.failure("unreadable", f"That PDF cannot be read: {exc}.")
+            return ToolResult.success(
+                {
+                    "url": str(response.url),
+                    "status": response.status_code,
+                    "content": text[:MAX_PDF_CHARS],
+                }
+            )
+
         text = response.text
-        if "html" in response.headers.get("content-type", "").lower():
+        if "html" in content_type:
             # Readable text, not markup: small models spend their whole
             # context on tags otherwise.
             text = html_to_text(text)

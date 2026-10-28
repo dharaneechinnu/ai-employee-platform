@@ -2,8 +2,10 @@
 
 from app.agent.tools.packs import (
     calculator,
+    chat,
     clock,
     email,
+    excel,
     github,
     google,
     memory,
@@ -19,8 +21,10 @@ from app.agent.tools.packs import (
 
 __all__ = [
     "calculator",
+    "chat",
     "clock",
     "email",
+    "excel",
     "github",
     "google",
     "memory",

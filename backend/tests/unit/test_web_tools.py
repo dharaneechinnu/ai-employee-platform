@@ -83,3 +83,28 @@ async def test_endless_redirects_stop(fake_web: Callable[[Handler], list[str]]) 
     fake_web(lambda r: httpx.Response(302, headers={"location": "/again"}))
     result = await _read("https://example.com/loop")
     assert not result.ok and "too many" in result.message  # type: ignore[attr-defined]
+
+
+async def test_a_pdf_is_read_as_its_text(fake_web: Callable[[Handler], list[str]]) -> None:
+    from tests.unit.pdf_sample import make_pdf
+
+    fake_web(
+        lambda r: httpx.Response(
+            200,
+            content=make_pdf("Revenue grew 12 percent"),
+            headers={"content-type": "application/pdf"},
+        )
+    )
+    result = await _read("https://example.com/annual-report.pdf")
+    assert result.ok, result.message  # type: ignore[attr-defined]
+    assert "Revenue grew 12 percent" in result.data["content"]  # type: ignore[attr-defined]
+
+
+async def test_a_broken_pdf_says_why(fake_web: Callable[[Handler], list[str]]) -> None:
+    fake_web(
+        lambda r: httpx.Response(
+            200, content=b"%PDF-1.4 nothing here", headers={"content-type": "application/pdf"}
+        )
+    )
+    result = await _read("https://example.com/broken.pdf")
+    assert not result.ok and result.error_class == "unreadable"  # type: ignore[attr-defined]

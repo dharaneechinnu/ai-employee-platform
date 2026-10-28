@@ -78,6 +78,13 @@ class DatabaseConfig(BaseModel):
     username: str = Field(min_length=1, max_length=100)
 
 
+class ChannelConfig(BaseModel):
+    """Only a name, so the person can tell their channels apart: the
+    webhook itself decides where messages go."""
+
+    channel: str = Field(default="", max_length=100)
+
+
 class GithubConfig(BaseModel):
     """Nothing to fill in: the token says who you are and which
     repositories it may reach."""
@@ -87,6 +94,8 @@ MANUAL_CONFIGS: dict[ConnectionKind, type[BaseModel]] = {
     ConnectionKind.EMAIL: EmailConfig,
     ConnectionKind.DATABASE: DatabaseConfig,
     ConnectionKind.GITHUB: GithubConfig,
+    ConnectionKind.SLACK: ChannelConfig,
+    ConnectionKind.TEAMS: ChannelConfig,
 }
 
 # Fields are described here rather than in the frontend, so adding a
@@ -135,6 +144,28 @@ CATALOGUE: dict[ConnectionKind, dict[str, Any]] = {
         "apps": ["Code", "Issues", "Pull requests", "Actions"],
         "fields": [],
         "secret_label": "Personal access token",
+    },
+    ConnectionKind.SLACK: {
+        "display_name": "Slack channel",
+        "description": (
+            "Let agents post summaries and alerts to one Slack channel. In Slack, add an "
+            "Incoming Webhook to the channel and paste its URL here."
+        ),
+        "auth": "manual",
+        "apps": ["Slack"],
+        "fields": [{"key": "channel", "label": "Channel name", "placeholder": "#team-updates"}],
+        "secret_label": "Incoming webhook URL",
+    },
+    ConnectionKind.TEAMS: {
+        "display_name": "Microsoft Teams channel",
+        "description": (
+            "Let agents post summaries and alerts to one Teams channel. In the channel, use "
+            "Workflows > 'Post to a channel when a webhook request is received' and paste its URL."
+        ),
+        "auth": "manual",
+        "apps": ["Teams"],
+        "fields": [{"key": "channel", "label": "Channel name", "placeholder": "Team updates"}],
+        "secret_label": "Workflow webhook URL",
     },
     ConnectionKind.DATABASE: {
         "display_name": "PostgreSQL",
@@ -630,6 +661,12 @@ class ConnectionService:
             problems = "; ".join(f"{e['loc'][0]}: {e['msg']}" for e in exc.errors())
             raise ValidationError(problems) from exc
         _check_hosts(clean)
+        if kind_enum in (ConnectionKind.SLACK, ConnectionKind.TEAMS):
+            from app.agent.tools.packs.chat import webhook_problem
+
+            if problem := webhook_problem(kind, secret):
+                raise ValidationError(problem)
+            secret = secret.strip()
 
         existing = await self.session.scalar(
             select(Connection).where(
@@ -675,6 +712,10 @@ class ConnectionService:
                 await _test_email(conn.config, decrypt(conn.credential_enc, scope=self.owner_id))
             elif conn.kind is ConnectionKind.DATABASE:
                 await _test_database(conn.config, decrypt(conn.credential_enc, scope=self.owner_id))
+            elif conn.kind in (ConnectionKind.SLACK, ConnectionKind.TEAMS):
+                await _test_channel(
+                    conn.kind.value, decrypt(conn.credential_enc, scope=self.owner_id)
+                )
             elif conn.kind is ConnectionKind.GITHUB:
                 login = await _test_github(decrypt(conn.credential_enc, scope=self.owner_id))
                 conn.config = {**(conn.config or {}), "account": login}
@@ -769,6 +810,19 @@ async def _test_github(token: str) -> str:
     if resp.status_code >= 400:
         raise ValidationError(f"GitHub answered {resp.status_code}.")
     return str(resp.json().get("login") or "")
+
+
+async def _test_channel(kind: str, url: str) -> None:
+    """The only real test of a webhook is a post, so the channel gets one
+    short line saying it is connected."""
+    from app.agent.tools.packs.chat import ChatPostArgs, SlackPost, TeamsPost, post
+
+    tool = SlackPost() if kind == "slack" else TeamsPost()
+    result = await post(
+        kind, url, tool.payload(ChatPostArgs(text="Baton is connected to this channel."))
+    )
+    if not result.ok:
+        raise ValidationError(result.message or "The channel did not accept the test message.")
 
 
 async def _test_email(config: dict[str, Any], password: str) -> None:
