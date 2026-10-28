@@ -23,6 +23,7 @@ from app.agent.tool_infer import NEVER_GIVEN, infer_tools
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.db.models.agent import DEFAULT_RUN_STEPS, MAX_AGENTS, MAX_RUN_STEPS, Agent
 from app.db.models.conversation import Conversation
+from app.db.models.policy import Connection
 from app.db.models.task import Run, Task
 from app.services.conversation_service import ConversationService
 from app.services.provider_service import AUTO_MODEL
@@ -93,7 +94,7 @@ class AgentService:
             scope=self._check_scope(scope),
             max_steps=self._check_steps(max_steps),
         )
-        self.choose_tools(agent)
+        self.choose_tools(agent, connected=await self._connected())
         self.apply_schedule(agent, schedule)
         self.session.add(agent)
         await self.session.flush()
@@ -135,25 +136,41 @@ class AgentService:
         if max_steps is not None:
             agent.max_steps = self._check_steps(max_steps)
         # Worked out again when the words that describe the job changed.
-        self.choose_tools(agent, refresh=instructions is not None or description is not None)
+        refresh = instructions is not None or description is not None
+        if refresh or agent.tools is None:
+            self.choose_tools(agent, refresh=refresh, connected=await self._connected())
         if set_schedule:
             self.apply_schedule(agent, schedule)
         await self.session.flush()
         return agent
 
+    async def _connected(self) -> set[str]:
+        """The kinds of app this person has connected and switched on."""
+        rows = await self.session.scalars(
+            select(Connection.kind).where(
+                Connection.owner_id == self.owner_id, Connection.enabled.is_(True)
+            )
+        )
+        return {kind.value for kind in rows.all()}
+
     @staticmethod
-    def choose_tools(agent: Agent, *, refresh: bool = False) -> None:
+    def choose_tools(
+        agent: Agent, *, refresh: bool = False, connected: set[str] | None = None
+    ) -> None:
         """Give an agent the tools its instructions call for.
 
         An agent with no list (one made before this existed, or one that
         asked to be set up automatically) gets one now. An automatic list
         is worked out again when `refresh` is set. A list somebody chose
-        by hand is never touched.
+        by hand is never touched. `connected` decides which app "my email"
+        or "my calendar" means; without it, Google.
         """
         if agent.tools is None:
             agent.tools_auto = True
         if agent.tools_auto and (agent.tools is None or refresh):
-            agent.tools = infer_tools(agent.name, agent.description, agent.instructions)
+            agent.tools = infer_tools(
+                agent.name, agent.description, agent.instructions, connected=connected
+            )
 
     # --- running on its own ----------------------------------------
 

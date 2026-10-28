@@ -103,3 +103,59 @@ def test_a_list_chosen_by_hand_is_never_touched(refresh: bool) -> None:
     agent = _agent(tools=["calculator"], tools_auto=False)
     AgentService.choose_tools(agent, refresh=refresh)  # type: ignore[arg-type]
     assert agent.tools == ["calculator"] and agent.tools_auto is False
+
+
+@pytest.mark.parametrize(
+    ("connected", "reads", "send"),
+    [
+        (None, "gmail_search", "gmail_send"),
+        ({"microsoft"}, "outlook_search", "outlook_send"),
+        ({"email"}, "list_emails", "send_email"),
+        ({"google", "microsoft"}, "gmail_search", "gmail_send"),
+    ],
+)
+def test_my_email_means_the_mail_app_the_person_connected(
+    connected: set[str] | None, reads: str, send: str
+) -> None:
+    quiet = infer_tools("Summarise my unread email every morning.", connected=connected)
+    assert reads in quiet and send not in quiet
+    loud = infer_tools("Read my email and reply to each customer.", connected=connected)
+    assert send in loud
+
+
+def test_calendar_and_files_follow_the_connected_app_too() -> None:
+    tools = set(
+        infer_tools("Schedule a meeting and attach the right documents.", connected={"microsoft"})
+    )
+    assert {"outlook_calendar_list", "outlook_calendar_create", "onedrive_read"} <= tools
+    assert not {"google_calendar_create", "google_drive_read"} & tools
+
+
+def test_a_named_vendor_wins_over_the_connected_one() -> None:
+    tools = set(infer_tools("Check my Gmail for invoices.", connected={"microsoft"}))
+    assert "gmail_search" in tools and "outlook_search" not in tools
+
+
+def test_reading_a_sheet_does_not_give_the_right_to_change_it() -> None:
+    tools = set(infer_tools("Read my sheet of leads and summarise it."))
+    assert "sheets_read" in tools
+    assert not {"sheets_create", "sheets_append_rows", "sheets_update_cells"} & tools
+
+
+def test_everyday_words_do_not_bring_database_or_github_tools() -> None:
+    tools = set(infer_tools("Make a table of any issues customers raise in the chat."))
+    assert not {"run_query", "list_tables"} & tools
+    assert not any(t.startswith("github") for t in tools)
+
+
+def test_running_on_a_schedule_is_not_booking_a_meeting() -> None:
+    tools = set(infer_tools("On a schedule every morning, list my calendar events."))
+    assert "google_calendar_list" in tools
+    assert "google_calendar_create" not in tools
+    assert "web_search" not in tools  # "events" here are calendar events
+
+
+def test_every_agent_can_recall_what_it_was_told_but_saves_only_when_asked() -> None:
+    assert "recall" in infer_tools("Help me with things.")
+    assert "remember" not in infer_tools("Help me with things.")
+    assert "remember" in infer_tools("Remember my preferences for next time.")

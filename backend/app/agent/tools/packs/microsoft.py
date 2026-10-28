@@ -196,7 +196,10 @@ class OutlookSend(ApiTool):
 
 
 class OutlookCalendarListArgs(BaseModel):
-    days_ahead: int = Field(default=7, ge=1, le=60)
+    days_ahead: int = Field(default=7, ge=0, le=60)
+    days_back: int = Field(
+        default=0, ge=0, le=60, description="Also include events from this many days ago"
+    )
     max_results: int = Field(default=20, ge=1, le=50)
 
 
@@ -204,7 +207,10 @@ class OutlookCalendarListArgs(BaseModel):
 class OutlookCalendarList(ApiTool):
     name = "outlook_calendar_list"
     pack = "microsoft"
-    description = "List upcoming events on the connected Outlook calendar (times in UTC)."
+    description = (
+        "List events on the connected Outlook calendar (times in UTC): upcoming ones, "
+        "and past ones with days_back (e.g. last week's meetings)."
+    )
     args_model = OutlookCalendarListArgs
     side_effect = SideEffect.READ
     requires_connection = "microsoft"
@@ -216,7 +222,7 @@ class OutlookCalendarList(ApiTool):
             "GET",
             f"{GRAPH}/calendarView",
             params={
-                "startDateTime": _utc(now),
+                "startDateTime": _utc(now - timedelta(days=args.days_back)),
                 "endDateTime": _utc(now + timedelta(days=args.days_ahead)),
                 "$top": args.max_results,
                 "$orderby": "start/dateTime",

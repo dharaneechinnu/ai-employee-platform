@@ -7,7 +7,8 @@ proxy into the private network — the classic SSRF shape.
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
+import asyncio
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from pydantic import BaseModel, Field
@@ -18,6 +19,10 @@ from app.agent.tools.registry import register
 from app.core.urls import is_private_address as _is_private_address
 
 MAX_CHARS = 6_000
+# Redirects are followed by hand, so every hop gets the same checks as
+# the first address. httpx following them itself would let a public page
+# bounce the request to an internal one.
+MAX_REDIRECTS = 5
 
 
 class GetWebpageArgs(BaseModel):
@@ -37,30 +42,21 @@ class GetWebpage(Tool):
     timeout_s = 20.0
 
     async def run(self, ctx: ToolContext, args: GetWebpageArgs) -> ToolResult:  # type: ignore[override]
-        parsed = urlparse(args.url)
-
-        if parsed.scheme not in ("http", "https"):
-            return ToolResult.failure("invalid_url", "Only http and https URLs can be read.")
-        if not parsed.hostname:
-            return ToolResult.failure("invalid_url", "That URL has no hostname.")
-
-        allowed: list[str] = (ctx.config or {}).get("allowed_domains", [])
-        if allowed and not any(
-            parsed.hostname == d or parsed.hostname.endswith(f".{d}") for d in allowed
-        ):
-            return ToolResult.failure(
-                "not_allowed",
-                f"{parsed.hostname} is not on the allowed list, so it cannot be read.",
-            )
-
-        if _is_private_address(parsed.hostname):
-            return ToolResult.failure(
-                "not_allowed", "Internal and private addresses cannot be read."
-            )
-
+        url = args.url
         try:
-            async with httpx.AsyncClient(timeout=self.timeout_s, follow_redirects=True) as client:
-                response = await client.get(args.url, headers={"User-Agent": "AgentPlatform/0.1"})
+            async with httpx.AsyncClient(timeout=self.timeout_s) as client:
+                for _ in range(MAX_REDIRECTS + 1):
+                    refused = await self._refuse(ctx, url)
+                    if refused:
+                        return refused
+                    response = await client.get(url, headers={"User-Agent": "Baton/0.1"})
+                    if not response.is_redirect:
+                        break
+                    url = urljoin(url, response.headers.get("location", ""))
+                else:
+                    return ToolResult.failure(
+                        "unreachable", f"{args.url} redirected too many times."
+                    )
         except httpx.TimeoutException:
             return ToolResult.failure("timeout", f"{args.url} did not respond in time.")
         except httpx.HTTPError as exc:
@@ -80,3 +76,28 @@ class GetWebpage(Tool):
         return ToolResult.success(
             {"url": str(response.url), "status": response.status_code, "content": text}
         )
+
+    @staticmethod
+    async def _refuse(ctx: ToolContext, url: str) -> ToolResult | None:
+        """Why this address may not be read, or None when it may."""
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return ToolResult.failure("invalid_url", "Only http and https URLs can be read.")
+        if not parsed.hostname:
+            return ToolResult.failure("invalid_url", "That URL has no hostname.")
+
+        allowed: list[str] = (ctx.config or {}).get("allowed_domains", [])
+        if allowed and not any(
+            parsed.hostname == d or parsed.hostname.endswith(f".{d}") for d in allowed
+        ):
+            return ToolResult.failure(
+                "not_allowed",
+                f"{parsed.hostname} is not on the allowed list, so it cannot be read.",
+            )
+
+        # The name lookup blocks, so it runs off the event loop.
+        if await asyncio.to_thread(_is_private_address, parsed.hostname):
+            return ToolResult.failure(
+                "not_allowed", "Internal and private addresses cannot be read."
+            )
+        return None

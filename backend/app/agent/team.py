@@ -98,6 +98,11 @@ ROLES: dict[str, SpecialistRole] = {
             "sheets_read",
             "google_drive_search",
             "google_drive_read",
+            "onedrive_search",
+            "onedrive_read",
+            "list_tables",
+            "describe_table",
+            "run_query",
         ),
     ),
     "writer": SpecialistRole(
@@ -135,7 +140,7 @@ ROLES: dict[str, SpecialistRole] = {
             "but not change it or run it: say what you could not verify."
         ),
         uses_tools=True,
-        tools=("text_tools", "calculator", "get_webpage", "current_time"),
+        tools=("text_tools", "calculator", "web_search", "get_webpage", "current_time"),
         packs=("github",),
     ),
     "generalist": SpecialistRole(

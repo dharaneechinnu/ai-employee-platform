@@ -216,7 +216,10 @@ class GmailSend(ApiTool):
 
 
 class CalendarListArgs(BaseModel):
-    days_ahead: int = Field(default=7, ge=1, le=60)
+    days_ahead: int = Field(default=7, ge=0, le=60)
+    days_back: int = Field(
+        default=0, ge=0, le=60, description="Also include events from this many days ago"
+    )
     query: str = Field(default="", max_length=200, description="Optional text to match")
     max_results: int = Field(default=20, ge=1, le=50)
 
@@ -225,7 +228,10 @@ class CalendarListArgs(BaseModel):
 class GoogleCalendarList(ApiTool):
     name = "google_calendar_list"
     pack = "google"
-    description = "List upcoming events on the connected Google Calendar."
+    description = (
+        "List events on the connected Google Calendar: upcoming ones, and past ones "
+        "with days_back (e.g. last week's meetings)."
+    )
     args_model = CalendarListArgs
     side_effect = SideEffect.READ
     requires_connection = "google"
@@ -233,7 +239,7 @@ class GoogleCalendarList(ApiTool):
     async def call(self, ctx: ToolContext, args: CalendarListArgs) -> ToolResult:
         now = datetime.now(UTC)
         params: dict[str, Any] = {
-            "timeMin": _iso(now),
+            "timeMin": _iso(now - timedelta(days=args.days_back)),
             "timeMax": _iso(now + timedelta(days=args.days_ahead)),
             "singleEvents": "true",
             "orderBy": "startTime",
