@@ -36,5 +36,7 @@ export const AGENT_LOOK: Record<AgentRole, AgentLook> = {
 };
 
 export function agentLook(role: string | null | undefined): AgentLook {
-  return AGENT_LOOK[(role ?? "") as AgentRole] ?? AGENT_LOOK.scheduled;
+  // The team calls this helper "generalist"; it is drawn as General.
+  const key = role === "generalist" ? "general" : role;
+  return AGENT_LOOK[(key ?? "") as AgentRole] ?? AGENT_LOOK.scheduled;
 }

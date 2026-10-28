@@ -2230,3 +2230,95 @@ html[data-dock='bottom'] .chat-shell {
 .strength[data-level="4"] > i:nth-child(-n + 4) {
   background: var(--ok);
 }
+
+/* One agent as a tree, left to right. Lines are quiet until they carry
+   work; the dots run along them in order, and stand still for people
+   who prefer less motion. */
+.agraph-line { fill: none; stroke: var(--line2); stroke-width: 1.6; stroke-dasharray: 3 5; }
+.agraph-line.is-on { stroke: var(--accent-line); stroke-width: 2; stroke-dasharray: none; }
+.agraph[data-working] .agraph-line.is-on { stroke: var(--ok); }
+.agraph-dot { fill: var(--accent); opacity: 0; }
+.agraph[data-working] .agraph-dot { fill: var(--ok); }
+.agraph-node {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line2);
+  border-radius: 14px;
+  background: var(--sunken);
+  padding: 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.agraph-node { overflow: hidden; }
+.agraph-node b {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.agraph-node small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.agraph-node.is-trigger small { -webkit-line-clamp: 2; }
+.agraph-node.is-out b { -webkit-line-clamp: 3; }
+.agraph-ic {
+  position: relative;
+  display: flex;
+  height: 34px;
+  width: 34px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--raised);
+  color: var(--accent-text);
+}
+.agraph-ic.is-big { height: 46px; width: 46px; border-radius: 13px; color: var(--tone, var(--accent)); background: var(--panel); border: 1px solid var(--line2); }
+.agraph-node.is-stage, .agraph-node.is-agent, .agraph-node.is-trigger { overflow: visible; }
+.agraph-node.is-stage > span:last-child, .agraph-node.is-agent > span:last-child, .agraph-node.is-trigger > span:last-child { overflow: hidden; }
+.agraph-ic i {
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  display: flex;
+  height: 17px;
+  min-width: 17px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  padding: 0 4px;
+}
+.agraph-node.is-trigger { border-style: dashed; }
+.agraph-node.is-trigger.is-primary { border-style: solid; border-color: var(--accent-line); background: var(--accent-soft); }
+.agraph-node.is-agent { border-color: var(--accent); background: var(--panel); box-shadow: 0 0 0 4px var(--glow); }
+.agraph[data-working] .agraph-node.is-agent { border-color: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+.agraph-node.is-stage { background: var(--panel); }
+.agraph-node.is-stage.is-asks { border-color: var(--ask); background: var(--ask-soft); }
+.agraph-node.is-stage.is-asks .agraph-ic { color: var(--ask-text); }
+.agraph-node.is-stage.is-asks .agraph-ic i { background: var(--ask); }
+.agraph-node.is-tool { gap: 8px; border-radius: 999px; padding: 0 12px 0 6px; font-size: 12.5px; color: var(--text); }
+.agraph-node.is-tool.is-used { border-color: var(--ok); background: var(--ok-soft); }
+.agraph-logo { display: flex; height: 26px; width: 26px; flex: none; align-items: center; justify-content: center; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+.agraph-tick { display: flex; height: 18px; width: 18px; flex: none; margin-left: auto; align-items: center; justify-content: center; border-radius: 999px; background: var(--ok); color: var(--bg); }
+.agraph-node.is-out { border-color: var(--ok); background: var(--ok-soft); }
+.agraph-node.is-out .agraph-ic { background: var(--ok); color: var(--bg); }
+.agraph-helpers { display: flex; gap: 3px; margin-top: 3px; color: var(--accent-text); }
+@media (prefers-reduced-motion: reduce) {
+  .agraph-dot { display: none; }
+}

@@ -3,8 +3,10 @@ import { agentLook } from "../../lib/agentIcons";
 import { api, ApiError, type Agent, type AgentsOverview, type Approval, type RunNowResult } from "../../lib/api";
 import { LEAD, useLiveTree, type NodeLive } from "../../lib/liveTree";
 import { toolLabel } from "../../lib/labels";
-import { Icon, type IconName } from "../icons";
+import { Icon } from "../icons";
 import { Button, Spinner, relativeTime, useToast } from "../ui";
+import AgentAvatar from "./AgentAvatar";
+import AgentTreeGraph from "./AgentTreeGraph";
 import RunPanel, { type PanelNode } from "./RunPanel";
 
 const W = 220;
@@ -165,7 +167,10 @@ export default function LiveTree({
   const panelNode: PanelNode | null = panelSlot;
   const panelLive: NodeLive | null = panelSlot ? (nodes[panelSlot.id] ?? null) : null;
 
+  const showGraph = panelSlot && (panelSlot.kind === "agent" || panelSlot.kind === "lead" || panelSlot.kind === "helper");
+
   return (
+    <div className="flex flex-col gap-4">
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] text-muted">
@@ -264,6 +269,12 @@ export default function LiveTree({
         onApprove={(id) => void approve(id)}
       />
     </div>
+    {showGraph ? (
+      <AgentTreeGraph node={panelSlot} live={panelLive} agents={agents} />
+    ) : (
+      <p className="text-[14px] text-dim">Click any agent or helper to see its tree: what starts it, what it does and what you get.</p>
+    )}
+    </div>
   );
 }
 
@@ -298,6 +309,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
     id: "scheduler",
     name: "Scheduler",
     kind: "scheduler",
+    role: "scheduler",
     icon: "clock",
     tone: "var(--run)",
     agent: null,
@@ -309,6 +321,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
     id: "you",
     name: "You",
     kind: "you",
+    role: "you",
     icon: "members",
     tone: "var(--accent)",
     agent: null,
@@ -321,6 +334,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
     id: LEAD,
     name: lead.label,
     kind: "lead",
+    role: "lead",
     icon: lead.icon,
     tone: lead.tone,
     agent: null,
@@ -337,6 +351,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
       id: a.id,
       name: a.name,
       kind: "agent",
+      role: "agent",
       icon: look.icon,
       tone: look.tone,
       agent: a,
@@ -360,6 +375,7 @@ function layout(agents: Agent[], helpers: { key: string; label: string }[]) {
       id: h.key,
       name: h.label,
       kind: "helper",
+      role: h.key,
       icon: look.icon,
       tone: look.tone,
       agent: null,
@@ -439,7 +455,7 @@ function Node({
         <span className="tn-ic" style={{ ["--tone" as string]: slot.tone }}>
           {(state === "working" || state === "waiting") && <span className="tn-ring" aria-hidden="true" />}
           {scheduler && <Countdown at={scheduler.at} />}
-          <Icon name={slot.icon as IconName} size={19} />
+          <AgentAvatar role={slot.role} size={22} />
         </span>
         <span className="min-w-0 flex-1">
           <b>{slot.name}</b>

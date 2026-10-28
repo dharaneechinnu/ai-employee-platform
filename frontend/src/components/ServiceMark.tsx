@@ -22,11 +22,21 @@ export type ServiceKey =
   | "outlook"
   | "onedrive"
   | "postgres"
-  | "gemini";
+  | "gemini"
+  | "gsheets"
+  | "excel"
+  | "slack"
+  | "teams"
+  | "github";
 
 /** Which service a tool name belongs to, or null for "no logo". */
 export function serviceForTool(tool: string): ServiceKey | null {
   if (/^gmail_/.test(tool)) return "gmail";
+  if (/^sheets_/.test(tool)) return "gsheets";
+  if (/^excel_/.test(tool)) return "excel";
+  if (/^slack_/.test(tool)) return "slack";
+  if (/^teams_/.test(tool)) return "teams";
+  if (/^github_/.test(tool)) return "github";
   if (/^google_calendar_/.test(tool)) return "gcalendar";
   if (/^google_drive_/.test(tool)) return "gdrive";
   if (/^outlook_calendar_/.test(tool)) return "outlook";
@@ -56,6 +66,11 @@ export const SERVICE_NAME: Record<ServiceKey, string> = {
   onedrive: "OneDrive",
   postgres: "PostgreSQL",
   gemini: "Gemini",
+  gsheets: "Google Sheets",
+  excel: "Excel",
+  slack: "Slack",
+  teams: "Microsoft Teams",
+  github: "GitHub",
 };
 
 /** A plain icon for anything with no logo of its own. */
@@ -168,6 +183,59 @@ export function ServiceMark({ service, size = 18 }: { service: ServiceKey; size?
             stroke="#8ab4d4"
             strokeWidth="1.6"
             fill="none"
+          />
+        </svg>
+      );
+
+    case "gsheets":
+      return (
+        <svg {...common}>
+          <path fill="#43a047" d="M29 4H12a3 3 0 0 0-3 3v34a3 3 0 0 0 3 3h24a3 3 0 0 0 3-3V14z" />
+          <path fill="#c8e6c9" d="M29 4v10h10z" />
+          <path fill="#e8f5e9" d="M15 21h18v14H15z" />
+          <path fill="#43a047" d="M17 23h6v4h-6zm8 0h6v4h-6zm-8 6h6v4h-6zm8 0h6v4h-6z" />
+        </svg>
+      );
+
+    case "excel":
+      return (
+        <svg {...common}>
+          <path fill="#21a366" d="M16 6h24a2 2 0 0 1 2 2v32a2 2 0 0 1-2 2H16z" />
+          <path fill="#33c481" d="M28 6h12a2 2 0 0 1 2 2v8H28z" />
+          <path fill="#107c41" d="M28 24h14v8H28z" />
+          <rect x="6" y="13" width="22" height="22" rx="2" fill="#185c37" />
+          <path fill="#fff" d="M11.5 18h3.4l2.3 4.2 2.4-4.2h3.2l-3.9 6 4 6h-3.4l-2.4-4.3-2.4 4.3h-3.3l4-6z" />
+        </svg>
+      );
+
+    case "slack":
+      return (
+        <svg {...common}>
+          <path fill="#e01e5a" d="M10 29a4 4 0 1 1-4-4h4zm2 0a4 4 0 0 1 8 0v10a4 4 0 0 1-8 0z" />
+          <path fill="#36c5f0" d="M16 10a4 4 0 1 1 4-4v4zm0 2a4 4 0 0 1 0 8H6a4 4 0 0 1 0-8z" />
+          <path fill="#2eb67d" d="M35 16a4 4 0 1 1 4 4h-4zm-2 0a4 4 0 0 1-8 0V6a4 4 0 0 1 8 0z" />
+          <path fill="#ecb22e" d="M29 35a4 4 0 1 1-4 4v-4zm0-2a4 4 0 0 1 0-8h10a4 4 0 0 1 0 8z" />
+        </svg>
+      );
+
+    case "teams":
+      return (
+        <svg {...common}>
+          <circle cx="34" cy="13" r="5" fill="#7b83eb" />
+          <path fill="#7b83eb" d="M27 20h14a2 2 0 0 1 2 2v10a8 8 0 0 1-16 0z" />
+          <circle cx="22" cy="11" r="6" fill="#5059c9" />
+          <path fill="#5059c9" d="M12 19h20a2 2 0 0 1 2 2v12a11 11 0 0 1-22 0z" />
+          <rect x="4" y="14" width="22" height="22" rx="2" fill="#4b53bc" />
+          <path fill="#fff" d="M9 19h12v3h-4.5v10h-3V22H9z" />
+        </svg>
+      );
+
+    case "github":
+      return (
+        <svg {...common}>
+          <path
+            fill="currentColor"
+            d="M24 4a20 20 0 0 0-6.3 39c1 .2 1.4-.4 1.4-1v-3.4c-5.6 1.2-6.8-2.7-6.8-2.7-.9-2.3-2.2-2.9-2.2-2.9-1.8-1.2.1-1.2.1-1.2 2 .1 3.1 2.1 3.1 2.1 1.8 3.1 4.7 2.2 5.9 1.7.2-1.3.7-2.2 1.3-2.7-4.5-.5-9.2-2.2-9.2-10a7.8 7.8 0 0 1 2.1-5.4c-.2-.5-.9-2.6.2-5.4 0 0 1.7-.5 5.5 2.1a19 19 0 0 1 10 0c3.8-2.6 5.5-2.1 5.5-2.1 1.1 2.8.4 4.9.2 5.4a7.8 7.8 0 0 1 2.1 5.4c0 7.7-4.7 9.4-9.2 9.9.7.6 1.4 1.9 1.4 3.8V42c0 .6.4 1.2 1.4 1A20 20 0 0 0 24 4z"
           />
         </svg>
       );
