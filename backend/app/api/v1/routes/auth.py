@@ -11,8 +11,8 @@ from fastapi import APIRouter, Query, Request, Response, status
 
 from app.api.v1.deps import REFRESH_COOKIE_NAME, CurrentUserDep, SessionDep
 from app.config import get_settings
-from app.core.errors import AuthError
-from app.core.rate_limit import register_limiter
+from app.core.errors import AuthError, InvalidCredentialsError
+from app.core.rate_limit import login_limiter, register_limiter
 from app.schemas.auth import (
     LoginRequest,
     MeResponse,
@@ -24,6 +24,10 @@ from app.schemas.auth import (
 from app.services.auth_service import AuthService, IssuedTokens
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
 
 
 def _set_refresh_cookie(response: Response, raw_token: str) -> None:
@@ -81,7 +85,7 @@ async def register(
     body: RegisterRequest, request: Request, response: Response, session: SessionDep
 ) -> TokenResponse:
     """Sign up with a username, email and password; you are signed in at once."""
-    register_limiter.check(request.client.host if request.client else "unknown")
+    await register_limiter.consume(_client_ip(request))
     tokens = await AuthService(session).register(
         username=body.username,
         email=body.email,
@@ -106,8 +110,18 @@ async def username_available(
 
 
 @router.post("/login", response_model=TokenResponse, summary="Sign in")
-async def login(body: LoginRequest, response: Response, session: SessionDep) -> TokenResponse:
-    tokens = await AuthService(session).login(identifier=body.who, password=body.password)
+async def login(
+    body: LoginRequest, request: Request, response: Response, session: SessionDep
+) -> TokenResponse:
+    # Wrong passwords are counted per address and account name; a good sign-in clears the count.
+    attempt = f"{_client_ip(request)}|{body.who.strip().lower()}"
+    await login_limiter.check(attempt)
+    try:
+        tokens = await AuthService(session).login(identifier=body.who, password=body.password)
+    except InvalidCredentialsError:
+        await login_limiter.hit(attempt)
+        raise
+    await login_limiter.clear(attempt)
     return _token_response(tokens, response)
 
 

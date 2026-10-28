@@ -126,3 +126,33 @@ async def test_register_is_rate_limited(api: AsyncClient) -> None:
         "/api/v1/auth/register", json=_body(username="user99", email="u99@example.com")
     )
     assert res.status_code == 429
+
+
+async def test_too_many_wrong_passwords_slow_a_sign_in_down(
+    api: AsyncClient,
+) -> None:
+    """Eight wrong passwords for one account lock further tries for a while,
+    and a different account from the same address is not affected."""
+    from app.core.rate_limit import login_limiter
+
+    login_limiter.reset()
+    try:
+        await api.post(
+            "/api/v1/auth/register",
+            json={"username": "limited", "email": "limited@example.com", "password": PASSWORD},
+        )
+        for _ in range(8):
+            wrong = await api.post(
+                "/api/v1/auth/login", json={"identifier": "limited", "password": "not-the-password"}
+            )
+            assert wrong.status_code == 401
+        locked = await api.post(
+            "/api/v1/auth/login", json={"identifier": "limited", "password": PASSWORD}
+        )
+        assert locked.status_code == 429
+        other = await api.post(
+            "/api/v1/auth/login", json={"identifier": "someone-else", "password": "whatever"}
+        )
+        assert other.status_code == 401
+    finally:
+        login_limiter.reset()

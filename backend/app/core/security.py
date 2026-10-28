@@ -62,6 +62,7 @@ def create_access_token(
     subject: uuid.UUID,
     token_type: TokenType = "access",  # noqa: S107 - a token kind, not a secret
     extra_claims: dict[str, Any] | None = None,
+    ttl: timedelta | None = None,
 ) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
@@ -69,7 +70,7 @@ def create_access_token(
         "sub": str(subject),
         "typ": token_type,
         "iat": now,
-        "exp": now + timedelta(minutes=settings.access_token_minutes),
+        "exp": now + (ttl or timedelta(minutes=settings.access_token_minutes)),
         "jti": str(uuid.uuid4()),
     }
     if extra_claims:

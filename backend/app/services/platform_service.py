@@ -206,6 +206,7 @@ class PlatformService:
         return create_access_token(
             subject=admin.id,
             token_type="platform_access",  # noqa: S106 - a token kind, not a secret
+            ttl=timedelta(hours=get_settings().platform_session_hours),
         )
 
     # ------------------------------------------------------------- accounts

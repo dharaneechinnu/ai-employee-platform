@@ -76,7 +76,8 @@ class MeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    email: EmailStr
+    # Plain string: see PersonRow. Signing in must not fail over a stored address.
+    email: str
     username: str
     full_name: str | None
 

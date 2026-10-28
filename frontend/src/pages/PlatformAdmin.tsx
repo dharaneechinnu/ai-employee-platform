@@ -37,6 +37,18 @@ function viewFromHash(): View {
 
 export default function PlatformAdmin() {
   const [signedIn, setSignedIn] = useState(false);
+  // On a page refresh the in-memory token is gone, but the session cookie may
+  // still be good, so ask once before showing the sign-in.
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    call<StaffMe>("/me")
+      .then(() => setSignedIn(true))
+      .catch(() => setSignedIn(false))
+      .finally(() => setChecking(false));
+  }, []);
+
+  if (checking) return <div className="staff min-h-screen bg-bg" aria-busy="true" />;
 
   return (
     <div className="staff min-h-screen bg-bg text-[14px] leading-[1.45] text-ink">
@@ -45,6 +57,8 @@ export default function PlatformAdmin() {
           onSignOut={() => {
             setPlatformToken(null);
             setSignedIn(false);
+            // Clear the session cookie too; failing to is not worth an error.
+            void call("/auth/logout", {}, "POST").catch(() => undefined);
           }}
         />
       ) : (

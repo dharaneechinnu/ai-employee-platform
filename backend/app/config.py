@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     jwt_secret: str = DEV_JWT_SECRET
     jwt_algorithm: str = "HS256"
     access_token_minutes: int = 15
+    # How long a staff console sign-in lasts. Staff have no refresh token, so this
+    # is the whole session; it also ends when the browser is closed.
+    platform_session_hours: int = 8
     refresh_token_days: int = 30
     # How long the account setup link from the Platform Admin works.
     setup_link_expiry_hours: int = 72

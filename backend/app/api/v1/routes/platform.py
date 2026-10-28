@@ -17,11 +17,12 @@ from datetime import datetime
 from typing import Annotated
 
 import jwt
-from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi import APIRouter, Cookie, Depends, Header, Query, Response, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
 from app.api.v1.deps import SessionDep
+from app.config import get_settings
 from app.core.errors import AuthError, NotFoundError
 from app.core.security import decode_access_token
 from app.db.models.identity import PlatformAdmin, PlatformAdminAudit, User
@@ -58,7 +59,8 @@ class CreatePersonRequest(BaseModel):
 
 class CreatePersonResponse(BaseModel):
     id: uuid.UUID
-    email: EmailStr
+    # A plain string: an address that was stored must never make a list fail to load.
+    email: str
     full_name: str | None
     # Shown once, right after creation. Only its hash is stored, so a
     # lost link means issuing another rather than looking one up.
@@ -69,7 +71,10 @@ class PersonRow(BaseModel):
     """What the Platform Admin may see: counts and health, never content."""
 
     id: uuid.UUID
-    email: EmailStr
+    # A plain string, not EmailStr: older accounts can hold an address the
+    # validator now rejects (a reserved ending such as .test), and one of
+    # them must not turn the whole list into a 500.
+    email: str
     username: str
     full_name: str | None
     active: bool
@@ -234,17 +239,28 @@ class PersonDetail(PersonRow):
 # ----------------------------------------------------------------- auth dep
 
 
+STAFF_COOKIE = "platform_session"
+
+
 async def get_platform_admin(
     session: SessionDep,
     authorization: Annotated[str | None, Header()] = None,
+    staff_cookie: Annotated[str | None, Cookie(alias=STAFF_COOKIE)] = None,
+    x_staff_console: Annotated[str | None, Header()] = None,
 ) -> PlatformAdmin:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    # The console keeps its sign-in in a session cookie so a page refresh does not
+    # sign staff out. A cookie is sent by the browser on its own, so it is only
+    # accepted together with a header a cross-site page cannot add (and the cookie
+    # is SameSite=Strict as well).
+    if authorization and authorization.lower().startswith("bearer "):
+        raw = authorization.split(" ", 1)[1].strip()
+    elif staff_cookie and x_staff_console == "1":
+        raw = staff_cookie
+    else:
         raise AuthError()
 
     try:
-        payload = decode_access_token(
-            authorization.split(" ", 1)[1].strip(), expected_type="platform_access"
-        )
+        payload = decode_access_token(raw, expected_type="platform_access")
         admin_id = uuid.UUID(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError) as exc:
         # A customer token lands here: its "typ" claim is "access", not
@@ -264,9 +280,27 @@ AdminDep = Annotated[PlatformAdmin, Depends(get_platform_admin)]
 
 
 @router.post("/auth/login", response_model=PlatformTokenResponse, summary="Admin sign in")
-async def platform_login(body: PlatformLoginRequest, session: SessionDep) -> PlatformTokenResponse:
+async def platform_login(
+    body: PlatformLoginRequest, response: Response, session: SessionDep
+) -> PlatformTokenResponse:
     token = await PlatformService(session).login(email=body.email, password=body.password)
+    settings = get_settings()
+    response.set_cookie(
+        key=STAFF_COOKIE,
+        value=token,
+        # No max_age: a session cookie, gone when the browser closes. The token inside
+        # also expires on its own after `platform_session_hours`.
+        httponly=True,
+        secure=settings.environment != "dev",
+        samesite="strict",
+        path="/api/v1/platform",
+    )
     return PlatformTokenResponse(access_token=token)
+
+
+@router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Admin sign out")
+async def platform_logout(response: Response) -> None:
+    response.delete_cookie(key=STAFF_COOKIE, path="/api/v1/platform")
 
 
 @router.post(

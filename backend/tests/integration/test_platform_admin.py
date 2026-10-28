@@ -136,3 +136,54 @@ async def test_a_customer_token_cannot_reach_platform_routes(
     assert response.status_code == 401
 
 
+async def test_an_older_account_with_a_reserved_email_still_lists_and_signs_in(
+    api: AsyncClient, session: AsyncSession
+) -> None:
+    """An address the validator now rejects (a reserved ending such as .test)
+    must not turn the People list, or signing in, into a 500."""
+    from app.core.security import hash_password
+    from app.db.models.identity import User
+
+    session.add(
+        User(
+            email="old-demo@example.test",
+            username="old-demo",
+            full_name="Old Demo",
+            password_hash=hash_password("correct-horse-battery"),
+        )
+    )
+    await session.commit()
+
+    email, password = await _make_admin(session)
+    token = await _sign_in(api, email, password)
+    people = await api.get("/api/v1/platform/people", headers={"Authorization": f"Bearer {token}"})
+    assert people.status_code == 200, people.text
+    assert "old-demo@example.test" in [p["email"] for p in people.json()]
+
+
+async def test_the_staff_console_stays_signed_in_through_a_page_refresh(
+    api: AsyncClient, session: AsyncSession
+) -> None:
+    """Signing in sets a session cookie, so a refresh (which loses the in-memory
+    token) can resume, but only when the console header comes with it."""
+    email, password = await _make_admin(session)
+    signed_in = await api.post(
+        "/api/v1/platform/auth/login", json={"email": email, "password": password}
+    )
+    assert signed_in.status_code == 200
+    set_cookie = signed_in.headers["set-cookie"].lower()
+    assert "platform_session=" in set_cookie and "httponly" in set_cookie
+    assert "samesite=strict" in set_cookie and "max-age" not in set_cookie
+
+    # A new "page load": no Authorization header, only the cookie (sent by hand,
+    # because the test client is plain http and the cookie is Secure outside dev).
+    jar = {"Cookie": f"platform_session={signed_in.json()['access_token']}"}
+    resumed = await api.get("/api/v1/platform/me", headers={**jar, "X-Staff-Console": "1"})
+    assert resumed.status_code == 200 and resumed.json()["email"] == email
+
+    # The cookie alone, with no console header, is refused: a cross-site page cannot add it.
+    assert (await api.get("/api/v1/platform/me", headers=jar)).status_code == 401
+
+    # Signing out asks the browser to delete the cookie.
+    out = await api.post("/api/v1/platform/auth/logout", headers={"X-Staff-Console": "1"})
+    assert out.status_code == 204 and "platform_session=" in out.headers["set-cookie"].lower()

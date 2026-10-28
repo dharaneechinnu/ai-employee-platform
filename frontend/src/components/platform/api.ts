@@ -1,9 +1,12 @@
 import { ApiError } from "../../lib/api";
 
 /**
- * The staff console's own client: a separate token, held in memory only,
- * so it is never mixed up with a customer's session and is gone when the
- * tab closes. Every type here is counts, dates and yes or no. There is no
+ * The staff console's own client: a separate token, so it is never mixed up
+ * with a customer's session. The token is also kept in an HttpOnly session
+ * cookie, so a page refresh does not sign staff out and the cookie is gone
+ * when the browser closes. The cookie is only honoured with the
+ * X-Staff-Console header below, which a page on another site cannot add.
+ * Every type here is counts, dates and yes or no. There is no
  * type for a task, a memory, a key or a token, because no endpoint
  * returns one.
  */
@@ -19,8 +22,10 @@ export function setPlatformToken(token: string | null) {
 export async function call<T>(path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(`${BASE}${path}`, {
     method: method ?? (body ? "POST" : "GET"),
+    credentials: "same-origin",
     headers: {
       "Content-Type": "application/json",
+      "X-Staff-Console": "1",
       ...(platformToken ? { Authorization: `Bearer ${platformToken}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
