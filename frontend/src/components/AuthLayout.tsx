@@ -12,9 +12,10 @@ import { ThemeToggle } from "./ui";
  */
 
 const DEFAULT_POINTS: { icon: IconName; title: string; body: string }[] = [
-  { icon: "chat", title: "Ask in plain words", body: "Say what you need. Your assistant uses your mail, calendar and files to do it." },
-  { icon: "approvals", title: "You stay in control", body: "Anything risky waits for your approval before it happens." },
-  { icon: "history", title: "Every step on record", body: "See what it did, and what it cost, any time." },
+  { icon: "key", title: "Start with free AI keys", body: "Use the free tiers from Gemini, Groq, OpenRouter or Mistral. You can add paid ones later." },
+  { icon: "cpu", title: "Many models, one assistant", body: "Connect several AIs at once. Each prompt goes to the model that suits it: code, writing, analysis or a quick answer." },
+  { icon: "refresh", title: "Never stuck on a limit", body: "If one model is busy or rate-limited, the work moves to the next one on its own." },
+  { icon: "approvals", title: "You stay in control", body: "Agents run on a schedule, and anything risky waits for your yes." },
 ];
 
 export function AuthStage({
