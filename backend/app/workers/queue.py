@@ -6,6 +6,7 @@ The API only ever puts a job on the queue; it never runs an agent.
 from __future__ import annotations
 
 import uuid
+
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
 
@@ -54,4 +55,3 @@ async def enqueue_task(task_id: uuid.UUID, *, resume_after: uuid.UUID | None = N
         log.info("task_already_queued", task_id=str(task_id))
         return None
     return str(job.job_id)
-

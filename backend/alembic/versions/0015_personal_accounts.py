@@ -147,7 +147,10 @@ def upgrade() -> None:
     op.create_table(
         "setup_tokens",
         sa.Column(
-            "id", sa.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+            "id",
+            sa.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column(
             "user_id",
@@ -159,10 +162,16 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
     )
 
@@ -182,23 +191,35 @@ def downgrade() -> None:
     op.create_table(
         "organizations",
         sa.Column(
-            "id", sa.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+            "id",
+            sa.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column("name", sa.String(200), nullable=False),
         sa.Column("slug", sa.String(100), nullable=False, unique=True),
         sa.Column("status", sa.String(20), nullable=False, server_default="active"),
         sa.Column("max_employees", sa.Integer(), nullable=False, server_default="5"),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
     )
     op.create_table(
         "memberships",
         sa.Column(
-            "id", sa.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+            "id",
+            sa.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column(
             "org_id",
@@ -207,21 +228,33 @@ def downgrade() -> None:
             nullable=False,
         ),
         sa.Column(
-            "user_id", sa.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+            "user_id",
+            sa.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
         ),
         sa.Column("role", sa.String(20), nullable=False, server_default="admin"),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.UniqueConstraint("org_id", "user_id", name="uq_membership"),
     )
     op.create_table(
         "invitations",
         sa.Column(
-            "id", sa.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+            "id",
+            sa.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column(
             "org_id",
@@ -235,10 +268,16 @@ def downgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
     )
 

@@ -38,9 +38,7 @@ async def main(email: str, password: str | None) -> None:
 
     maker = async_sessionmaker(bind=get_engine(), expire_on_commit=False)
     async with maker() as session:
-        admin = await PlatformService(session).create_admin(
-            email=email, password=password
-        )
+        admin = await PlatformService(session).create_admin(email=email, password=password)
         await session.commit()
 
     print("\nPlatform admin created.")

@@ -106,15 +106,10 @@ def compact_old_results(messages: list[Message]) -> list[Message]:
     last_reply = max((i for i, m in enumerate(messages) if m.role is Role.ASSISTANT), default=-1)
 
     def old_and_long(i: int, m: Message) -> bool:
-        return (
-            i < last_reply
-            and m.role is Role.TOOL
-            and bool(m.content)
-            and len(m.content) > OLD_RESULT_CHARS
-        )
+        return i < last_reply and m.role is Role.TOOL and len(m.content or "") > OLD_RESULT_CHARS
 
     return [
-        replace(m, content=m.content[:OLD_RESULT_CHARS] + "\n[shortened: already read]")
+        replace(m, content=(m.content or "")[:OLD_RESULT_CHARS] + "\n[shortened: already read]")
         if old_and_long(i, m)
         else m
         for i, m in enumerate(messages)

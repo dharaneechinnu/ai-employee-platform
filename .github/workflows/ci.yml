@@ -63,7 +63,8 @@ jobs:
 
       - name: Create the test database
         run: |
-          PGPASSWORD=app psql -h localhost -p 5433 -U app -d postgres \n            -c 'CREATE DATABASE ai_employee_test OWNER app'
+          PGPASSWORD=app psql -h localhost -p 5433 -U app -d postgres \
+            -c 'CREATE DATABASE ai_employee_test OWNER app'
 
       - name: Migrations run forward and backward
         run: |
@@ -76,3 +77,24 @@ jobs:
 
       - name: Tests (unit, isolation and integration)
         run: python -m pytest --cov=app --cov-report=term-missing
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Types and production build
+        run: npm run build

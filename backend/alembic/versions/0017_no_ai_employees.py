@@ -79,8 +79,7 @@ def upgrade() -> None:
     bind.execute(sa.text("DELETE FROM policy_defaults WHERE scope_value = 'delegation'"))
     bind.execute(
         sa.text(
-            "DELETE FROM policies "
-            "WHERE scope_value IN ('delegation', 'delegate_to_specialist')"
+            "DELETE FROM policies WHERE scope_value IN ('delegation', 'delegate_to_specialist')"
         )
     )
 

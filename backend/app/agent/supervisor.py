@@ -262,7 +262,9 @@ def build_supervisor(loop: AgentLoop, team: Team) -> Any:
 
     graph = StateGraph(SupervisorState)
     graph.add_node("router", router)
-    graph.add_node("helper", helper)
+    # A helper gets its own Send payload, not the graph state, which the
+    # stubs for add_node cannot express.
+    graph.add_node("helper", helper)  # type: ignore[arg-type]
     graph.add_node("lead", lead)
     graph.add_node("writer", writer)
     graph.add_node("critic", critic)
