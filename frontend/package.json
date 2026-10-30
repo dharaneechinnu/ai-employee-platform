@@ -10,7 +10,7 @@
     "lint": "tsc --noEmit",
     "film": "node scripts/record-film.mjs --out ../docs/product-film.mp4",
     "demo:record": "node scripts/app-demo/record-app-demo.mjs /tmp/app-demo.mp4 && AD_SCRIPT=scripts/app-demo/script.json python3 scripts/ad/make_ad.py /tmp/app-demo.mp4 ../docs/product-demo.mp4",
-    "ad:voice-setup": "npm install --no-save --no-package-lock --prefix scripts/ad/.voice n8n-nodes-ttsbro@0.1.6 sherpa-onnx-node"
+    "ad:voice-setup": "npm install --no-save --no-package-lock --prefix scripts/ad/.voice n8n-nodes-ttsbro@0.1.6 sherpa-onnx-node@1.13.8"
   },
   "dependencies": {
     "react": "18.3.1",

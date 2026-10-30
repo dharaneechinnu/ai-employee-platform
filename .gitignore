@@ -49,3 +49,6 @@ uploads/
 
 # ---- Python virtualenv (local dev) ----
 .venv/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

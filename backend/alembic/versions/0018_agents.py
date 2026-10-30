@@ -42,10 +42,16 @@ def upgrade() -> None:
         sa.Column("tools", postgresql.JSONB),
         sa.Column("archived", sa.Boolean, nullable=False, server_default=sa.false()),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
     )
     op.create_index("ix_agents_owner", "agents", ["owner_id"])

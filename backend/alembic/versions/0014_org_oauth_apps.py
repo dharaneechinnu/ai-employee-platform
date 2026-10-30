@@ -28,7 +28,10 @@ def upgrade() -> None:
     op.create_table(
         "org_oauth_apps",
         sa.Column(
-            "id", sa.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")
+            "id",
+            sa.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column(
             "org_id",
@@ -41,10 +44,16 @@ def upgrade() -> None:
         sa.Column("client_secret_enc", sa.LargeBinary(), nullable=False),
         sa.Column("secret_last4", sa.String(4), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
         ),
         sa.UniqueConstraint("org_id", "provider", name="uq_org_oauth_app"),
     )

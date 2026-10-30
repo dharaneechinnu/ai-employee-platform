@@ -408,6 +408,37 @@ A Platform Admin can create accounts for other people and manage platform rules.
 
 One-click connections, email notifications and shared web search need settings on the server. Copy `.env.example` to `.env` to set them when you run the backend outside Docker; with Docker Compose, add them to the `environment` section of `api` and `worker` in `docker-compose.yml`. See [Configuration](#configuration).
 
+## Run in production
+
+`docker-compose.prod.yml` runs the same services built for serving real traffic:
+
+- the code is baked into the images (nothing mounted), and the API image has no test or lint tools;
+- `ENVIRONMENT=prod`, so the API refuses to start with the placeholder secrets and hides `/docs`;
+- only the web server is published. It serves the built app, proxies `/api` to the API (one origin, so no CORS) and streams live updates unbuffered. Postgres, Redis and the API are reachable only inside the stack;
+- hashed assets are cached for a year, `index.html` never, and each page loads on demand.
+
+Create `.env.prod` next to the compose file (it is git-ignored). Start from `.env.example` for the optional settings, then add:
+
+```bash
+POSTGRES_PASSWORD=...                       # any long random string
+JWT_SECRET=$(openssl rand -hex 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)      # keep it: stored keys cannot be read without it
+PUBLIC_APP_URL=https://baton.example.com
+PUBLIC_API_URL=https://baton.example.com    # same origin: the web server proxies /api
+ALLOW_PRIVATE_URLS=false
+# API_WORKERS=2   WEB_PORT=80
+```
+
+Then:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.prod exec api \
+  python -m scripts.bootstrap_admin --email you@example.com
+```
+
+Put TLS in front of the web port (a load balancer, or a reverse proxy such as Caddy): the sign-in cookie is `Secure`. Migrations run on every start, before the API and worker.
+
 ## Configuration
 
 Settings are read from the environment (and from `.env`) by `backend/app/config.py`. `.env.example` lists them with comments. In production, set real secrets.
@@ -473,7 +504,7 @@ cd frontend && npm run build   # TypeScript check and production build
 | `backend/tests/integration` | Routes against real Postgres and Redis: sign-up and sign-in, chat, agents, approvals, memory, providers, connections, the Platform Admin |
 | `backend/tests/isolation` | Every table that holds a person's data has `owner_id` |
 
-GitHub Actions runs ruff, mypy, a migrate-forward-and-back check and the backend tests on every push to `main` and every pull request.
+GitHub Actions runs ruff, mypy, a migrate-forward-and-back check and the backend tests, and the frontend type check and production build, on every push to `main` and every pull request.
 
 ## Project layout
 
@@ -493,7 +524,7 @@ GitHub Actions runs ruff, mypy, a migrate-forward-and-back check and the backend
 │   │   ├── workers/         worker entrypoint and jobs
 │   │   └── core/            security, crypto, rate limits, errors
 │   ├── alembic/versions/    migrations 0001 to 0032
-│   ├── scripts/             bootstrap_admin.py (and seed_demo.py for demo data)
+│   ├── scripts/             bootstrap_admin.py (creates the first admin)
 │   └── tests/               unit, integration, isolation
 ├── frontend/
 │   ├── src/                 App.tsx, pages/, components/, lib/

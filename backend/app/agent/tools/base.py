@@ -155,6 +155,10 @@ class Tool(ABC):
 
     @classmethod
     def json_schema(cls) -> dict[str, Any]:
-        schema = cls.args_model.model_json_schema()
+        """The arguments' schema, with shared definitions written out in
+        place, so every provider can read it (see `schema.inline_refs`)."""
+        from app.agent.tools.schema import inline_refs
+
+        schema = inline_refs(cls.args_model.model_json_schema())
         schema.pop("title", None)
         return schema

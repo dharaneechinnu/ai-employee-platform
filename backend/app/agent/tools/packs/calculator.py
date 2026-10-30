@@ -73,7 +73,7 @@ def evaluate(expression: str) -> float | int:
         tree = ast.parse(cleaned, mode="eval")
     except SyntaxError as exc:
         raise CalculationError(f"Could not read the expression: {exc.msg}.") from exc
-    result = _eval(tree.body)
+    result: float | int = _eval(tree.body)
     if isinstance(result, float) and (math.isnan(result) or math.isinf(result)):
         raise CalculationError("The result is not a finite number.")
     if abs(result) > MAX_ABS_RESULT:

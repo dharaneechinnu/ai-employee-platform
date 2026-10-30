@@ -49,4 +49,5 @@ async def run_in_graph(
     final = await build_graph(loop).ainvoke(
         {"system_prompt": system_prompt, "task": task, "history": history}
     )
-    return final["outcome"]
+    outcome: RunOutcome = final["outcome"]
+    return outcome

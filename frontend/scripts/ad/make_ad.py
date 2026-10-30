@@ -4,7 +4,8 @@
     python3 scripts/ad/make_ad.py DEMO.mp4 OUT.mp4
 
 Inputs: the demo MP4 and its `.marks.json` (chapter start times, written
-by record-demo.mjs). Adds, in order:
+by scripts/app-demo/record-app-demo.mjs or
+scripts/ad-routing/render.mjs). Adds, in order:
 
 1. Voiceover: each line in script.json, spoken aloud and placed at its
    chapter, in sync with its subtitle. Two voices:

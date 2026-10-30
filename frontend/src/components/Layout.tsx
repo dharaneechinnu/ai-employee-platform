@@ -4,7 +4,9 @@ import { CoachHelp, CoachProvider } from "./coach/Coach";
 import CommandPalette from "./CommandPalette";
 import Rail from "./Rail";
 import SetupBar from "./SetupBar";
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
+import { Spinner } from "./ui";
 
 export { BrandMark } from "./BrandMark";
 
@@ -29,7 +31,10 @@ export default function Layout() {
       <div className="flex min-h-screen flex-col">
         <SetupBar />
         <main className="flex min-w-0 flex-1 flex-col" style={{ background: "var(--hero)" }}>
-          <Outlet />
+          {/* Inside the layout, so the rail stays put while a page loads. */}
+          <Suspense fallback={<Spinner />}>
+            <Outlet />
+          </Suspense>
         </main>
 
         <Rail dock={dock} setDock={setDock} running={running} waiting={waiting} />

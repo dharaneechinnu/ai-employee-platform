@@ -32,6 +32,7 @@ from app.config import Settings, get_settings
 from app.core.error_handlers import register_error_handlers
 from app.core.observability import configure_logging, get_logger
 from app.db.session import dispose_engine
+from app.workers.queue import close_pool
 
 log = get_logger(__name__)
 
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         slow_mode=settings.slow_mode,
     )
     yield
+    await close_pool()
     await dispose_engine()
     log.info("api_stopped")
 
@@ -53,16 +55,21 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(debug=settings.debug, json_logs=settings.environment != "dev")
 
+    # The interactive API docs list every route and schema: useful while
+    # building, needless surface in production.
+    show_docs = settings.environment != "prod"
     app = FastAPI(
         title=settings.app_name,
         version="0.1.0",
-        docs_url="/docs",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if show_docs else None,
+        redoc_url="/redoc" if show_docs else None,
+        openapi_url="/openapi.json" if show_docs else None,
         lifespan=lifespan,
     )
 
-    # Dev-only permissive CORS. Phase 1 replaces this with an explicit
-    # origin list once real auth cookies are in play.
+    # CORS only for the Vite dev server. In production the web server
+    # serves the app and proxies /api on the same origin, so the browser
+    # never makes a cross-origin call.
     if settings.environment == "dev":
         app.add_middleware(
             CORSMiddleware,

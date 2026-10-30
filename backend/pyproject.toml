@@ -5,11 +5,11 @@ description = "Personal multi-agent assistant platform: people connect their own
 requires-python = ">=3.12"
 
 dependencies = [
-    "fastapi>=0.115.0",
+    "fastapi>=0.115.0,<1",
     "uvicorn[standard]>=0.32.0",
-    "pydantic>=2.9.0",
+    "pydantic>=2.9.0,<3",
     "pydantic-settings>=2.6.0",
-    "sqlalchemy[asyncio]>=2.0.36",
+    "sqlalchemy[asyncio]>=2.0.36,<3",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "redis>=5.2.0",
@@ -22,8 +22,8 @@ dependencies = [
     "cryptography>=43.0.0",
     "httpx>=0.28.0",
     "tzdata>=2024.1",
-    "langchain-core>=1.0.0",
-    "langgraph>=1.0.0",
+    "langchain-core>=1.0.0,<2",
+    "langgraph>=1.0.0,<2",
     "pypdf>=5.0.0,<6",
 ]
 
@@ -33,8 +33,9 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "httpx>=0.28.0",
-    "ruff>=0.8.0",
-    "mypy>=1.13.0",
+    # ruff format output changes between minor releases.
+    "ruff>=0.17,<0.18",
+    "mypy>=2.4,<2.5",
 ]
 
 [build-system]
@@ -92,6 +93,7 @@ disallow_untyped_defs = false
 # ---------------------------------------------------------------- pytest
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "-q --strict-markers"
 

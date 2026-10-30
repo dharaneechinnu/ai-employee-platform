@@ -40,9 +40,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Nullable on the way back: the old secrets are gone, so there is
     # nothing honest to put here. Re-enrolment is the only route.
-    op.add_column(
-        "platform_admins", sa.Column("totp_secret_enc", sa.LargeBinary(), nullable=True)
-    )
+    op.add_column("platform_admins", sa.Column("totp_secret_enc", sa.LargeBinary(), nullable=True))
     op.add_column(
         "platform_admins",
         sa.Column("totp_confirmed", sa.Boolean(), nullable=False, server_default="false"),

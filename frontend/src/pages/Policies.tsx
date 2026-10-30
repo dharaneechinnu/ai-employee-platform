@@ -155,8 +155,8 @@ export default function Policies() {
       <PageBody>
         <p className="rise max-w-3xl text-sm leading-relaxed text-muted">
           For every tool, choose <b>Always allow</b> (it runs with no approval), <b>Ask me first</b> (you approve
-          each time) or <b>Blocked</b> (it never runs). By default, reading is allowed and sending asks first. Changes
-          save as you click.
+          each time) or <b>Blocked</b> (it never runs). By default, reading is allowed, while changing, sending and posting
+          ask you first. Changes save as you click.
         </p>
 
         <ErrorNote message={error} />
