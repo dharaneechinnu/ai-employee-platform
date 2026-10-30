@@ -1,0 +1,12 @@
+# Kept out of the build context: caches, local settings and secrets.
+.env
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+*.egg-info

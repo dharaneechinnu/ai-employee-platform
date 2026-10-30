@@ -1,0 +1,109 @@
+# Production stack: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# Differences from docker-compose.yml (development):
+# - Images carry the code; nothing is mounted from this checkout.
+# - No dev tools in the API image, no --reload, ENVIRONMENT=prod, which
+#   refuses to start with the placeholder secrets and hides /docs.
+# - Only the web server is published. Postgres, Redis and the API are
+#   reachable inside this network alone.
+# - The web server serves the built app and proxies /api, so the app and
+#   API share one origin. Put TLS in front of port 80 (a load balancer or
+#   a reverse proxy such as Caddy): the refresh cookie is Secure.
+#
+# Required in the env file: POSTGRES_PASSWORD, JWT_SECRET, ENCRYPTION_KEY,
+# PUBLIC_APP_URL and PUBLIC_API_URL (both the public https address).
+# Everything else in .env.example is optional and passed through.
+
+name: baton
+
+x-backend: &backend
+  build:
+    context: ./backend
+  env_file: .env.prod
+  environment: &backend-env
+    ENVIRONMENT: prod
+    DATABASE_URL: postgresql+asyncpg://app:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/ai_employee
+    REDIS_URL: redis://redis:6379/0
+    JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ai_employee
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d ai_employee"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Queue and rate-limit state only: nothing here needs to survive a restart.
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      # Trust X-Forwarded-For from the web server, the only thing that can
+      # reach this container, so rate limits count each visitor's own address.
+      FORWARDED_ALLOW_IPS: "*"
+    command:
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+       "--proxy-headers", "--workers", "${API_WORKERS:-2}"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *backend
+    command: ["arq", "app.workers.main.WorkerSettings"]
+    healthcheck:
+      test: ["CMD", "arq", "app.workers.main.WorkerSettings", "--check"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ./frontend
+      target: prod
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

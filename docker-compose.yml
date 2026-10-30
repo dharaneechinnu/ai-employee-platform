@@ -37,6 +37,8 @@ services:
   migrate:
     build:
       context: ./backend
+      args:
+        INSTALL_DEV: "true"
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/ai_employee
       REDIS_URL: redis://redis:6379/0
@@ -56,6 +58,8 @@ services:
   api:
     build:
       context: ./backend
+      args:
+        INSTALL_DEV: "true"
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/ai_employee
       REDIS_URL: redis://redis:6379/0
@@ -78,6 +82,8 @@ services:
   worker:
     build:
       context: ./backend
+      args:
+        INSTALL_DEV: "true"
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/ai_employee
       REDIS_URL: redis://redis:6379/0
@@ -87,7 +93,7 @@ services:
     volumes:
       - ./backend:/app
     command: ["arq", "app.workers.main.WorkerSettings"]
-    # The image's default healthcheck curls /healthz, but the worker
+    # The image's default healthcheck fetches /healthz, but the worker
     # serves no HTTP - that is the whole point of splitting it from the
     # API. Use arq's own check, which reads the heartbeat the worker
     # writes to Redis, so this proves it is consuming jobs rather than
@@ -107,6 +113,7 @@ services:
   web:
     build:
       context: ./frontend
+      target: dev
     environment:
       NODE_ENV: development
       # Service name, not localhost: inside this container localhost
