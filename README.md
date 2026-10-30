@@ -493,7 +493,7 @@ GitHub Actions runs ruff, mypy, a migrate-forward-and-back check and the backend
 │   │   ├── workers/         worker entrypoint and jobs
 │   │   └── core/            security, crypto, rate limits, errors
 │   ├── alembic/versions/    migrations 0001 to 0032
-│   ├── scripts/             bootstrap_admin.py (and seed_demo.py for demo data)
+│   ├── scripts/             bootstrap_admin.py (creates the first admin)
 │   └── tests/               unit, integration, isolation
 ├── frontend/
 │   ├── src/                 App.tsx, pages/, components/, lib/

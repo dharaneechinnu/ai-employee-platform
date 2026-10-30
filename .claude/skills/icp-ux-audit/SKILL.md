@@ -52,7 +52,7 @@ Score each screen 1–5 on each line. Anything at 1–2 is a finding.
 
 ## 4. Procedure
 
-1. **Start the app** with seeded data (see `DEMO.md`): Postgres, Redis, API on :8000, Vite on :5173, accounts `owner@victopia.com` (admin) and `priya@victopia.com` (member).
+1. **Start the app** locally: Postgres, Redis, API on :8000, worker, Vite on :5173. Create an admin with `python -m scripts.bootstrap_admin --email you@example.com` from `backend/` (see README) and invite a member from Team.
 2. **Capture** every screen at desktop (1440×900) and phone (390×844), as admin and as member, with automatic checks:
    ```bash
    cd frontend && node ../.claude/skills/icp-ux-audit/capture.mjs <out-dir>
@@ -60,8 +60,9 @@ Score each screen 1–5 on each line. Anything at 1–2 is a finding.
    This writes `<out-dir>/<role>-<page>-<device>.png` and `<out-dir>/checks.json`
    (sideways overflow, small tap targets, unnamed controls, unlabeled
    inputs, tiny text, console errors per screen).
-   For populated states (a live run, approvals, connections), also run
-   `node scripts/readme-screenshots.mjs`, which drives the demo server.
+   For populated states (a live run, approvals, connections), first run
+   `node scripts/app-demo/record-app-demo.mjs` then
+   `node scripts/feature-tour/seed.mjs`, which fill a demo account.
 3. **Look at every screenshot** against the rubric, as each persona. Read the words on screen, not the code.
 4. **Walk the five jobs** and note where a persona would stop, guess, or worry.
 5. **Verify in code** before reporting anything that a screenshot only suggests (e.g. "no confirmation on delete": check the component).

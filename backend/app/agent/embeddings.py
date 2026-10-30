@@ -77,7 +77,6 @@ class LocalEmbeddingProvider(EmbeddingProvider):
             from fastembed import TextEmbedding
 
             self._backend = TextEmbedding(model_name=f"BAAI/{model}")
-            self._semantic = True
         except Exception:  # noqa: BLE001 - optional dependency, absence is expected
             log.warning(
                 "fastembed_unavailable",

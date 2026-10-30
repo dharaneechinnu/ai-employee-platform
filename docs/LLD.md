@@ -32,7 +32,7 @@
 ├── backend/
 │   ├── pyproject.toml
 │   ├── alembic/versions/            # 0001 … 0032
-│   ├── scripts/                     # bootstrap_admin.py, seed_demo.py
+│   ├── scripts/                     # bootstrap_admin.py
 │   ├── tests/                       # unit/, integration/, isolation/
 │   └── app/
 │       ├── main.py                  # API entrypoint
