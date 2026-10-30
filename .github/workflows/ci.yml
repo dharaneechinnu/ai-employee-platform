@@ -66,10 +66,12 @@ jobs:
           PGPASSWORD=app psql -h localhost -p 5433 -U app -d postgres \
             -c 'CREATE DATABASE ai_employee_test OWNER app'
 
+      # Back to 0017, not base: 0017 deleted the AI Employees and their data
+      # on purpose and refuses to run backward. Everything after it must.
       - name: Migrations run forward and backward
         run: |
           alembic upgrade head
-          alembic downgrade base
+          alembic downgrade 0017
           alembic upgrade head
 
       - name: Migrate the test database
