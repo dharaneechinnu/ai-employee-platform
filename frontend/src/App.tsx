@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import Layout from "./components/Layout";
 import { Spinner } from "./components/ui";
 import { useAuth } from "./lib/auth";
@@ -30,6 +30,15 @@ function AfterSignIn() {
   return <Navigate to={safe} replace />;
 }
 
+/** Signed out on a page that needs an account: sign in, then come back
+ * to that page rather than to Chat. */
+function ToSignIn() {
+  const { pathname, search } = useLocation();
+  const here = pathname + search;
+  const to = pathname === "/" || pathname === "/login" ? "/login" : `/login?next=${encodeURIComponent(here)}`;
+  return <Navigate to={to} replace />;
+}
+
 export default function App() {
   const { me, loading } = useAuth();
 
@@ -47,7 +56,7 @@ export default function App() {
         <Route path="/approve/:token" element={<ApproveLink />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<ToSignIn />} />
       </Routes>
     );
   }

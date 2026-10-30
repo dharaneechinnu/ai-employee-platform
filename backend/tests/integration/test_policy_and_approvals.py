@@ -131,6 +131,8 @@ async def test_the_default_policy_is_seeded(api: AsyncClient, session: AsyncSess
     by_key = {(r["scope_value"], r["side_effect"]): r for r in response.json()}
     assert by_key[("email", "destructive")]["setting"] == "ask"
     assert by_key[("email", "write")]["setting"] == "auto"
+    # Posting to a chat channel reaches other people, like sending email.
+    assert by_key[("chat", "destructive")]["setting"] == "ask"
     assert all(r["is_default"] for r in response.json())
 
 

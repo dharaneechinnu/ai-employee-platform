@@ -87,7 +87,31 @@ export const api = {
     request<T>(path, { method: "POST", body: blob, headers: { "Content-Type": blob.type } }),
 };
 
-export async function refresh(): Promise<boolean> {
+let refreshing: Promise<boolean> | null = null;
+
+/**
+ * Swap the refresh cookie for a new access token.
+ *
+ * One at a time, on purpose. Each refresh rotates the cookie, and the
+ * server treats an already-rotated cookie coming back as theft and ends
+ * every session of that person. Two refreshes in flight together (two
+ * requests failing with 401 at once, React running the start-up effect
+ * twice, or two tabs reloading) would do exactly that. So callers in a
+ * tab share one attempt, and tabs queue behind a browser lock: by the
+ * time the next tab's turn comes, the browser holds the new cookie.
+ */
+export function refresh(): Promise<boolean> {
+  refreshing ??= (
+    typeof navigator !== "undefined" && navigator.locks
+      ? navigator.locks.request("baton-refresh", refreshOnce)
+      : refreshOnce()
+  ).finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+async function refreshOnce(): Promise<boolean> {
   const response = await fetch(`${BASE}/auth/refresh`, {
     method: "POST",
     credentials: "include",

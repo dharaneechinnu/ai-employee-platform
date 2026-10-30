@@ -38,6 +38,7 @@ from app.agent.providers.base import (
     parse_retry_after,
     too_large_error,
 )
+from app.agent.tools.schema import for_gemini
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -118,7 +119,11 @@ class GeminiProvider(LLMProvider):
             payload["tools"] = [
                 {
                     "functionDeclarations": [
-                        {"name": t.name, "description": t.description, "parameters": t.parameters}
+                        {
+                            "name": t.name,
+                            "description": t.description,
+                            "parameters": for_gemini(t.parameters),
+                        }
                         for t in tools
                     ]
                 }
