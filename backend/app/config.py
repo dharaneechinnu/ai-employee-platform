@@ -114,7 +114,9 @@ class Settings(BaseSettings):
     # agent can run again. The longest quiet stretch of a healthy run is a few
     # minutes (a slow model call with its retries, or a long tool), so this
     # leaves a wide margin and still ends a dead run in a few minutes.
-    run_stall_seconds: int = 600
+    # At least two minutes: a lower value would end healthy runs, and 0 or a
+    # negative number would end every running run on each sweep.
+    run_stall_seconds: int = Field(default=600, ge=120)
 
     @property
     def effective_worker_concurrency(self) -> int:

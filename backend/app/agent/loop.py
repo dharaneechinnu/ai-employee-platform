@@ -203,13 +203,21 @@ class AgentLoop:
         return f"{getattr(self.provider, 'provider_key', '?')}:{self.model}"
 
     async def _after_call(self, reply: LLMReply, messages: list[Message]) -> None:
-        """Record who answered, and keep a handoff note for every later step."""
-        self.work.record_reply(self._current_model(), reply.usage, reply.tool_calls)
+        """Record who answered, and keep a handoff note for every later step.
+
+        This is bookkeeping, and a run must never fail because of it: a failure
+        here is logged and the run carries on without the note."""
         note = reply.handoff
+        try:
+            self.work.record_reply(self._current_model(), reply.usage, reply.tool_calls)
+            if note is not None:
+                attach_note(messages, note.text)
+                self.work.record_handoff(note)
+        except Exception:
+            log.exception("handoff_bookkeeping_failed")
+            return
         if note is None:
             return
-        attach_note(messages, note.text)
-        self.work.record_handoff(note)
         await self._emit(
             "handoff_note",
             from_model=note.from_model,

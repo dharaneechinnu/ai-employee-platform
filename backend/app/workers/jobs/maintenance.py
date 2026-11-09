@@ -76,8 +76,11 @@ async def reap_stalled_runs(ctx: dict[str, Any]) -> int:
 
     ended = 0
     for run_id in ids:
-        if await _end_stalled(run_id, cutoff):
-            ended += 1
+        try:
+            if await _end_stalled(run_id, cutoff):
+                ended += 1
+        except Exception:
+            log.exception("stalled_run_not_ended", run_id=str(run_id))
     if ended:
         log.warning("stalled_runs_ended", count=ended)
     return ended

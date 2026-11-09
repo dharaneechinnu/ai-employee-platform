@@ -9,6 +9,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -208,3 +209,29 @@ async def test_a_stalled_agent_run_is_reported_and_the_agent_can_run_again(
 
     again: dict[str, Any] = (await api.post(f"{AGENTS}/{agent['id']}/run", headers=headers)).json()
     assert again["status"] == "started"  # no longer blocked by a run that is long dead
+
+
+async def test_one_run_that_cannot_be_closed_does_not_stop_the_rest(
+    api: AsyncClient, session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.workers.jobs.agent_run as job
+    from app.workers.jobs.maintenance import reap_stalled_runs
+
+    person = await seed_person(session, api, name="Meera")
+    headers = {"Authorization": f"Bearer {person.token}"}
+    stuck = await _start_run(session, await _task(api, headers), heartbeat=_quiet(40))
+    healthy = await _start_run(session, await _task(api, headers), heartbeat=_quiet(20))
+
+    real_finish = job._finish
+
+    async def fails_for_one(session: Any, run: Run, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        if run.id == stuck:
+            raise RuntimeError("cannot close this one")
+        return await real_finish(session, run, *args, **kwargs)  # type: ignore[no-any-return]
+
+    monkeypatch.setattr(job, "_finish", fails_for_one)
+
+    assert await reap_stalled_runs({}) == 1  # the older run is first in line and fails
+
+    assert (await _run(session, healthy)).status is RunStatus.FAILED  # the rest still ended
+    assert (await _run(session, stuck)).status is RunStatus.RUNNING  # tried again next sweep
