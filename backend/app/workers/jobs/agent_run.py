@@ -19,14 +19,14 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.agent import assistant
+from app.agent import assistant, cooldown
 from app.agent.checkpoint import SqlCheckpointSaver
 from app.agent.graph import run_in_graph
 from app.agent.graph_loop import GraphLoop
 from app.agent.loop import AgentEvent, AgentLoop, Budget, StopCause
 from app.agent.providers import build_provider
 from app.agent.providers.base import LLMError, Message, Role, Usage
-from app.agent.providers.fallback import FallbackProvider, Option
+from app.agent.providers.fallback import FallbackProvider, OnSwitch, Option
 from app.agent.routing import (
     CLASSIFY_PROMPT,
     Candidate,
@@ -180,7 +180,13 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         chosen = choices[0]
         switches: list[str] = []
 
+        async def rest_failed(old: Option, new: Option, exc: LLMError) -> None:
+            """An AI this run had to give up on rests for a while, for every
+            run of this person, so the next one does not waste the same wait."""
+            await cooldown.rest(task.owner_id, old.provider_key, exc)
+
         async def on_switch(old: Option, new: Option, exc: LLMError) -> None:
+            await rest_failed(old, new, exc)
             names = {c.provider_key: c.display_name for c in choices}
             switches.append(
                 f"{names.get(old.provider_key, old.provider_key)} was unavailable, "
@@ -282,7 +288,7 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
                 await sink(AgentEvent(type=type_, payload=payload))
 
             team_router = (
-                TeamRouter(await providers.candidates(), options, routing)
+                TeamRouter(await providers.candidates(), options, routing, on_switch=rest_failed)
                 if len(options) > 1
                 else None
             )
@@ -358,6 +364,10 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
             outcome = await run_in_graph(
                 loop, system_prompt=system_prompt, task=task.input, history=history
             )
+        if len(outcome.model_usage) > 1:
+            # More than one AI worked on this run (a handoff happened): record
+            # what each one did and used, so the run view can show it.
+            await sink(AgentEvent(type="model_usage", payload={"models": outcome.model_usage}))
         if team is not None:
             if team.stats:
                 await sink(AgentEvent(type="team_summary", payload=team.summary()))
@@ -369,6 +379,9 @@ async def _execute(maker: async_sessionmaker, task_id: uuid.UUID) -> dict[str, A
         outcome.output_tokens += classify_usage.output_tokens
         # The AI that actually finished the run, after any fallback.
         provider_key, model = provider.current.provider_key, provider.current.model
+        if outcome.completed:
+            # It answered, so it works: end any rest it was on.
+            await cooldown.recovered(task.owner_id, provider_key)
         reason = chosen.reason + (f"; {switches[-1]}" if switches else "")
 
         if outcome.paused and outcome.pending_tool_call:
@@ -525,6 +538,10 @@ _STOP_MESSAGES = {
     ),
     "timeout": "That took too long, so I stopped.",
     "provider_error": "The AI service returned an error.",
+    "stalled": (
+        "This run stopped unexpectedly, so I ended it. Some steps may already have "
+        "been done, so check before you try again."
+    ),
 }
 
 
@@ -681,9 +698,14 @@ class TeamRouter:
     ranked for quality alone, for a helper that failed on its first AI."""
 
     def __init__(
-        self, candidates: list[Candidate], options: list[Option], preference: Preference
+        self,
+        candidates: list[Candidate],
+        options: list[Option],
+        preference: Preference,
+        on_switch: OnSwitch | None = None,
     ) -> None:
         self._candidates = candidates
+        self._on_switch = on_switch
         self._options = options
         self._by_key = {o.provider_key: o for o in options}
         self._preference = preference
@@ -693,7 +715,7 @@ class TeamRouter:
     def _build(self, role: str, preference: Preference) -> tuple[FallbackProvider, str, str]:
         ranked = rank(self._candidates, ROLE_KIND.get(role, TaskKind.GENERAL), preference)
         ordered = [self._by_key[c.provider_key] for c in ranked if c.provider_key in self._by_key]
-        fallback = FallbackProvider(ordered or self._options)
+        fallback = FallbackProvider(ordered or self._options, on_switch=self._on_switch)
         first = fallback.current
         return fallback, first.model, f"{first.provider_key}:{first.model}"
 

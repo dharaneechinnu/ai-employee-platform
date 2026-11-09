@@ -108,6 +108,16 @@ class Settings(BaseSettings):
     agent_checkpointer: bool = False
     worker_max_jobs: int = 10
 
+    # A running run writes a "still alive" mark with every step. One whose mark
+    # is older than this many seconds has lost its worker (a crash, a deploy, a
+    # frozen process) and is ended as failed, so the person is told and the
+    # agent can run again. The longest quiet stretch of a healthy run is a few
+    # minutes (a slow model call with its retries, or a long tool), so this
+    # leaves a wide margin and still ends a dead run in a few minutes.
+    # At least two minutes: a lower value would end healthy runs, and 0 or a
+    # negative number would end every running run on each sweep.
+    run_stall_seconds: int = Field(default=600, ge=120)
+
     @property
     def effective_worker_concurrency(self) -> int:
         return 1 if self.slow_mode else self.worker_max_jobs

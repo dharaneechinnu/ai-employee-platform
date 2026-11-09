@@ -29,6 +29,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.agent.providers.base import (
+    HandoffNote,
     LLMError,
     LLMProvider,
     LLMReply,
@@ -40,6 +41,7 @@ from app.agent.providers.base import (
     ProviderUnavailableError,
     ToolSchema,
 )
+from app.agent.worklog import CURRENT_LOG, build_note, reason_for, with_note
 
 # Pauses before each retry on the same AI, by kind of failure (seconds).
 RATE_LIMIT_PAUSES = (2.0, 5.0)
@@ -111,16 +113,20 @@ class FallbackProvider(LLMProvider):
         max_tokens: int = 4096,
     ) -> LLMReply:
         retries = 0  # on the current option
+        handoff: HandoffNote | None = None
         while True:
             option = self.current
             try:
-                return await option.provider.complete(
+                reply = await option.provider.complete(
                     messages=messages,
                     model=option.model,
                     tools=tools,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
+                if handoff is not None:
+                    reply.handoff = handoff
+                return reply
             except LLMError as exc:
                 pauses = pauses_for(exc)
                 if retries < len(pauses):
@@ -137,8 +143,34 @@ class FallbackProvider(LLMProvider):
                     raise
                 self.index += 1
                 retries = 0
+                # Tell the AI taking over what is already done, in the
+                # instructions it is about to receive.
+                if note := self._handoff_note(option, self.current, exc, messages):
+                    handoff = note
+                    messages = with_note(messages, note.text)
                 if self.on_switch:
                     await self.on_switch(option, self.current, exc)
+
+    @staticmethod
+    def _handoff_note(
+        old: Option, new: Option, exc: LLMError, messages: list[Message]
+    ) -> HandoffNote | None:
+        """The note for the new AI, or None. Only inside an agent loop, which
+        is what keeps the record of the work; and never a reason for the
+        run to fail, so any problem making it means no note."""
+        log = CURRENT_LOG.get()
+        if log is None:
+            return None
+        try:
+            return build_note(
+                messages,
+                log,
+                from_model=f"{old.provider_key}:{old.model}",
+                to_model=f"{new.provider_key}:{new.model}",
+                reason=reason_for(exc),
+            )
+        except Exception:  # noqa: BLE001 - see the docstring
+            return None
 
     async def check(self, model: str) -> None:
         await self.current.provider.check(self.current.model)

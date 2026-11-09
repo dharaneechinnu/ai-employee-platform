@@ -35,6 +35,8 @@ class World:
         self.down: set[str] = set()
         self.classify_answer = "general"
         self.classified_by: list[str] = []
+        # Every model call that reached a provider, answered or refused.
+        self.attempts: list[str] = []
 
     def build(self, key: str, api_key: str, **_: Any) -> LLMProvider:
         world = self
@@ -48,6 +50,7 @@ class World:
                 if system == CLASSIFY_PROMPT:
                     world.classified_by.append(key)
                     return _reply(world.classify_answer, kwargs["model"])
+                world.attempts.append(key)
                 if key in world.down:
                     raise ProviderRateLimitError(f"{key} is busy")
                 world.answered.append((key, kwargs["model"]))
@@ -179,6 +182,85 @@ async def test_a_busy_ai_hands_over_to_the_next_best(
     kinds = [e["type"] for e in trace["events"]]
     assert kinds[0] == "model_chosen"
     assert "model_fallback" in kinds
+
+
+CODING = "Fix this ```python\nprint(x)```"
+
+
+async def test_the_next_task_skips_an_ai_that_just_gave_out(
+    api: AsyncClient, session: AsyncSession, world: World
+) -> None:
+    """The first run finds the limit the slow way (three tries, then a switch).
+    The next one should not repeat that wait: it goes straight to the AI that works."""
+    headers = await _person(api, session, "anthropic", "gemini")
+    world.down = {"anthropic"}
+
+    first = await _ask(api, headers, CODING)
+    assert first["model"].startswith("gemini:")
+    tried_before = world.attempts.count("anthropic")
+    assert tried_before == 3  # the try and two retries
+
+    second = await _ask(api, headers, CODING)
+
+    assert second["error"] is None and second["model"].startswith("gemini:")
+    assert world.attempts.count("anthropic") == tried_before  # not asked again
+    assert "resting after a recent problem" in second["model_reason"]
+
+
+async def test_a_resting_ai_is_used_again_once_it_has_a_new_key(
+    api: AsyncClient, session: AsyncSession, world: World
+) -> None:
+    headers = await _person(api, session, "anthropic", "gemini")
+    world.down = {"anthropic"}
+    await _ask(api, headers, CODING)  # anthropic is now resting
+
+    world.down = set()
+    await api.post(
+        "/api/v1/me/providers",
+        json={"provider_key": "anthropic", "api_key": "anthropic-new-key-5678"},
+        headers=headers,
+    )
+    again = await _ask(api, headers, CODING)
+
+    assert again["model"].startswith("anthropic:")  # the best fit again, no longer resting
+
+
+async def test_a_pinned_ai_is_used_even_while_it_is_resting(
+    api: AsyncClient, session: AsyncSession, world: World
+) -> None:
+    headers = await _person(api, session, "anthropic", "gemini")
+    world.down = {"anthropic"}
+    await _ask(api, headers, CODING)  # anthropic is now resting
+
+    world.down = set()
+    reply = await _ask(api, headers, CODING, model="anthropic:claude-opus-5-5")
+
+    assert reply["model"] == "anthropic:claude-opus-5-5"
+    assert reply["model_reason"] == "the AI you chose"  # the person's choice is never overridden
+
+
+async def test_a_run_that_ends_well_on_an_ai_ends_its_rest(
+    api: AsyncClient, session: AsyncSession, world: World
+) -> None:
+    from app.agent import cooldown
+
+    person = await seed_person(session, api, name="Meera")
+    headers = {"Authorization": f"Bearer {person.token}"}
+    for key in ("anthropic", "gemini"):
+        body = {"provider_key": key, "api_key": f"{key}-test-key-1234"}
+        assert (
+            await api.post("/api/v1/me/providers", json=body, headers=headers)
+        ).status_code == 201
+
+    # Gemini is resting from an earlier problem, and Claude is down now, so
+    # Gemini is the only way through. It answers, which proves it works again.
+    await cooldown.rest(person.owner_id, "gemini", ProviderRateLimitError("busy"))
+    world.down = {"anthropic"}
+    reply = await _ask(api, headers, CODING)
+
+    assert reply["error"] is None and reply["model"].startswith("gemini:")
+    assert await cooldown.resting(person.owner_id, ["gemini"]) == {}
+    assert "anthropic" in await cooldown.resting(person.owner_id, ["anthropic"])
 
 
 async def test_a_pinned_ai_is_used_as_chosen(

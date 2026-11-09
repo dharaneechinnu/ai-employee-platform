@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent import cooldown
 from app.agent.providers import CUSTOM_PROVIDER, build_provider
 from app.agent.providers.base import (
     LLMError,
@@ -108,6 +109,18 @@ class ModelTry:
     model: str
     ok: bool
     reason: str | None
+
+
+def _resting_note(ranked: list[Candidate]) -> str:
+    """A few words for the chat when an AI was passed over because it had a
+    recent problem, so the person can see why the usual choice was not used."""
+    resting = [c for c in ranked if c.cooling]
+    if not resting:
+        return ""
+    if ranked[0].cooling:
+        return "; it had a recent problem, but no other AI is free to take this"
+    names = ", ".join(c.display_name for c in resting)
+    return f"; {names} {'is' if len(resting) == 1 else 'are'} resting after a recent problem"
 
 
 @dataclass(slots=True)
@@ -253,6 +266,8 @@ class ProviderService:
             self.session.add(config)
 
         await self.session.flush()
+        # A new key may work where the old one did not: end any rest at once.
+        await cooldown.recovered(self.owner_id, provider_key)
         log.info(
             "provider_connected",
             owner_id=str(self.owner_id),
@@ -278,6 +293,7 @@ class ProviderService:
         else:
             config.status = ConnectionStatus.WORKING
             config.last_error = None
+            await cooldown.recovered(self.owner_id, provider_key)
 
         config.last_tested_at = datetime.now(UTC)
         return config
@@ -354,6 +370,8 @@ class ProviderService:
             config.model = model
             config.status = ConnectionStatus.UNTESTED
             config.last_error = None
+            # A different model may be reachable where the last one was not.
+            await cooldown.recovered(self.owner_id, provider_key)
         return config
 
     async def list_models(self, provider_key: str) -> list[str]:
@@ -416,6 +434,7 @@ class ProviderService:
             else:
                 tried.append(ModelTry(model, True, None))
                 self._adopt(config, model, working=True)
+                await cooldown.recovered(self.owner_id, provider_key)
                 return config, tried
         return config, tried
 
@@ -480,15 +499,19 @@ class ProviderService:
         return config
 
     async def candidates(self) -> list[Candidate]:
-        """Every connected AI, with the model this person picked for it."""
+        """Every connected AI, with the model this person picked for it, and
+        whether it is resting after a recent failure."""
+        connected = [c for c in await self.connected() if c.default_model]
+        resting = await cooldown.resting(self.owner_id, (c.provider_key for c in connected))
         return [
             Candidate(
                 provider_key=c.provider_key,
                 model=c.default_model,
                 display_name=c.display_name,
                 failed=c.status is ConnectionStatus.FAILED,
+                cooling=resting.get(c.provider_key),
             )
-            for c in await self.connected()
+            for c in connected
             if c.default_model
         ]
 
@@ -550,7 +573,7 @@ class ProviderService:
                 display_name=c.display_name,
                 kind=kind,
                 preference=preference,
-                reason=explain(c, kind, preference, len(ranked) - 1)
+                reason=explain(c, kind, preference, len(ranked) - 1) + _resting_note(ranked)
                 if i == 0
                 else "next best, if the first is unavailable",
             )

@@ -14,7 +14,13 @@ from arq import cron
 
 from app.config import get_settings
 from app.core.observability import configure_logging, get_logger
-from app.workers.jobs import dispatch_due_agents, expire_approvals, ping, run_task
+from app.workers.jobs import (
+    dispatch_due_agents,
+    expire_approvals,
+    ping,
+    reap_stalled_runs,
+    run_task,
+)
 from app.workers.queue import redis_settings as redis_settings_fn
 
 log = get_logger(__name__)
@@ -46,6 +52,10 @@ class WorkerSettings:
         cron(expire_approvals, minute=set(range(0, 60, 5)), run_at_startup=True),
         # Every minute: start the agents whose scheduled time has come.
         cron(dispatch_due_agents, run_at_startup=True),
+        # Every two minutes: end runs whose worker went quiet, so the person is
+        # told and the agent can run again. Also at startup, which is when the
+        # runs a crash left behind are found.
+        cron(reap_stalled_runs, minute=set(range(0, 60, 2)), run_at_startup=True),
     ]
 
     on_startup = startup

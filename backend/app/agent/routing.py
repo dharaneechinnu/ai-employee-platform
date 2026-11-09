@@ -231,6 +231,8 @@ class Candidate:
     model: str
     display_name: str
     failed: bool = False  # its last connection test failed
+    # Why it is resting after a recent failure (see `app.agent.cooldown`), or None.
+    cooling: str | None = None
 
     @property
     def profile(self) -> Profile:
@@ -262,8 +264,8 @@ _WEIGHTS: dict[Preference, dict[str, tuple[float, float, float]]] = {
 
 
 def rank(candidates: list[Candidate], kind: TaskKind, preference: Preference) -> list[Candidate]:
-    """Best first. Connections whose last test failed go last, so they
-    are only tried when nothing else is left."""
+    """Best first. Connections whose last test failed, and AIs resting after
+    a recent failure, go last, so they are only tried when nothing else is left."""
     pool = candidates
     if preference is Preference.PRIVATE:
         pool = [c for c in candidates if c.profile.private]
@@ -276,7 +278,8 @@ def rank(candidates: list[Candidate], kind: TaskKind, preference: Preference) ->
         # simple question under "best quality" still goes to the
         # strongest AI rather than whichever is quickest.
         fit = w_skill * p.skill(kind) + (w_skill / 10) * p.overall
-        return (0 if c.failed else 1, fit + w_cost * p.cost + w_speed * p.speed)
+        usable = not c.failed and c.cooling is None
+        return (1 if usable else 0, fit + w_cost * p.cost + w_speed * p.speed)
 
     return sorted(pool, key=score, reverse=True)
 
