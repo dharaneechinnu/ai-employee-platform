@@ -37,6 +37,7 @@ from app.agent.slim import (
     slim_tools,
 )
 from app.agent.tools.base import Tool, ToolContext, ToolResult
+from app.agent.worklog import CURRENT_LOG, WorkLog, attach_note
 from app.core.observability import get_logger
 
 log = get_logger(__name__)
@@ -136,6 +137,10 @@ class RunOutcome:
     saved_state: dict[str, Any] | None = None
     pending_tool_call: dict[str, Any] | None = None
 
+    # What each AI did in this run: model calls, tokens and tool steps,
+    # keyed by "provider:model". More than one key means a handoff happened.
+    model_usage: dict[str, dict[str, int]] = field(default_factory=dict)
+
     @property
     def completed(self) -> bool:
         return self.stop_cause == StopCause.COMPLETED
@@ -185,6 +190,37 @@ class AgentLoop:
         # has refused a size, later steps of the run do not try it again.
         self._slim_level = 0
         self._wrapping_up = False
+        # Which AI did what, so an AI that takes over mid-job is told what
+        # is already done (see `app.agent.worklog`).
+        self.work = WorkLog()
+
+    def _current_model(self) -> str:
+        """ "provider:model" of the AI answering right now. With several AIs
+        behind a fallback provider this is the current one, not the first."""
+        current = getattr(self.provider, "current", None)
+        if current is not None:
+            return f"{current.provider_key}:{current.model}"
+        return f"{getattr(self.provider, 'provider_key', '?')}:{self.model}"
+
+    async def _after_call(self, reply: LLMReply, messages: list[Message]) -> None:
+        """Record who answered, and keep a handoff note for every later step."""
+        self.work.record_reply(self._current_model(), reply.usage, reply.tool_calls)
+        note = reply.handoff
+        if note is None:
+            return
+        attach_note(messages, note.text)
+        self.work.record_handoff(note)
+        await self._emit(
+            "handoff_note",
+            from_model=note.from_model,
+            to_model=note.to_model,
+            reason=note.reason,
+            done=note.done,
+            looked_up=note.looked_up,
+            failed=note.failed,
+            omitted=note.omitted,
+            usage=self.work.usage_summary(),
+        )
 
     @property
     def resuming(self) -> bool:
@@ -216,8 +252,13 @@ class AgentLoop:
         a time, instead of failing the run."""
         while True:
             sent = slim_messages(compact_old_results(messages), self._slim_level)
+            # So the fallback layer, if it switches AI during this call, can
+            # tell the new AI what this run has done so far.
+            token = CURRENT_LOG.set(self.work)
             try:
-                return await self._complete_once(sent)
+                reply = await self._complete_once(sent)
+                await self._after_call(reply, messages)
+                return reply
             except ProviderTooLargeError as exc:
                 if self._slim_level >= MAX_LEVEL:
                     raise
@@ -235,6 +276,8 @@ class AgentLoop:
                     estimated_tokens_before=before,
                     estimated_tokens_after=after,
                 )
+            finally:
+                CURRENT_LOG.reset(token)
 
     async def _complete_once(self, messages: list[Message]) -> LLMReply:
         """A model call. A model that cannot take tools is retried once
@@ -457,6 +500,7 @@ class AgentLoop:
             prompt_tokens=prompt_tokens,
             output_tokens=output_tokens,
             events=self._events,
+            model_usage=self.work.usage_summary(),
         )
 
 

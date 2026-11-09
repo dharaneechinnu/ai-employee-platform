@@ -21,6 +21,17 @@ def no_retry_waits(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.agent.providers.fallback.pause", instant)
 
 
+@pytest.fixture(autouse=True)
+def no_leftover_rests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An AI resting after a failure is remembered in this process during
+    tests, never in a shared Redis (a developer's shell or container may not
+    set ENVIRONMENT=test); one test's failures must not route the next test's runs."""
+    from app.agent import cooldown
+
+    monkeypatch.setattr(cooldown, "_client", lambda: None)
+    cooldown.reset()
+
+
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
     """HTTP client wired directly to the ASGI app — no network, no server."""

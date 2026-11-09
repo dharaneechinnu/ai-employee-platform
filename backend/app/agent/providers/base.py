@@ -76,6 +76,25 @@ class Usage:
         return self.prompt_tokens + self.output_tokens
 
 
+@dataclass(slots=True, frozen=True)
+class HandoffNote:
+    """What the AI that takes over a job is told about the work so far.
+
+    Made by the fallback layer at the moment it switches AI, and carried
+    back on the reply so the loop can keep it for every later step.
+    """
+
+    text: str
+    done: int = 0
+    looked_up: int = 0
+    failed: int = 0
+    # Steps older than the cap, finished but not listed in the text.
+    omitted: int = 0
+    from_model: str | None = None
+    to_model: str | None = None
+    reason: str | None = None
+
+
 @dataclass(slots=True)
 class LLMReply:
     message: Message
@@ -83,6 +102,8 @@ class LLMReply:
     usage: Usage
     model: str
     latency_ms: int = 0
+    # Set only when this reply came from an AI that took over mid-job.
+    handoff: HandoffNote | None = None
 
     @property
     def text(self) -> str | None:

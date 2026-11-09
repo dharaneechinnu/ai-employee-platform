@@ -141,8 +141,8 @@ class Run(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # Proof the worker is still alive. Phase 8's reaper requeues runs
-    # whose heartbeat has gone stale.
+    # Proof the worker is still alive, written with every step. A run whose
+    # heartbeat has gone stale is ended as failed by `reap_stalled_runs`.
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     worker_id: Mapped[str | None] = mapped_column(String(100))
 
