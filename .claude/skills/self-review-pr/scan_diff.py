@@ -14,6 +14,7 @@ import sys
 from dataclasses import dataclass
 
 BASE = sys.argv[1] if len(sys.argv) > 1 else "origin/main"
+SELF = ".claude/skills/self-review-pr/"
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,8 @@ def main() -> int:
     by_file: dict[str, list[tuple[int, str]]] = {}
     for path, n, text in rows:
         by_file.setdefault(path, []).append((n, text))
+        if path.startswith(SELF):
+            continue  # this file's own rules quote the patterns it looks for
         if not path.endswith((".py", ".ts", ".tsx", ".yml", ".yaml", ".sh", ".toml", ".json")):
             continue
         for rule in RULES:
